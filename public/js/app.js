@@ -1097,8 +1097,10 @@ init();
 
 
 
+
+
 // ==========================================
-// UNIFIED 4-SUB-TAB CMS MANAGEMENT SYSTEM (V3)
+// UNIFIED 4-SUB-TAB CMS MANAGEMENT SYSTEM (V4)
 // ==========================================
 let adminReelsList = [];
 let adminDealsList = [];
@@ -1180,7 +1182,7 @@ function renderAdminReels() {
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-outline" style="flex:1; padding:8px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#fff; cursor:pointer;" onclick="window.editReel('${reel._id}')">Edit</button>
                         <a href="${reel.image}" download="reel_thumbnail.png" target="_blank" class="btn btn-outline" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#4ade80; text-decoration:none; text-align:center;" title="Download Base64 Image">📥</a>
-                        <button class="btn btn-danger" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:#ef4444; color:#fff; border:none; cursor:pointer;" onclick="window.deleteReel('${reel._id}')">Delete</button>
+                        <button class="btn btn-danger" style="padding:8px 14px; font-size:0.85rem; border-radius:8px; background:#ef4444; color:#fff; border:none; cursor:pointer;" onclick="window.deleteReel('${reel._id}')">Delete</button>
                     </div>
                 </div>
             </div>
@@ -1198,6 +1200,7 @@ window.openReelModal = function(reel = null) {
     document.getElementById('reel-badge-input').value = reel ? reel.badge : 'Popular';
     document.getElementById('reel-link-input').value = reel ? reel.link : '';
     document.getElementById('reel-image-input').value = reel ? reel.image : '';
+    document.getElementById('reel-file-input').value = '';
     
     const preview = document.getElementById('reel-image-preview');
     if (reel && reel.image) {
@@ -1209,6 +1212,7 @@ window.openReelModal = function(reel = null) {
 
     modal.classList.add('active');
     modal.classList.remove('hidden');
+    modal.style.display = 'flex';
 };
 
 window.closeReelModal = function() {
@@ -1216,6 +1220,7 @@ window.closeReelModal = function() {
     if (modal) {
         modal.classList.remove('active');
         modal.classList.add('hidden');
+        modal.style.display = 'none';
     }
 };
 
@@ -1238,24 +1243,63 @@ window.editReel = function(id) {
     if (reel) window.openReelModal(reel);
 };
 
+window.saveReelCms = async function(event) {
+    event.preventDefault();
+    const id = document.getElementById('reel-id').value;
+    const title = document.getElementById('reel-title-input').value;
+    const badge = document.getElementById('reel-badge-input').value;
+    const link = document.getElementById('reel-link-input').value;
+    const image = document.getElementById('reel-image-input').value;
+
+    const payload = { title, badge, link, image };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${API_URL}/reels/${id}` : `${API_URL}/reels`;
+
+    try {
+        const res = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            window.showAdminToast(id ? 'Reel updated successfully!' : 'New Reel added!', 'success');
+            window.closeReelModal();
+            fetchReels();
+        } else {
+            window.showAdminToast('Failed to save reel. Invalid PIN.', 'error');
+        }
+    } catch(err) {
+        window.showAdminToast('Error saving reel', 'error');
+    }
+};
+
 window.deleteReel = async function(id) {
     if (!confirm('Are you sure you want to delete this Instagram reel?')) return;
     try {
         const res = await fetch(`${API_URL}/reels/${id}`, {
             method: 'DELETE',
-            headers: { 'x-admin-pin': authPin, 'x-pin': authPin }
+            headers: {
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            }
         });
         if (res.ok) {
+            window.showAdminToast('Reel deleted successfully!', 'success');
             fetchReels();
         } else {
-            window.showAdminToast('Failed to delete reel', "error");
+            window.showAdminToast('Failed to delete reel', 'error');
         }
     } catch (err) {
-        window.showAdminToast('Error deleting reel', "error");
+        window.showAdminToast('Error deleting reel', 'error');
     }
 };
 
-// --- SUB-TAB 2: ANNOUNCEMENTS (WITH HIDE & DELETE BUTTONS) ---
+// --- SUB-TAB 2: ANNOUNCEMENTS ---
 async function fetchCmsAnnouncements() {
     const container = document.getElementById('cms-announcements-grid');
     if (!container) return;
@@ -1309,17 +1353,19 @@ window.toggleAnnouncementActive = async function(id, currentActive) {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
-                'x-admin-pin': authPin, 'x-pin': authPin
+                'x-admin-pin': authPin,
+                'x-pin': authPin
             },
             body: JSON.stringify({ isActive: !currentActive })
         });
         if (res.ok) {
+            window.showAdminToast(currentActive ? 'Announcement hidden from website' : 'Announcement activated live!', 'success');
             fetchCmsAnnouncements();
         } else {
-            window.showAdminToast('Failed to update announcement status', "error");
+            window.showAdminToast('Failed to update announcement status', 'error');
         }
     } catch(e) {
-        window.showAdminToast('Error updating announcement', "error");
+        window.showAdminToast('Error updating announcement', 'error');
     }
 };
 
@@ -1328,44 +1374,52 @@ window.deleteAnnouncementCms = async function(id) {
     try {
         const res = await fetch(`${API_URL}/announcements/${id}`, {
             method: 'DELETE',
-            headers: { 'x-admin-pin': authPin, 'x-pin': authPin }
+            headers: {
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            }
         });
         if (res.ok) {
+            window.showAdminToast('Announcement deleted successfully!', 'success');
             fetchCmsAnnouncements();
         } else {
-            window.showAdminToast('Failed to delete announcement', "error");
+            window.showAdminToast('Failed to delete announcement', 'error');
         }
     } catch(e) {
-        window.showAdminToast('Error deleting announcement', "error");
+        window.showAdminToast('Error deleting announcement', 'error');
     }
 };
 
 // --- SUB-TAB 3: CRAZIEST DEALS OF THE HOUR ---
-const defaultCraziestDeals = [
-    { _id: 'deal-1', name: 'Pet Bhar Combo 💀', note: 'Includes: Red Sauce Pasta (Full) + Masterchef Special Thecha Chowmein (Half)', price: 279, originalPrice: 325, image: 'images/menu/Craziest Deal Menu/pet-bhar-combo.png' },
-    { _id: 'deal-2', name: 'Tera Jo Mann Wo Khila De 🥴', note: 'Includes: Veg Manchurian (Full) + Dhokla', price: 209, originalPrice: 228, image: 'images/menu/Craziest Deal Menu/tera-jo-mann-wo-khila-de.png' },
-    { _id: 'deal-3', name: 'Kuch Bhi Khila De 😭', note: 'Includes: Mushroom Masala (Half) + Veg Fried Rice (Half)', price: 209, originalPrice: 228, image: 'images/menu/Craziest Deal Menu/kuch-bhi-khila-de.png' }
-];
-
 async function fetchCmsDeals() {
     const container = document.getElementById('cms-deals-grid');
     if (!container) return;
-    
-    adminDealsList = defaultCraziestDeals;
+    try {
+        const res = await fetch(`${API_URL}/menu`);
+        const menuItems = await res.json();
+        adminDealsList = (menuItems || []).filter(item => item.isCombo || (item.category && item.category.includes('Feast')) || (item.category && item.category.includes('Combos')) || (item.category && item.category.includes('Deals')));
+        
+        if (adminDealsList.length === 0) {
+            container.innerHTML = '<div style="color:#aaa; grid-column:1/-1;">No deals found in database.</div>';
+            return;
+        }
 
-    container.innerHTML = adminDealsList.map(deal => `
-        <div class="card" style="background:#18181c; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:16px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
-            <div>
-                <img src="${deal.image || 'images/logo.png'}" style="width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:12px; margin-bottom:12px;" onerror="this.src='images/logo.png'">
-                <h4 style="color:#fff; font-size:1.1rem; font-weight:700; margin-bottom:6px;">${deal.name}</h4>
-                <div style="color:#f97316; font-size:0.85rem; line-height:1.4; margin-bottom:10px;">${deal.note || deal.description}</div>
-                <div style="font-weight:bold; color:#4ade80; font-size:1.2rem; margin-bottom:14px;">
-                    ₹${deal.price} ${deal.originalPrice ? `<span style="color:#64748b; text-decoration:line-through; font-size:0.9rem; margin-left:6px;">₹${deal.originalPrice}</span>` : ''}
+        container.innerHTML = adminDealsList.map(deal => `
+            <div class="card" style="background:#18181c; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:16px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+                <div>
+                    <img src="${deal.image || 'images/logo.png'}" style="width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:12px; margin-bottom:12px;" onerror="this.src='images/logo.png'">
+                    <h4 style="color:#fff; font-size:1.1rem; font-weight:700; margin-bottom:6px;">${deal.name}</h4>
+                    <div style="color:#f97316; font-size:0.85rem; line-height:1.4; margin-bottom:10px;">${deal.note || deal.description || 'Special Deal Combo'}</div>
+                    <div style="font-weight:bold; color:#4ade80; font-size:1.2rem; margin-bottom:14px;">
+                        ₹${deal.price} ${deal.originalPrice ? `<span style="color:#64748b; text-decoration:line-through; font-size:0.9rem; margin-left:6px;">₹${deal.originalPrice}</span>` : ''}
+                    </div>
                 </div>
+                <button class="btn btn-primary" style="width:100%; padding:10px; font-weight:bold; border-radius:8px; cursor:pointer;" onclick="window.openDealModal('${deal._id}')">✏️ Edit Deal Details & Banner</button>
             </div>
-            <button class="btn btn-primary" style="width:100%; padding:10px; font-weight:bold; border-radius:8px;" onclick="window.openDealModal('${deal._id}')">✏️ Edit Deal Details & Banner</button>
-        </div>
-    `).join('');
+        `).join('');
+    } catch(e) {
+        container.innerHTML = '<div style="color:#ef4444;">Failed to load deals from database.</div>';
+    }
 }
 
 window.openDealModal = function(dealId) {
@@ -1377,10 +1431,11 @@ window.openDealModal = function(dealId) {
 
     document.getElementById('deal-id').value = deal._id;
     document.getElementById('deal-title-input').value = deal.name;
-    document.getElementById('deal-note-input').value = deal.note || '';
+    document.getElementById('deal-note-input').value = deal.note || deal.description || '';
     document.getElementById('deal-price-input').value = deal.price;
     document.getElementById('deal-origprice-input').value = deal.originalPrice || '';
     document.getElementById('deal-image-input').value = deal.image || '';
+    document.getElementById('deal-file-input').value = '';
 
     const preview = document.getElementById('deal-image-preview');
     if (preview && deal.image) {
@@ -1418,20 +1473,37 @@ window.handleDealImageUpload = function(event) {
     reader.readAsDataURL(file);
 };
 
-window.saveDealCms = function(event) {
+window.saveDealCms = async function(event) {
     event.preventDefault();
     const id = document.getElementById('deal-id').value;
-    const deal = adminDealsList.find(d => d._id === id);
-    if (deal) {
-        deal.name = document.getElementById('deal-title-input').value;
-        deal.note = document.getElementById('deal-note-input').value;
-        deal.price = Number(document.getElementById('deal-price-input').value);
-        deal.originalPrice = Number(document.getElementById('deal-origprice-input').value);
-        deal.image = document.getElementById('deal-image-input').value;
-        
-        window.showAdminToast('Deal updated successfully!', "error");
-        window.closeDealModal();
-        fetchCmsDeals();
+    const name = document.getElementById('deal-title-input').value;
+    const note = document.getElementById('deal-note-input').value;
+    const price = Number(document.getElementById('deal-price-input').value);
+    const originalPrice = Number(document.getElementById('deal-origprice-input').value);
+    const image = document.getElementById('deal-image-input').value;
+
+    const payload = { name, note, description: note, price, originalPrice, image };
+
+    try {
+        const res = await fetch(`${API_URL}/menu/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            window.showAdminToast('Deal updated successfully in MongoDB Atlas!', 'success');
+            window.closeDealModal();
+            fetchCmsDeals();
+        } else {
+            window.showAdminToast('Failed to update deal. Invalid PIN.', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error updating deal', 'error');
     }
 };
 
@@ -1492,61 +1564,17 @@ window.saveHeroCms = async function(event) {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
-                'x-admin-pin': authPin, 'x-pin': authPin
+                'x-admin-pin': authPin,
+                'x-pin': authPin
             },
             body: JSON.stringify(payload)
         });
         if (res.ok) {
-            window.showAdminToast('Hero & About Us Settings saved successfully!', "error");
+            window.showAdminToast('Hero & About Us Settings saved in MongoDB Atlas!', 'success');
         } else {
-            window.showAdminToast('Failed to save settings. Check Admin PIN.', "error");
+            window.showAdminToast('Failed to save settings. Invalid PIN.', 'error');
         }
     } catch(e) {
-        window.showAdminToast('Error saving settings', "error");
+        window.showAdminToast('Error saving settings', 'error');
     }
-};
-
-// Custom Admin Toast Notification (Replaces Browser native alert)
-window.showAdminToast = function(message, type = 'success') {
-    const container = document.getElementById('admin-toast-container');
-    if (!container) return;
-
-    const toast = document.createElement('div');
-    const isSuccess = type === 'success';
-    
-    toast.style.cssText = `
-        background: ${isSuccess ? '#166534' : '#991b1b'};
-        color: #ffffff;
-        border: 1px solid ${isSuccess ? '#22c55e' : '#ef4444'};
-        padding: 14px 22px;
-        border-radius: 12px;
-        font-weight: 600;
-        font-size: 0.95rem;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        min-width: 280px;
-        transform: translateY(20px);
-        opacity: 0;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    `;
-
-    toast.innerHTML = `
-        <span>${isSuccess ? '✅' : '❌'}</span>
-        <span>${message}</span>
-    `;
-
-    container.appendChild(toast);
-
-    setTimeout(() => {
-        toast.style.transform = 'translateY(0)';
-        toast.style.opacity = '1';
-    }, 10);
-
-    setTimeout(() => {
-        toast.style.transform = 'translateY(20px)';
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 3200);
 };
