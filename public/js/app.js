@@ -103,17 +103,24 @@ function showConfirm(title, message, okText = 'Yes', isDanger = true) {
 // =======================
 navItems.forEach(item => {
     item.addEventListener('click', () => {
-        navItems.forEach(n => n.classList.remove('active'));
-        tabSections.forEach(s => s.classList.add('hidden'));
+        const allNavs = document.querySelectorAll('.nav-item');
+        const allTabs = document.querySelectorAll('.tab-section');
+        
+        allNavs.forEach(n => n.classList.remove('active'));
+        allTabs.forEach(s => s.classList.add('hidden'));
         
         item.classList.add('active');
         const targetId = item.getAttribute('data-target');
-        document.getElementById(targetId).classList.remove('hidden');
-        document.getElementById(targetId).classList.add('active');
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) {
+            targetEl.classList.remove('hidden');
+            targetEl.classList.add('active');
+        }
         
         // Close sidebar on mobile after clicking a link
         if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('open');
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.classList.remove('open');
         }
     });
 });
@@ -1101,7 +1108,7 @@ async function fetchReels() {
 }
 
 function renderAdminReels() {
-    const container = document.getElementById('reels-grid-container');
+    const container = document.getElementById('media-grid-container');
     if (!container) return;
 
     if (!adminReelsList || adminReelsList.length === 0) {
