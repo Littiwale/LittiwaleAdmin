@@ -115,6 +115,7 @@ navItems.forEach(item => {
         if (targetEl) {
             targetEl.classList.remove('hidden');
             targetEl.classList.add('active');
+            if (targetId === 'media-section') fetchReels();
         }
         
         // Close sidebar on mobile after clicking a link

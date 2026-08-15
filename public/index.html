@@ -239,6 +239,31 @@
             </section>
 
             <!-- Settings Section -->
+            
+            <!-- MEDIA & CONTENT SECTION -->
+            <section id="media-section" class="tab-section hidden">
+                <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; background:#18181c; padding:20px 24px; border-radius:16px; border:1px solid rgba(255,255,255,0.08);">
+                    <div>
+                        <h2 style="font-size:1.6rem; color:#ffffff; font-weight:700; margin-bottom:4px;">🖼️ Media & Site Content Manager</h2>
+                        <p style="color:#9ca3af; font-size:0.9rem; margin:0;">Manage Instagram Reels, Thumbnails, Links, Banners & Deals displayed on the main website</p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-primary" onclick="openReelModal()">+ Add Instagram Reel</button>
+                    </div>
+                </div>
+
+                <!-- Instagram Reels Sub-Section -->
+                <div style="margin-bottom:30px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <h3 style="font-size:1.25rem; color:#f97316; font-weight:700;">📸 Instagram Reels & Customer Reviews</h3>
+                        <span style="font-size:0.85rem; color:#9ca3af;">Clicking any card on the main website opens its Instagram Reel</span>
+                    </div>
+                    <div id="media-grid-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:20px;">
+                        <!-- Instagram Reel cards dynamically rendered via JS -->
+                    </div>
+                </div>
+            </section>
+
             <section id="settings-section" class="tab-section hidden">
                 <div class="header">
                     <h2>Store Settings</h2>
