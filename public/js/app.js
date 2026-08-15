@@ -836,7 +836,7 @@ async function loadAnnouncements() {
 document.getElementById('announcement-inline-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentAnnouncementImage) {
-        alert('Please select a banner image first.');
+        window.showAdminToast('Please select a banner image first.', "error");
         return;
     }
 
@@ -1045,10 +1045,10 @@ document.getElementById('schedule-form').addEventListener('submit', async (e) =>
     try {
         await apiCall(`/settings/${storeId}`, 'PUT', { schedule: newSchedule });
         closeModal('schedule-modal');
-        alert('Weekly Schedule Saved!');
+        window.showAdminToast('Weekly Schedule Saved!', "error");
         loadStoreSettings();
     } catch (err) {
-        alert('Error saving schedule');
+        window.showAdminToast('Error saving schedule', "error");
     }
 });
 
@@ -1082,10 +1082,10 @@ async function saveStoreSetting(storeId) {
     
     try {
         await apiCall(`/settings/${storeId}`, 'PUT', { autoSchedule, isOnline, offlineReason });
-        alert(`${storeId.toUpperCase()} settings saved!`);
+        window.showAdminToast(`${storeId.toUpperCase(, "error")} settings saved!`);
         loadStoreSettings();
     } catch (e) {
-        alert(`Error saving ${storeId} settings`);
+        window.showAdminToast(`Error saving ${storeId} settings`, "error");
     }
 }
 
@@ -1243,15 +1243,15 @@ window.deleteReel = async function(id) {
     try {
         const res = await fetch(`${API_URL}/reels/${id}`, {
             method: 'DELETE',
-            headers: { 'x-pin': authPin }
+            headers: { 'x-admin-pin': authPin, 'x-pin': authPin }
         });
         if (res.ok) {
             fetchReels();
         } else {
-            alert('Failed to delete reel');
+            window.showAdminToast('Failed to delete reel', "error");
         }
     } catch (err) {
-        alert('Error deleting reel');
+        window.showAdminToast('Error deleting reel', "error");
     }
 };
 
@@ -1309,17 +1309,17 @@ window.toggleAnnouncementActive = async function(id, currentActive) {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
-                'x-pin': authPin
+                'x-admin-pin': authPin, 'x-pin': authPin
             },
             body: JSON.stringify({ isActive: !currentActive })
         });
         if (res.ok) {
             fetchCmsAnnouncements();
         } else {
-            alert('Failed to update announcement status');
+            window.showAdminToast('Failed to update announcement status', "error");
         }
     } catch(e) {
-        alert('Error updating announcement');
+        window.showAdminToast('Error updating announcement', "error");
     }
 };
 
@@ -1328,15 +1328,15 @@ window.deleteAnnouncementCms = async function(id) {
     try {
         const res = await fetch(`${API_URL}/announcements/${id}`, {
             method: 'DELETE',
-            headers: { 'x-pin': authPin }
+            headers: { 'x-admin-pin': authPin, 'x-pin': authPin }
         });
         if (res.ok) {
             fetchCmsAnnouncements();
         } else {
-            alert('Failed to delete announcement');
+            window.showAdminToast('Failed to delete announcement', "error");
         }
     } catch(e) {
-        alert('Error deleting announcement');
+        window.showAdminToast('Error deleting announcement', "error");
     }
 };
 
@@ -1429,7 +1429,7 @@ window.saveDealCms = function(event) {
         deal.originalPrice = Number(document.getElementById('deal-origprice-input').value);
         deal.image = document.getElementById('deal-image-input').value;
         
-        alert('Deal updated successfully!');
+        window.showAdminToast('Deal updated successfully!', "error");
         window.closeDealModal();
         fetchCmsDeals();
     }
@@ -1492,16 +1492,61 @@ window.saveHeroCms = async function(event) {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
-                'x-pin': authPin
+                'x-admin-pin': authPin, 'x-pin': authPin
             },
             body: JSON.stringify(payload)
         });
         if (res.ok) {
-            alert('Hero & About Us Settings saved successfully!');
+            window.showAdminToast('Hero & About Us Settings saved successfully!', "error");
         } else {
-            alert('Failed to save settings. Check Admin PIN.');
+            window.showAdminToast('Failed to save settings. Check Admin PIN.', "error");
         }
     } catch(e) {
-        alert('Error saving settings');
+        window.showAdminToast('Error saving settings', "error");
     }
+};
+
+// Custom Admin Toast Notification (Replaces Browser native alert)
+window.showAdminToast = function(message, type = 'success') {
+    const container = document.getElementById('admin-toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    const isSuccess = type === 'success';
+    
+    toast.style.cssText = `
+        background: ${isSuccess ? '#166534' : '#991b1b'};
+        color: #ffffff;
+        border: 1px solid ${isSuccess ? '#22c55e' : '#ef4444'};
+        padding: 14px 22px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 280px;
+        transform: translateY(20px);
+        opacity: 0;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    `;
+
+    toast.innerHTML = `
+        <span>${isSuccess ? '✅' : '❌'}</span>
+        <span>${message}</span>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.transform = 'translateY(0)';
+        toast.style.opacity = '1';
+    }, 10);
+
+    setTimeout(() => {
+        toast.style.transform = 'translateY(20px)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 3200);
 };
