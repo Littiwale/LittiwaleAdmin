@@ -65,6 +65,27 @@
             border: 1px solid transparent;
         }
     </style>
+
+    <style>
+        /* REEL MODAL OVERLAY STYLES */
+        .modal {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(0, 0, 0, 0.85) !important;
+            backdrop-filter: blur(8px) !important;
+            z-index: 99999 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .modal.hidden {
+            display: none !important;
+        }
+    </style>
+    
 </head>
 <body>
     <!-- Login Screen -->
@@ -93,9 +114,7 @@
             </div>
             <nav>
                 <button class="nav-item active" data-target="menu-section">Menu</button>
-                <button class="nav-item" data-target="announcements-section">Announcements</button>
                 <button class="nav-item" data-target="coupons-section">Coupons</button>
-                
                 <button class="nav-item" data-target="media-section">Media & Content</button>
                 <button class="nav-item" data-target="settings-section">Store Settings</button>
             </nav>
@@ -243,19 +262,21 @@
             <!-- MEDIA & CONTENT SECTION -->
             
             <!-- MEDIA & CONTENT SECTION (UNIFIED 4-TAB CMS) -->
+            
+            <!-- MEDIA & CONTENT SECTION (UNIFIED 4-TAB CMS) -->
             <section id="media-section" class="tab-section hidden">
                 <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; background:#18181c; padding:20px 24px; border-radius:16px; border:1px solid rgba(255,255,255,0.08);">
                     <div>
-                        <h2 style="font-size:1.6rem; color:#ffffff; font-weight:700; margin-bottom:4px;">🖼️ Website CMS & Media Manager</h2>
-                        <p style="color:#9ca3af; font-size:0.9rem; margin:0;">Manage Instagram Reels, Banners, Deals & Hero Content for the main website</p>
+                        <h2 style="font-size:1.6rem; color:#ffffff; font-weight:700; margin-bottom:4px;">🖼️ Website Media & Content CMS</h2>
+                        <p style="color:#9ca3af; font-size:0.9rem; margin:0;">Manage Instagram Reels, Announcements, Hourly Deals & About Us section for main website</p>
                     </div>
                     <button class="btn btn-primary" id="cms-primary-btn" onclick="openReelModal()">+ Add Instagram Reel</button>
                 </div>
 
                 <!-- Sub-Tab Navigation Bar -->
                 <div class="cms-subtabs" style="display:flex; gap:10px; margin-bottom:25px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:12px; flex-wrap:wrap;">
-                    <button class="cms-tab-btn active" data-subtab="reels-tab" onclick="switchCmsSubTab('reels-tab')" style="padding:10px 18px; border-radius:10px; border:none; background:#f97316; color:#fff; font-weight:bold; cursor:pointer;">📸 Instagram Reels</button>
-                    <button class="cms-tab-btn" data-subtab="banners-tab" onclick="switchCmsSubTab('banners-tab')" style="padding:10px 18px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#aaa; font-weight:600; cursor:pointer;">📢 Banners (16:9)</button>
+                    <button class="cms-tab-btn active" data-subtab="reels-tab" onclick="switchCmsSubTab('reels-tab')" style="padding:10px 18px; border-radius:10px; border:none; background:#f97316; color:#fff; font-weight:bold; cursor:pointer;">📷 Instagram Reels</button>
+                    <button class="cms-tab-btn" data-subtab="announcements-tab" onclick="switchCmsSubTab('announcements-tab')" style="padding:10px 18px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#aaa; font-weight:600; cursor:pointer;">📢 Announcements</button>
                     <button class="cms-tab-btn" data-subtab="deals-tab" onclick="switchCmsSubTab('deals-tab')" style="padding:10px 18px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#aaa; font-weight:600; cursor:pointer;">🔥 Hourly Deals</button>
                     <button class="cms-tab-btn" data-subtab="hero-tab" onclick="switchCmsSubTab('hero-tab')" style="padding:10px 18px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#aaa; font-weight:600; cursor:pointer;">ℹ️ Hero & About Us</button>
                 </div>
@@ -263,22 +284,22 @@
                 <!-- Sub-Tab 1: Instagram Reels Container -->
                 <div id="reels-tab" class="cms-tab-content">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="font-size:1.2rem; color:#fff;">Instagram Reels (6 Featured Customer Reviews)</h3>
-                        <span style="font-size:0.85rem; color:#9ca3af;">Clicking any card on main website opens its Instagram URL</span>
+                        <h3 style="font-size:1.2rem; color:#fff;">Instagram Reels (Customer Reviews & Food Posts)</h3>
+                        <span style="font-size:0.85rem; color:#9ca3af;">Clicking reel card on website opens its Instagram link</span>
                     </div>
                     <div id="media-grid-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:20px;">
                         <!-- Reels loaded via JS -->
                     </div>
                 </div>
 
-                <!-- Sub-Tab 2: Banners Container -->
-                <div id="banners-tab" class="cms-tab-content hidden">
+                <!-- Sub-Tab 2: Announcements Container -->
+                <div id="announcements-tab" class="cms-tab-content hidden">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                        <h3 style="font-size:1.2rem; color:#fff;">16:9 Announcement Banners</h3>
-                        <span style="font-size:0.85rem; color:#9ca3af;">Managed under Announcements section</span>
+                        <h3 style="font-size:1.2rem; color:#fff;">Announcement Banners (16:9 Ratio)</h3>
+                        <button class="btn btn-primary" onclick="openAnnouncementModal()">+ Add Announcement Banner</button>
                     </div>
-                    <div id="cms-banners-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:20px;">
-                        <!-- Banners copied/synced -->
+                    <div id="cms-announcements-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:20px;">
+                        <!-- Announcements loaded via JS -->
                     </div>
                 </div>
 
@@ -286,35 +307,40 @@
                 <div id="deals-tab" class="cms-tab-content hidden">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                         <h3 style="font-size:1.2rem; color:#fff;">Craziest Deals of the Hour</h3>
-                        <span style="font-size:0.85rem; color:#9ca3af;">Managed under Menu Combos</span>
+                        <span style="font-size:0.85rem; color:#9ca3af;">Edit deal banners, titles, prices & included items</span>
                     </div>
                     <div id="cms-deals-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:20px;">
-                        <!-- Deals synced -->
+                        <!-- Deals loaded via JS -->
                     </div>
                 </div>
 
-                <!-- Sub-Tab 4: Hero & About Container -->
+                <!-- Sub-Tab 4: Hero & About Us Container -->
                 <div id="hero-tab" class="cms-tab-content hidden">
-                    <div style="background:#18181c; padding:24px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); max-width:650px;">
-                        <h3 style="font-size:1.2rem; color:#fff; margin-bottom:20px;">Hero & About Us Content Settings</h3>
+                    <div style="background:#18181c; padding:28px; border-radius:16px; border:1px solid rgba(255,255,255,0.08); max-width:680px;">
+                        <h3 style="font-size:1.25rem; color:#fff; margin-bottom:20px;">Hero & About Us Settings</h3>
                         <form id="hero-cms-form" onsubmit="saveHeroCms(event)">
-                            <div style="margin-bottom:16px;">
-                                <label style="display:block; color:#cbd5e1; margin-bottom:6px; font-size:0.9rem;">About Stat Badge Number / Tag</label>
-                                <input type="text" id="cms-stat-num" class="form-control" value="#1" style="width:100%; padding:10px; background:#121215; border:1px solid #333; color:#fff; border-radius:8px;">
+                            <div style="margin-bottom:18px;">
+                                <label style="display:block; color:#cbd5e1; margin-bottom:6px; font-size:0.9rem; font-weight:600;">About Stat Badge Number / Tag</label>
+                                <input type="text" id="cms-stat-num" class="form-control" placeholder="#1" style="width:100%; padding:12px; background:#121215; border:1px solid #333; color:#fff; border-radius:10px;">
                             </div>
-                            <div style="margin-bottom:16px;">
-                                <label style="display:block; color:#cbd5e1; margin-bottom:6px; font-size:0.9rem;">About Stat Subtitle</label>
-                                <input type="text" id="cms-stat-text" class="form-control" value="Premier Cloud Kitchen in Barbil" style="width:100%; padding:10px; background:#121215; border:1px solid #333; color:#fff; border-radius:8px;">
+                            <div style="margin-bottom:18px;">
+                                <label style="display:block; color:#cbd5e1; margin-bottom:6px; font-size:0.9rem; font-weight:600;">About Stat Subtitle</label>
+                                <input type="text" id="cms-stat-text" class="form-control" placeholder="Premier Cloud Kitchen in Barbil" style="width:100%; padding:12px; background:#121215; border:1px solid #333; color:#fff; border-radius:10px;">
                             </div>
-                            <div style="margin-bottom:20px;">
-                                <label style="display:block; color:#cbd5e1; margin-bottom:6px; font-size:0.9rem;">About Us Image (URL or Path)</label>
-                                <input type="text" id="cms-about-img" class="form-control" value="images/menu-litti.jpg" style="width:100%; padding:10px; background:#121215; border:1px solid #333; color:#fff; border-radius:8px;">
+                            <div style="margin-bottom:18px;">
+                                <label style="display:block; color:#cbd5e1; margin-bottom:6px; font-size:0.9rem; font-weight:600;">About Section Photo (Upload File or Base64/URL)</label>
+                                <input type="file" id="cms-about-file-input" accept="image/*" style="margin-bottom:10px; color:#aaa; font-size:0.9rem;" onchange="handleAboutImageUpload(event)">
+                                <input type="text" id="cms-about-img" class="form-control" placeholder="images/menu-litti.jpg or data:image/..." style="width:100%; padding:12px; background:#121215; border:1px solid #333; color:#fff; border-radius:10px;">
                             </div>
-                            <button type="submit" class="btn btn-primary" style="padding:10px 20px; background:#f97316; color:#fff; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Save Changes</button>
+                            <div style="text-align:center; margin-bottom:20px;">
+                                <img id="cms-about-preview" src="images/menu-litti.jpg" style="max-height:160px; border-radius:12px; border:1px solid rgba(249,115,22,0.3); display:block; margin:0 auto;" onerror="this.src='images/logo.png'">
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="padding:12px 28px; background:#f97316; color:#fff; border:none; border-radius:10px; font-weight:bold; cursor:pointer; font-size:1rem;">Save Hero & About Settings</button>
                         </form>
                     </div>
                 </div>
             </section>
+
 
 
             <section id="settings-section" class="tab-section hidden">

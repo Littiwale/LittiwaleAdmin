@@ -1093,25 +1093,15 @@ async function saveStoreSetting(storeId) {
 init();
 
 
-// =======================
-// INSTAGRAM REELS MANAGEMENT
-// =======================
+
+
+// ==========================================
+// UNIFIED 4-SUB-TAB CMS MANAGEMENT SYSTEM
+// ==========================================
 let adminReelsList = [];
 
-async function fetchReels() {
-    try {
-        const res = await fetch(`${API_URL}/reels`);
-        adminReelsList = await res.json();
-        renderAdminReels();
-    } catch (err) {
-        console.error('Error fetching reels:', err);
-    }
-}
-
-
-
-// Sub-Tab Switcher for CMS Section
-function switchCmsSubTab(subTabId) {
+// Sub-Tab Switcher
+window.switchCmsSubTab = function(subTabId) {
     const tabBtns = document.querySelectorAll('.cms-tab-btn');
     const tabContents = document.querySelectorAll('.cms-tab-content');
 
@@ -1141,15 +1131,30 @@ function switchCmsSubTab(subTabId) {
     if (primaryBtn) {
         if (subTabId === 'reels-tab') {
             primaryBtn.textContent = '+ Add Instagram Reel';
-            primaryBtn.onclick = openReelModal;
+            primaryBtn.onclick = window.openReelModal;
             primaryBtn.style.display = 'block';
-        } else if (subTabId === 'banners-tab') {
+        } else if (subTabId === 'announcements-tab') {
             primaryBtn.textContent = '+ Add Announcement Banner';
-            primaryBtn.onclick = () => openAnnouncementModal();
+            primaryBtn.onclick = () => { if (typeof openAnnouncementModal === 'function') openAnnouncementModal(); };
             primaryBtn.style.display = 'block';
         } else {
             primaryBtn.style.display = 'none';
         }
+    }
+
+    if (subTabId === 'announcements-tab') fetchCmsAnnouncements();
+    if (subTabId === 'deals-tab') fetchCmsDeals();
+    if (subTabId === 'hero-tab') loadHeroCmsSettings();
+};
+
+// --- SUB-TAB 1: INSTAGRAM REELS ---
+async function fetchReels() {
+    try {
+        const res = await fetch(`${API_URL}/reels`);
+        adminReelsList = await res.json();
+        renderAdminReels();
+    } catch (err) {
+        console.error('Error fetching reels:', err);
     }
 }
 
@@ -1163,23 +1168,19 @@ function renderAdminReels() {
     }
 
     container.innerHTML = adminReelsList.map(reel => {
-        let displayImg = reel.image || 'images/instagram/reel1.png';
-        if (displayImg.startsWith('images/instagram/')) {
-            displayImg = displayImg;
-        }
         return `
             <div class="card" style="background:#18181c; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
                 <div style="position:relative; aspect-ratio:4/3; width:100%; overflow:hidden; background:#0c0c0e;">
-                    <img src="${displayImg}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.src='images/logo.png'">
+                    <img src="${reel.image || 'images/logo.png'}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.src='images/logo.png'">
                     <span style="position:absolute; top:12px; left:12px; background:${reel.badge === 'Loved' ? '#ec4899' : '#f97316'}; color:#fff; font-size:0.75rem; font-weight:bold; padding:4px 12px; border-radius:20px; box-shadow:0 4px 10px rgba(0,0,0,0.4);">${reel.badge || 'Popular'}</span>
                 </div>
                 <div style="padding:16px;">
                     <h4 style="font-size:1rem; color:#fff; font-weight:700; margin-bottom:6px;">${reel.title || 'Customer Review'}</h4>
                     <a href="${reel.link}" target="_blank" style="font-size:0.78rem; color:#60a5fa; text-decoration:none; word-break:break-all; display:block; margin-bottom:14px;">🔗 ${reel.link}</a>
                     <div style="display:flex; gap:8px;">
-                        <button class="btn btn-outline" style="flex:1; padding:8px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#fff; cursor:pointer;" onclick="editReel('${reel._id}')">Edit</button>
-                        <a href="${displayImg}" download="reel_thumbnail.png" target="_blank" class="btn btn-outline" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#4ade80; text-decoration:none; text-align:center;" title="Download Thumbnail">📥</a>
-                        <button class="btn btn-danger" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:#ef4444; color:#fff; border:none; cursor:pointer;" onclick="deleteReel('${reel._id}')">Delete</button>
+                        <button class="btn btn-outline" style="flex:1; padding:8px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#fff; cursor:pointer;" onclick="window.editReel('${reel._id}')">Edit</button>
+                        <a href="${reel.image}" download="reel_thumbnail.png" target="_blank" class="btn btn-outline" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#4ade80; text-decoration:none; text-align:center;" title="Download Base64 Image">📥</a>
+                        <button class="btn btn-danger" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:#ef4444; color:#fff; border:none; cursor:pointer;" onclick="window.deleteReel('${reel._id}')">Delete</button>
                     </div>
                 </div>
             </div>
@@ -1187,8 +1188,7 @@ function renderAdminReels() {
     }).join('');
 }
 
-
-function openReelModal(reel = null) {
+window.openReelModal = function(reel = null) {
     const modal = document.getElementById('reel-modal');
     if (!modal) return;
     
@@ -1208,14 +1208,14 @@ function openReelModal(reel = null) {
     }
 
     modal.classList.remove('hidden');
-}
+};
 
-function closeReelModal() {
+window.closeReelModal = function() {
     const modal = document.getElementById('reel-modal');
     if (modal) modal.classList.add('hidden');
-}
+};
 
-function handleReelImageUpload(event) {
+window.handleReelImageUpload = function(event) {
     const file = event.target.files[0];
     if (!file) return;
     
@@ -1227,14 +1227,14 @@ function handleReelImageUpload(event) {
         preview.style.display = 'block';
     };
     reader.readAsDataURL(file);
-}
+};
 
-function editReel(id) {
+window.editReel = function(id) {
     const reel = adminReelsList.find(r => r._id === id);
-    if (reel) openReelModal(reel);
-}
+    if (reel) window.openReelModal(reel);
+};
 
-async function deleteReel(id) {
+window.deleteReel = async function(id) {
     if (!confirm('Are you sure you want to delete this Instagram reel?')) return;
     try {
         const res = await fetch(`${API_URL}/reels/${id}`, {
@@ -1249,42 +1249,115 @@ async function deleteReel(id) {
     } catch (err) {
         alert('Error deleting reel');
     }
+};
+
+// --- SUB-TAB 2: ANNOUNCEMENTS ---
+async function fetchCmsAnnouncements() {
+    const container = document.getElementById('cms-announcements-grid');
+    if (!container) return;
+    try {
+        const res = await fetch(`${API_URL}/announcements`);
+        const announcements = await res.json();
+        if (!announcements || announcements.length === 0) {
+            container.innerHTML = '<div style="color:#aaa;">No announcements uploaded yet. Click "+ Add Announcement Banner".</div>';
+            return;
+        }
+        container.innerHTML = announcements.map(a => `
+            <div class="card" style="background:#18181c; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:12px;">
+                <div style="aspect-ratio:16/9; width:100%; border-radius:10px; overflow:hidden; background:#000; margin-bottom:10px;">
+                    <img src="${a.image || 'images/logo.png'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='images/logo.png'">
+                </div>
+                <div style="font-weight:bold; color:#fff; font-size:0.95rem; margin-bottom:6px;">${a.title || 'Announcement Banner'}</div>
+                <div style="font-size:0.8rem; color:${a.isActive !== false ? '#4ade80' : '#ef4444'}; margin-bottom:10px;">Status: ${a.isActive !== false ? 'Active (Live)' : 'Inactive'}</div>
+            </div>
+        `).join('');
+    } catch(e) {
+        container.innerHTML = '<div style="color:#ef4444;">Failed to load announcements.</div>';
+    }
 }
 
-document.getElementById('reel-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('reel-id').value;
-    const body = {
-        title: document.getElementById('reel-title-input').value,
-        badge: document.getElementById('reel-badge-input').value,
-        link: document.getElementById('reel-link-input').value,
-        image: document.getElementById('reel-image-input').value
-    };
+// --- SUB-TAB 3: HOURLY DEALS ---
+async function fetchCmsDeals() {
+    const container = document.getElementById('cms-deals-grid');
+    if (!container) return;
+    try {
+        const res = await fetch(`${API_URL}/menu`);
+        const menuItems = await res.json();
+        const deals = (menuItems || []).filter(item => item.isCombo || (item.category && item.category.includes('Feast')) || (item.category && item.category.includes('Combos')));
+        
+        if (deals.length === 0) {
+            container.innerHTML = '<div style="color:#aaa;">No deals found in menu. Mark menu items as Combos in the Menu section to show them here.</div>';
+            return;
+        }
 
-    const method = id ? 'PUT' : 'POST';
-    const url = id ? `${API_URL}/reels/${id}` : `${API_URL}/reels`;
+        container.innerHTML = deals.map(deal => `
+            <div class="card" style="background:#18181c; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:14px;">
+                <img src="${deal.image || 'images/logo.png'}" style="width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:10px; margin-bottom:10px;" onerror="this.src='images/logo.png'">
+                <h4 style="color:#fff; font-size:1rem; margin-bottom:4px;">${deal.name}</h4>
+                <div style="color:#f97316; font-size:0.82rem; margin-bottom:8px;">${deal.note || deal.description || 'Special Deal Combo'}</div>
+                <div style="font-weight:bold; color:#4ade80; font-size:1.1rem; margin-bottom:10px;">₹${deal.price}</div>
+            </div>
+        `).join('');
+    } catch(e) {
+        container.innerHTML = '<div style="color:#ef4444;">Failed to load deals.</div>';
+    }
+}
+
+// --- SUB-TAB 4: HERO & ABOUT US ---
+window.handleAboutImageUpload = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('cms-about-img').value = e.target.result;
+        const preview = document.getElementById('cms-about-preview');
+        if (preview) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        }
+    };
+    reader.readAsDataURL(file);
+};
+
+window.loadHeroCmsSettings = async function() {
+    try {
+        const res = await fetch(`${API_URL}/settings`);
+        const settings = await res.json();
+        if (settings && settings.length > 0) {
+            const s = settings[0];
+            if (s.statNum) document.getElementById('cms-stat-num').value = s.statNum;
+            if (s.statText) document.getElementById('cms-stat-text').value = s.statText;
+            if (s.aboutImage) {
+                document.getElementById('cms-about-img').value = s.aboutImage;
+                const preview = document.getElementById('cms-about-preview');
+                if (preview) preview.src = s.aboutImage;
+            }
+        }
+    } catch(e) {}
+};
+
+window.saveHeroCms = async function(event) {
+    event.preventDefault();
+    const statNum = document.getElementById('cms-stat-num').value;
+    const statText = document.getElementById('cms-stat-text').value;
+    const aboutImage = document.getElementById('cms-about-img').value;
 
     try {
-        const res = await fetch(url, {
-            method,
+        const res = await fetch(`${API_URL}/settings/cloud`, {
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'x-pin': authPin
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify({ statNum, statText, aboutImage })
         });
-
         if (res.ok) {
-            closeReelModal();
-            fetchReels();
+            alert('Hero & About Settings saved successfully!');
         } else {
-            alert('Failed to save reel. Please check Admin PIN.');
+            alert('Failed to save settings. Check Admin PIN.');
         }
-    } catch (err) {
-        alert('Error saving reel');
+    } catch(e) {
+        alert('Error saving settings');
     }
-});
-
-// Hook into initial dashboard load
-const origInitDashboard = typeof initDashboard === 'function' ? initDashboard : null;
-fetchReels();
+};
