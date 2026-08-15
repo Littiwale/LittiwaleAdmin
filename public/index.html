@@ -1200,8 +1200,11 @@
                                 <input type="number" id="setting-delivery-rate-km" class="form-control" value="30" placeholder="30">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Kitchen GPS Coordinates (Barbil)</label>
-                                <input type="text" id="setting-kitchen-gps" class="form-control" value="22.1221, 85.3942" placeholder="22.1221, 85.3942">
+                                <label class="form-label" style="display:flex; align-items:center; justify-content:space-between;">
+                                    <span>Kitchen GPS Coordinates</span>
+                                    <span style="font-size:10px; color:var(--brand-gold); background:rgba(245,158,11,0.12); padding:2px 6px; border-radius:4px; font-weight:700;">🔒 Fixed (Barbil)</span>
+                                </label>
+                                <input type="text" id="setting-kitchen-gps" class="form-control" value="22.1221, 85.3942" readonly style="opacity:0.75; cursor:not-allowed; background:rgba(255,255,255,0.03); border-color:rgba(255,255,255,0.08);" title="GPS location is permanently locked for Barbil Cloud Kitchen">
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Average Dispatch Time</label>
