@@ -1108,32 +1108,85 @@ async function fetchReels() {
     }
 }
 
+
+
+// Sub-Tab Switcher for CMS Section
+function switchCmsSubTab(subTabId) {
+    const tabBtns = document.querySelectorAll('.cms-tab-btn');
+    const tabContents = document.querySelectorAll('.cms-tab-content');
+
+    tabBtns.forEach(btn => {
+        if (btn.getAttribute('data-subtab') === subTabId) {
+            btn.classList.add('active');
+            btn.style.background = '#f97316';
+            btn.style.color = '#fff';
+            btn.style.border = 'none';
+        } else {
+            btn.classList.remove('active');
+            btn.style.background = 'rgba(255,255,255,0.05)';
+            btn.style.color = '#aaa';
+            btn.style.border = '1px solid rgba(255,255,255,0.1)';
+        }
+    });
+
+    tabContents.forEach(content => {
+        if (content.id === subTabId) {
+            content.classList.remove('hidden');
+        } else {
+            content.classList.add('hidden');
+        }
+    });
+
+    const primaryBtn = document.getElementById('cms-primary-btn');
+    if (primaryBtn) {
+        if (subTabId === 'reels-tab') {
+            primaryBtn.textContent = '+ Add Instagram Reel';
+            primaryBtn.onclick = openReelModal;
+            primaryBtn.style.display = 'block';
+        } else if (subTabId === 'banners-tab') {
+            primaryBtn.textContent = '+ Add Announcement Banner';
+            primaryBtn.onclick = () => openAnnouncementModal();
+            primaryBtn.style.display = 'block';
+        } else {
+            primaryBtn.style.display = 'none';
+        }
+    }
+}
+
 function renderAdminReels() {
     const container = document.getElementById('media-grid-container');
     if (!container) return;
 
     if (!adminReelsList || adminReelsList.length === 0) {
-        container.innerHTML = '<div style="color:var(--text-muted); grid-column:1/-1;">No Instagram reels added yet. Click "+ Add New Reel" to create one.</div>';
+        container.innerHTML = '<div style="color:var(--text-muted); grid-column:1/-1;">No Instagram reels added yet. Click "+ Add Instagram Reel" to create one.</div>';
         return;
     }
 
-    container.innerHTML = adminReelsList.map(reel => `
-        <div class="card" style="background:#18181c; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; justify-content:space-between;">
-            <div style="position:relative; aspect-ratio:9/16; max-height:240px; overflow:hidden; background:#000;">
-                <img src="${reel.image || 'images/logo.png'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='images/logo.png'">
-                <span style="position:absolute; top:10px; left:10px; background:${reel.badge === 'Loved' ? '#ec4899' : '#f97316'}; color:#fff; font-size:0.75rem; font-weight:bold; padding:3px 10px; border-radius:20px;">${reel.badge || 'Popular'}</span>
-            </div>
-            <div style="padding:14px;">
-                <h4 style="font-size:0.95rem; color:#fff; margin-bottom:6px;">${reel.title || 'Customer Review'}</h4>
-                <a href="${reel.link}" target="_blank" style="font-size:0.78rem; color:#60a5fa; text-decoration:none; word-break:break-all; display:block; margin-bottom:12px;">🔗 ${reel.link}</a>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-outline" style="flex:1; padding:6px; font-size:0.8rem;" onclick="editReel('${reel._id}')">Edit</button>
-                    <button class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;" onclick="deleteReel('${reel._id}')">Delete</button>
+    container.innerHTML = adminReelsList.map(reel => {
+        let displayImg = reel.image || 'images/instagram/reel1.png';
+        if (displayImg.startsWith('images/instagram/')) {
+            displayImg = displayImg;
+        }
+        return `
+            <div class="card" style="background:#18181c; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+                <div style="position:relative; aspect-ratio:4/3; width:100%; overflow:hidden; background:#0c0c0e;">
+                    <img src="${displayImg}" style="width:100%; height:100%; object-fit:cover; display:block;" onerror="this.src='images/logo.png'">
+                    <span style="position:absolute; top:12px; left:12px; background:${reel.badge === 'Loved' ? '#ec4899' : '#f97316'}; color:#fff; font-size:0.75rem; font-weight:bold; padding:4px 12px; border-radius:20px; box-shadow:0 4px 10px rgba(0,0,0,0.4);">${reel.badge || 'Popular'}</span>
+                </div>
+                <div style="padding:16px;">
+                    <h4 style="font-size:1rem; color:#fff; font-weight:700; margin-bottom:6px;">${reel.title || 'Customer Review'}</h4>
+                    <a href="${reel.link}" target="_blank" style="font-size:0.78rem; color:#60a5fa; text-decoration:none; word-break:break-all; display:block; margin-bottom:14px;">🔗 ${reel.link}</a>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-outline" style="flex:1; padding:8px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#fff; cursor:pointer;" onclick="editReel('${reel._id}')">Edit</button>
+                        <a href="${displayImg}" download="reel_thumbnail.png" target="_blank" class="btn btn-outline" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#4ade80; text-decoration:none; text-align:center;" title="Download Thumbnail">📥</a>
+                        <button class="btn btn-danger" style="padding:8px 12px; font-size:0.85rem; border-radius:8px; background:#ef4444; color:#fff; border:none; cursor:pointer;" onclick="deleteReel('${reel._id}')">Delete</button>
+                    </div>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
+
 
 function openReelModal(reel = null) {
     const modal = document.getElementById('reel-modal');
