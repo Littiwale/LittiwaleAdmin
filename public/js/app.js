@@ -1138,10 +1138,21 @@ window.switchCmsSubTab = function(subTabId) {
 
 // --- SUB-TAB 1: INSTAGRAM REELS ---
 async function fetchReels() {
+    const cached = sessionStorage.getItem('adminCachedReels');
+    if (cached) {
+        try {
+            adminReelsList = JSON.parse(cached);
+            renderAdminReels();
+        } catch(e) {}
+    }
     try {
         const res = await fetch(`${API_URL}/reels`);
-        adminReelsList = await res.json();
-        renderAdminReels();
+        const data = await res.json();
+        if (data && Array.isArray(data)) {
+            adminReelsList = data;
+            sessionStorage.setItem('adminCachedReels', JSON.stringify(data));
+            renderAdminReels();
+        }
     } catch (err) {
         console.error('Error fetching reels:', err);
     }
@@ -1248,9 +1259,8 @@ window.deleteReel = async function(id) {
 async function fetchCmsAnnouncements() {
     const container = document.getElementById('cms-announcements-grid');
     if (!container) return;
-    try {
-        const res = await fetch(`${API_URL}/announcements`);
-        const announcements = await res.json();
+
+    const render = (announcements) => {
         if (!announcements || announcements.length === 0) {
             container.innerHTML = '<div style="color:#aaa; grid-column:1/-1;">No announcements uploaded yet. Click "+ Add Announcement Banner" to create one.</div>';
             return;
@@ -1274,8 +1284,22 @@ async function fetchCmsAnnouncements() {
                 </div>
             </div>
         `).join('');
+    };
+
+    const cached = sessionStorage.getItem('adminCachedAnnouncements');
+    if (cached) {
+        try { render(JSON.parse(cached)); } catch(e) {}
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/announcements`);
+        const announcements = await res.json();
+        if (announcements && Array.isArray(announcements)) {
+            sessionStorage.setItem('adminCachedAnnouncements', JSON.stringify(announcements));
+            render(announcements);
+        }
     } catch(e) {
-        container.innerHTML = '<div style="color:#ef4444;">Failed to load announcements.</div>';
+        if (!cached) container.innerHTML = '<div style="color:#ef4444;">Failed to load announcements.</div>';
     }
 }
 

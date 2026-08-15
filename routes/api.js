@@ -84,7 +84,7 @@ router.delete('/categories/:id', checkPin, async (req, res) => {
 // =======================
 router.get('/menu', async (req, res) => {
     try {
-        const menu = await Menu.find().sort({ createdAt: -1 });
+        const menu = await Menu.find().sort({ createdAt: -1 }).lean();
         res.json(menu);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -137,7 +137,7 @@ router.get('/announcements/public', async (req, res) => {
 
 router.get('/announcements', async (req, res) => {
     try {
-        const announcements = await Announcement.find().sort({ createdAt: -1 });
+        const announcements = await Announcement.find().sort({ createdAt: -1 }).lean();
         res.json(announcements || []);
     } catch (err) {
         res.json([]);
@@ -177,7 +177,7 @@ router.delete('/announcements/:id', checkPin, async (req, res) => {
 // =======================
 router.get('/coupons', async (req, res) => {
     try {
-        const coupons = await Coupon.find().sort({ createdAt: -1 });
+        const coupons = await Coupon.find().sort({ createdAt: -1 }).lean();
         res.json(coupons || []);
     } catch (err) {
         res.json([]);
@@ -296,7 +296,7 @@ const Reel = require('../models/Reel');
 
 router.get('/reels', async (req, res) => {
     try {
-        let reels = await Reel.find().sort({ order: 1, createdAt: -1 });
+        let reels = await Reel.find().sort({ order: 1, createdAt: -1 }).lean();
         if (reels.length === 0) {
             const defaultReels = [
                 { title: 'Customer Review 1', badge: 'Popular', image: 'images/instagram/reel1.png', link: 'https://www.instagram.com/reel/DM0OaRuTorz/', order: 1 },
