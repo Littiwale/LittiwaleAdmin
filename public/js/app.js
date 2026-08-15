@@ -1082,7 +1082,7 @@ async function saveStoreSetting(storeId) {
     
     try {
         await apiCall(`/settings/${storeId}`, 'PUT', { autoSchedule, isOnline, offlineReason });
-        window.showAdminToast(`${storeId.toUpperCase(, "error")} settings saved!`);
+        window.showAdminToast(`${storeId.toUpperCase()} settings saved!`);
         loadStoreSettings();
     } catch (e) {
         window.showAdminToast(`Error saving ${storeId} settings`, "error");
