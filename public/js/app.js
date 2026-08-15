@@ -1083,3 +1083,147 @@ async function saveStoreSetting(storeId) {
 
 // Start
 init();
+
+
+// =======================
+// INSTAGRAM REELS MANAGEMENT
+// =======================
+let adminReelsList = [];
+
+async function fetchReels() {
+    try {
+        const res = await fetch(`${API_URL}/reels`);
+        adminReelsList = await res.json();
+        renderAdminReels();
+    } catch (err) {
+        console.error('Error fetching reels:', err);
+    }
+}
+
+function renderAdminReels() {
+    const container = document.getElementById('reels-grid-container');
+    if (!container) return;
+
+    if (!adminReelsList || adminReelsList.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted); grid-column:1/-1;">No Instagram reels added yet. Click "+ Add New Reel" to create one.</div>';
+        return;
+    }
+
+    container.innerHTML = adminReelsList.map(reel => `
+        <div class="card" style="background:#18181c; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); display:flex; flex-direction:column; justify-content:space-between;">
+            <div style="position:relative; aspect-ratio:9/16; max-height:240px; overflow:hidden; background:#000;">
+                <img src="${reel.image || 'images/logo.png'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='images/logo.png'">
+                <span style="position:absolute; top:10px; left:10px; background:${reel.badge === 'Loved' ? '#ec4899' : '#f97316'}; color:#fff; font-size:0.75rem; font-weight:bold; padding:3px 10px; border-radius:20px;">${reel.badge || 'Popular'}</span>
+            </div>
+            <div style="padding:14px;">
+                <h4 style="font-size:0.95rem; color:#fff; margin-bottom:6px;">${reel.title || 'Customer Review'}</h4>
+                <a href="${reel.link}" target="_blank" style="font-size:0.78rem; color:#60a5fa; text-decoration:none; word-break:break-all; display:block; margin-bottom:12px;">🔗 ${reel.link}</a>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-outline" style="flex:1; padding:6px; font-size:0.8rem;" onclick="editReel('${reel._id}')">Edit</button>
+                    <button class="btn btn-danger" style="padding:6px 12px; font-size:0.8rem;" onclick="deleteReel('${reel._id}')">Delete</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function openReelModal(reel = null) {
+    const modal = document.getElementById('reel-modal');
+    if (!modal) return;
+    
+    document.getElementById('reel-modal-title').textContent = reel ? 'Edit Instagram Reel' : 'Add New Instagram Reel';
+    document.getElementById('reel-id').value = reel ? reel._id : '';
+    document.getElementById('reel-title-input').value = reel ? reel.title : '';
+    document.getElementById('reel-badge-input').value = reel ? reel.badge : 'Popular';
+    document.getElementById('reel-link-input').value = reel ? reel.link : '';
+    document.getElementById('reel-image-input').value = reel ? reel.image : '';
+    
+    const preview = document.getElementById('reel-image-preview');
+    if (reel && reel.image) {
+        preview.src = reel.image;
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeReelModal() {
+    const modal = document.getElementById('reel-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function handleReelImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('reel-image-input').value = e.target.result;
+        const preview = document.getElementById('reel-image-preview');
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+function editReel(id) {
+    const reel = adminReelsList.find(r => r._id === id);
+    if (reel) openReelModal(reel);
+}
+
+async function deleteReel(id) {
+    if (!confirm('Are you sure you want to delete this Instagram reel?')) return;
+    try {
+        const res = await fetch(`${API_URL}/reels/${id}`, {
+            method: 'DELETE',
+            headers: { 'x-pin': authPin }
+        });
+        if (res.ok) {
+            fetchReels();
+        } else {
+            alert('Failed to delete reel');
+        }
+    } catch (err) {
+        alert('Error deleting reel');
+    }
+}
+
+document.getElementById('reel-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('reel-id').value;
+    const body = {
+        title: document.getElementById('reel-title-input').value,
+        badge: document.getElementById('reel-badge-input').value,
+        link: document.getElementById('reel-link-input').value,
+        image: document.getElementById('reel-image-input').value
+    };
+
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${API_URL}/reels/${id}` : `${API_URL}/reels`;
+
+    try {
+        const res = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'x-pin': authPin
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (res.ok) {
+            closeReelModal();
+            fetchReels();
+        } else {
+            alert('Failed to save reel. Please check Admin PIN.');
+        }
+    } catch (err) {
+        alert('Error saving reel');
+    }
+});
+
+// Hook into initial dashboard load
+const origInitDashboard = typeof initDashboard === 'function' ? initDashboard : null;
+fetchReels();

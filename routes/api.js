@@ -288,4 +288,59 @@ router.put('/settings/:storeId', checkPin, async (req, res) => {
     }
 });
 
+
+// =======================
+// INSTAGRAM REELS ROUTES
+// =======================
+const Reel = require('../models/Reel');
+
+router.get('/reels', async (req, res) => {
+    try {
+        let reels = await Reel.find().sort({ order: 1, createdAt: -1 });
+        if (reels.length === 0) {
+            const defaultReels = [
+                { title: 'Customer Review 1', badge: 'Popular', image: 'images/instagram/reel1.png', link: 'https://www.instagram.com/reel/DM0OaRuTorz/', order: 1 },
+                { title: 'Customer Review 2', badge: 'Loved', image: 'images/instagram/reel2.png', link: 'https://www.instagram.com/reel/DVOCmnIk-Yt/', order: 2 },
+                { title: 'Customer Review 3', badge: 'Popular', image: 'images/instagram/reel3.png', link: 'https://www.instagram.com/reel/DUsneR7E1Vh/', order: 3 },
+                { title: 'Customer Review 4', badge: 'Popular', image: 'images/instagram/reel4.png', link: 'https://www.instagram.com/reel/DU20uoDE9vY/', order: 4 },
+                { title: 'Customer Review 5', badge: 'Loved', image: 'images/instagram/reel5.png', link: 'https://www.instagram.com/reel/DUVd2y6k_bG/', order: 5 },
+                { title: 'Customer Review 6', badge: 'Popular', image: 'images/instagram/reel6.png', link: 'https://www.instagram.com/reel/DTcsHKbE2C7/', order: 6 }
+            ];
+            reels = await Reel.insertMany(defaultReels);
+        }
+        res.json(reels);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/reels', checkPin, async (req, res) => {
+    try {
+        const newReel = new Reel(req.body);
+        await newReel.save();
+        res.status(201).json(newReel);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+router.put('/reels/:id', checkPin, async (req, res) => {
+    try {
+        const updatedReel = await Reel.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        res.json(updatedReel);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+router.delete('/reels/:id', checkPin, async (req, res) => {
+    try {
+        await Reel.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Reel deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
+
