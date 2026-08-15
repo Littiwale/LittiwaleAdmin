@@ -89,6 +89,23 @@
         }
     </style>
     
+
+        /* PERFECT CENTERING & SCROLLABLE MODAL CONTENT */
+        .modal-content {
+            max-height: 88vh !important;
+            overflow-y: auto !important;
+            box-sizing: border-box !important;
+            scrollbar-width: thin !important;
+            scrollbar-color: #f97316 #1e1e24 !important;
+        }
+        .modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        .modal-content::-webkit-scrollbar-thumb {
+            background-color: #f97316;
+            border-radius: 10px;
+        }
+
 </head>
 <body>
     <!-- Login Screen -->
@@ -951,7 +968,7 @@
                 <div class="form-group" style="margin-bottom:16px;">
                     <label style="display:block; margin-bottom:6px; font-size:0.9rem; color:#cbd5e1;">Deal Banner Image (Upload File or Base64/URL)</label>
                     <input type="file" id="deal-file-input" accept="image/*" style="margin-bottom:8px; color:#aaa;" onchange="handleDealImageUpload(event)">
-                    <input type="text" id="deal-image-input" class="form-control" placeholder="images/... or Base64" style="width:100%; padding:10px; background:#121215; border:1px solid #333; color:#fff; border-radius:8px;" required>
+                    
                 </div>
                 <div style="text-align:center; margin-bottom:16px;">
                     <img id="deal-image-preview" src="" style="max-height:120px; border-radius:10px; display:none; border:1px solid #444; margin:0 auto;">
