@@ -67,7 +67,7 @@
     </style>
 
     <style>
-        /* REEL MODAL OVERLAY STYLES */
+                /* REEL MODAL OVERLAY STYLES */
         .modal {
             position: fixed !important;
             top: 0 !important;
@@ -77,11 +77,11 @@
             background: rgba(0, 0, 0, 0.85) !important;
             backdrop-filter: blur(8px) !important;
             z-index: 99999 !important;
-            display: none;
+            display: none !important;
             align-items: center !important;
             justify-content: center !important;
         }
-        .modal.active, .modal:not(.hidden) {
+        .modal.active, .modal:not(.hidden):not([style*="display: none"]) {
             display: flex !important;
         }
         .modal.hidden {
@@ -407,7 +407,7 @@
 
     <!-- Modals -->
     <!-- Advanced Menu Modal -->
-    <div id="menu-modal" class="modal">
+    <div id="menu-modal" class="modal hidden">
         <div class="lw-split-modal" style="width:100%; max-width:980px; margin:40px auto; border-radius:16px; overflow:hidden; box-shadow:0 32px 80px rgba(0,0,0,0.7); background:#161820; border:1px solid #252830; display:grid; grid-template-rows:auto 1fr; grid-template-columns:1fr; max-height: 90vh;">
             
             <!-- ── MODAL HEADER ── -->
@@ -690,7 +690,7 @@
     </div>
 
     <!-- Manage Categories Modal -->
-    <div id="category-modal" class="modal">
+    <div id="category-modal" class="modal hidden">
         <div class="modal-content" style="max-width:500px; background:#161820; border:1px solid #252830; padding:0; overflow:hidden;">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #252830; background:#12141b;">
                 <h3 style="margin:0; font-size:18px; color:#fff;">Manage Categories</h3>
@@ -731,7 +731,7 @@
 
 
     <!-- Coupon Modal -->
-    <div id="coupon-modal" class="modal">
+    <div id="coupon-modal" class="modal hidden">
         <div class="modal-content">
             <h3 id="coupon-modal-title">Add Coupon</h3>
             <form id="coupon-form">
@@ -768,7 +768,7 @@
     </div>
 
     <!-- Confirmation Modal -->
-    <div id="confirm-modal" class="modal">
+    <div id="confirm-modal" class="modal hidden">
         <div class="modal-content" style="max-width:400px; text-align:center; padding:30px; background:#161820; border:1px solid #252830;">
             <h3 id="confirm-title" style="margin-top:0; color:#fff; font-size:20px; font-weight:800;">Confirm</h3>
             <p id="confirm-message" style="color:#9ca3af; margin-bottom:24px; font-size:14px; line-height:1.5;">Are you sure?</p>
