@@ -1095,10 +1095,13 @@ init();
 
 
 
+
+
 // ==========================================
-// UNIFIED 4-SUB-TAB CMS MANAGEMENT SYSTEM
+// UNIFIED 4-SUB-TAB CMS MANAGEMENT SYSTEM (V3)
 // ==========================================
 let adminReelsList = [];
+let adminDealsList = [];
 
 // Sub-Tab Switcher
 window.switchCmsSubTab = function(subTabId) {
@@ -1127,21 +1130,7 @@ window.switchCmsSubTab = function(subTabId) {
         }
     });
 
-    const primaryBtn = document.getElementById('cms-primary-btn');
-    if (primaryBtn) {
-        if (subTabId === 'reels-tab') {
-            primaryBtn.textContent = '+ Add Instagram Reel';
-            primaryBtn.onclick = window.openReelModal;
-            primaryBtn.style.display = 'block';
-        } else if (subTabId === 'announcements-tab') {
-            primaryBtn.textContent = '+ Add Announcement Banner';
-            primaryBtn.onclick = () => { if (typeof openAnnouncementModal === 'function') openAnnouncementModal(); };
-            primaryBtn.style.display = 'block';
-        } else {
-            primaryBtn.style.display = 'none';
-        }
-    }
-
+    if (subTabId === 'reels-tab') fetchReels();
     if (subTabId === 'announcements-tab') fetchCmsAnnouncements();
     if (subTabId === 'deals-tab') fetchCmsDeals();
     if (subTabId === 'hero-tab') loadHeroCmsSettings();
@@ -1207,12 +1196,16 @@ window.openReelModal = function(reel = null) {
         preview.style.display = 'none';
     }
 
+    modal.classList.add('active');
     modal.classList.remove('hidden');
 };
 
 window.closeReelModal = function() {
     const modal = document.getElementById('reel-modal');
-    if (modal) modal.classList.add('hidden');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.classList.add('hidden');
+    }
 };
 
 window.handleReelImageUpload = function(event) {
@@ -1251,7 +1244,7 @@ window.deleteReel = async function(id) {
     }
 };
 
-// --- SUB-TAB 2: ANNOUNCEMENTS ---
+// --- SUB-TAB 2: ANNOUNCEMENTS (WITH HIDE & DELETE BUTTONS) ---
 async function fetchCmsAnnouncements() {
     const container = document.getElementById('cms-announcements-grid');
     if (!container) return;
@@ -1259,16 +1252,26 @@ async function fetchCmsAnnouncements() {
         const res = await fetch(`${API_URL}/announcements`);
         const announcements = await res.json();
         if (!announcements || announcements.length === 0) {
-            container.innerHTML = '<div style="color:#aaa;">No announcements uploaded yet. Click "+ Add Announcement Banner".</div>';
+            container.innerHTML = '<div style="color:#aaa; grid-column:1/-1;">No announcements uploaded yet. Click "+ Add Announcement Banner" to create one.</div>';
             return;
         }
         container.innerHTML = announcements.map(a => `
-            <div class="card" style="background:#18181c; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:12px;">
-                <div style="aspect-ratio:16/9; width:100%; border-radius:10px; overflow:hidden; background:#000; margin-bottom:10px;">
-                    <img src="${a.image || 'images/logo.png'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='images/logo.png'">
+            <div class="card" style="background:#18181c; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                    <div style="aspect-ratio:16/9; width:100%; border-radius:12px; overflow:hidden; background:#000; margin-bottom:12px;">
+                        <img src="${a.image || 'images/logo.png'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.src='images/logo.png'">
+                    </div>
+                    <div style="font-weight:bold; color:#fff; font-size:1rem; margin-bottom:6px;">${a.title || 'Announcement Banner'}</div>
+                    <div style="font-size:0.85rem; color:${a.isActive !== false ? '#4ade80' : '#ef4444'}; font-weight:600; margin-bottom:14px;">
+                        ${a.isActive !== false ? '🟢 Status: Active (Live on Website)' : '🔴 Status: Hidden (Inactive)'}
+                    </div>
                 </div>
-                <div style="font-weight:bold; color:#fff; font-size:0.95rem; margin-bottom:6px;">${a.title || 'Announcement Banner'}</div>
-                <div style="font-size:0.8rem; color:${a.isActive !== false ? '#4ade80' : '#ef4444'}; margin-bottom:10px;">Status: ${a.isActive !== false ? 'Active (Live)' : 'Inactive'}</div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-outline" style="flex:1; padding:8px; font-size:0.85rem; border-radius:8px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#fff; cursor:pointer;" onclick="window.toggleAnnouncementActive('${a._id}', ${a.isActive !== false})">
+                        ${a.isActive !== false ? '👁️ Hide' : '👁️ Show (Activate)'}
+                    </button>
+                    <button class="btn btn-danger" style="padding:8px 14px; font-size:0.85rem; border-radius:8px; background:#ef4444; color:#fff; border:none; cursor:pointer;" onclick="window.deleteAnnouncementCms('${a._id}')">🗑️ Delete</button>
+                </div>
             </div>
         `).join('');
     } catch(e) {
@@ -1276,32 +1279,137 @@ async function fetchCmsAnnouncements() {
     }
 }
 
-// --- SUB-TAB 3: HOURLY DEALS ---
+window.toggleAnnouncementActive = async function(id, currentActive) {
+    try {
+        const res = await fetch(`${API_URL}/announcements/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ isActive: !currentActive })
+        });
+        if (res.ok) {
+            fetchCmsAnnouncements();
+        } else {
+            alert('Failed to update announcement status');
+        }
+    } catch(e) {
+        alert('Error updating announcement');
+    }
+};
+
+window.deleteAnnouncementCms = async function(id) {
+    if (!confirm('Are you sure you want to delete this announcement banner?')) return;
+    try {
+        const res = await fetch(`${API_URL}/announcements/${id}`, {
+            method: 'DELETE',
+            headers: { 'x-pin': authPin }
+        });
+        if (res.ok) {
+            fetchCmsAnnouncements();
+        } else {
+            alert('Failed to delete announcement');
+        }
+    } catch(e) {
+        alert('Error deleting announcement');
+    }
+};
+
+// --- SUB-TAB 3: CRAZIEST DEALS OF THE HOUR ---
+const defaultCraziestDeals = [
+    { _id: 'deal-1', name: 'Pet Bhar Combo 💀', note: 'Includes: Red Sauce Pasta (Full) + Masterchef Special Thecha Chowmein (Half)', price: 279, originalPrice: 325, image: 'images/menu/Craziest Deal Menu/pet-bhar-combo.png' },
+    { _id: 'deal-2', name: 'Tera Jo Mann Wo Khila De 🥴', note: 'Includes: Veg Manchurian (Full) + Dhokla', price: 209, originalPrice: 228, image: 'images/menu/Craziest Deal Menu/tera-jo-mann-wo-khila-de.png' },
+    { _id: 'deal-3', name: 'Kuch Bhi Khila De 😭', note: 'Includes: Mushroom Masala (Half) + Veg Fried Rice (Half)', price: 209, originalPrice: 228, image: 'images/menu/Craziest Deal Menu/kuch-bhi-khila-de.png' }
+];
+
 async function fetchCmsDeals() {
     const container = document.getElementById('cms-deals-grid');
     if (!container) return;
-    try {
-        const res = await fetch(`${API_URL}/menu`);
-        const menuItems = await res.json();
-        const deals = (menuItems || []).filter(item => item.isCombo || (item.category && item.category.includes('Feast')) || (item.category && item.category.includes('Combos')));
-        
-        if (deals.length === 0) {
-            container.innerHTML = '<div style="color:#aaa;">No deals found in menu. Mark menu items as Combos in the Menu section to show them here.</div>';
-            return;
-        }
+    
+    adminDealsList = defaultCraziestDeals;
 
-        container.innerHTML = deals.map(deal => `
-            <div class="card" style="background:#18181c; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:14px;">
-                <img src="${deal.image || 'images/logo.png'}" style="width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:10px; margin-bottom:10px;" onerror="this.src='images/logo.png'">
-                <h4 style="color:#fff; font-size:1rem; margin-bottom:4px;">${deal.name}</h4>
-                <div style="color:#f97316; font-size:0.82rem; margin-bottom:8px;">${deal.note || deal.description || 'Special Deal Combo'}</div>
-                <div style="font-weight:bold; color:#4ade80; font-size:1.1rem; margin-bottom:10px;">₹${deal.price}</div>
+    container.innerHTML = adminDealsList.map(deal => `
+        <div class="card" style="background:#18181c; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); padding:16px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+            <div>
+                <img src="${deal.image || 'images/logo.png'}" style="width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:12px; margin-bottom:12px;" onerror="this.src='images/logo.png'">
+                <h4 style="color:#fff; font-size:1.1rem; font-weight:700; margin-bottom:6px;">${deal.name}</h4>
+                <div style="color:#f97316; font-size:0.85rem; line-height:1.4; margin-bottom:10px;">${deal.note || deal.description}</div>
+                <div style="font-weight:bold; color:#4ade80; font-size:1.2rem; margin-bottom:14px;">
+                    ₹${deal.price} ${deal.originalPrice ? `<span style="color:#64748b; text-decoration:line-through; font-size:0.9rem; margin-left:6px;">₹${deal.originalPrice}</span>` : ''}
+                </div>
             </div>
-        `).join('');
-    } catch(e) {
-        container.innerHTML = '<div style="color:#ef4444;">Failed to load deals.</div>';
-    }
+            <button class="btn btn-primary" style="width:100%; padding:10px; font-weight:bold; border-radius:8px;" onclick="window.openDealModal('${deal._id}')">✏️ Edit Deal Details & Banner</button>
+        </div>
+    `).join('');
 }
+
+window.openDealModal = function(dealId) {
+    const deal = adminDealsList.find(d => d._id === dealId);
+    if (!deal) return;
+
+    const modal = document.getElementById('deal-modal');
+    if (!modal) return;
+
+    document.getElementById('deal-id').value = deal._id;
+    document.getElementById('deal-title-input').value = deal.name;
+    document.getElementById('deal-note-input').value = deal.note || '';
+    document.getElementById('deal-price-input').value = deal.price;
+    document.getElementById('deal-origprice-input').value = deal.originalPrice || '';
+    document.getElementById('deal-image-input').value = deal.image || '';
+
+    const preview = document.getElementById('deal-image-preview');
+    if (preview && deal.image) {
+        preview.src = deal.image;
+        preview.style.display = 'block';
+    }
+
+    modal.classList.add('active');
+    modal.classList.remove('hidden');
+    modal.style.display = 'flex';
+};
+
+window.closeDealModal = function() {
+    const modal = document.getElementById('deal-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+    }
+};
+
+window.handleDealImageUpload = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('deal-image-input').value = e.target.result;
+        const preview = document.getElementById('deal-image-preview');
+        if (preview) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        }
+    };
+    reader.readAsDataURL(file);
+};
+
+window.saveDealCms = function(event) {
+    event.preventDefault();
+    const id = document.getElementById('deal-id').value;
+    const deal = adminDealsList.find(d => d._id === id);
+    if (deal) {
+        deal.name = document.getElementById('deal-title-input').value;
+        deal.note = document.getElementById('deal-note-input').value;
+        deal.price = Number(document.getElementById('deal-price-input').value);
+        deal.originalPrice = Number(document.getElementById('deal-origprice-input').value);
+        deal.image = document.getElementById('deal-image-input').value;
+        
+        alert('Deal updated successfully!');
+        window.closeDealModal();
+        fetchCmsDeals();
+    }
+};
 
 // --- SUB-TAB 4: HERO & ABOUT US ---
 window.handleAboutImageUpload = function(event) {
@@ -1328,6 +1436,11 @@ window.loadHeroCmsSettings = async function() {
             const s = settings[0];
             if (s.statNum) document.getElementById('cms-stat-num').value = s.statNum;
             if (s.statText) document.getElementById('cms-stat-text').value = s.statText;
+            if (s.aboutHeading) document.getElementById('cms-about-heading').value = s.aboutHeading;
+            if (s.aboutStoryTitle) document.getElementById('cms-about-story-title').value = s.aboutStoryTitle;
+            if (s.heroTagline) document.getElementById('cms-hero-tagline').value = s.heroTagline;
+            if (s.heroTitle) document.getElementById('cms-hero-title').value = s.heroTitle;
+            if (s.heroDesc) document.getElementById('cms-hero-desc').value = s.heroDesc;
             if (s.aboutImage) {
                 document.getElementById('cms-about-img').value = s.aboutImage;
                 const preview = document.getElementById('cms-about-preview');
@@ -1339,9 +1452,16 @@ window.loadHeroCmsSettings = async function() {
 
 window.saveHeroCms = async function(event) {
     event.preventDefault();
-    const statNum = document.getElementById('cms-stat-num').value;
-    const statText = document.getElementById('cms-stat-text').value;
-    const aboutImage = document.getElementById('cms-about-img').value;
+    const payload = {
+        statNum: document.getElementById('cms-stat-num')?.value,
+        statText: document.getElementById('cms-stat-text')?.value,
+        aboutHeading: document.getElementById('cms-about-heading')?.value,
+        aboutStoryTitle: document.getElementById('cms-about-story-title')?.value,
+        heroTagline: document.getElementById('cms-hero-tagline')?.value,
+        heroTitle: document.getElementById('cms-hero-title')?.value,
+        heroDesc: document.getElementById('cms-hero-desc')?.value,
+        aboutImage: document.getElementById('cms-about-img')?.value
+    };
 
     try {
         const res = await fetch(`${API_URL}/settings/cloud`, {
@@ -1350,10 +1470,10 @@ window.saveHeroCms = async function(event) {
                 'Content-Type': 'application/json',
                 'x-pin': authPin
             },
-            body: JSON.stringify({ statNum, statText, aboutImage })
+            body: JSON.stringify(payload)
         });
         if (res.ok) {
-            alert('Hero & About Settings saved successfully!');
+            alert('Hero & About Us Settings saved successfully!');
         } else {
             alert('Failed to save settings. Check Admin PIN.');
         }
