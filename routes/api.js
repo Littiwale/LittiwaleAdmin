@@ -123,24 +123,24 @@ router.delete('/menu/:id', checkPin, async (req, res) => {
 // ANNOUNCEMENT ROUTES
 // =======================
 
-// Lightweight route for public website — NO image data (avoids 15MB response)
+// Lightweight route for public website â€” NO image data (avoids 15MB response)
 router.get('/announcements/public', async (req, res) => {
     try {
         const announcements = await Announcement.find({ isActive: true })
             .select('-image')
             .sort({ createdAt: -1 });
-        res.json(announcements);
+        res.json(announcements || []);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.json([]);
     }
 });
 
 router.get('/announcements', async (req, res) => {
     try {
         const announcements = await Announcement.find().sort({ createdAt: -1 });
-        res.json(announcements);
+        res.json(announcements || []);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.json([]);
     }
 });
 
@@ -178,9 +178,9 @@ router.delete('/announcements/:id', checkPin, async (req, res) => {
 router.get('/coupons', async (req, res) => {
     try {
         const coupons = await Coupon.find().sort({ createdAt: -1 });
-        res.json(coupons);
+        res.json(coupons || []);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.json([]);
     }
 });
 
