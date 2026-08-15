@@ -77,9 +77,12 @@
             background: rgba(0, 0, 0, 0.85) !important;
             backdrop-filter: blur(8px) !important;
             z-index: 99999 !important;
-            display: flex !important;
+            display: none;
             align-items: center !important;
             justify-content: center !important;
+        }
+        .modal.active, .modal:not(.hidden) {
+            display: flex !important;
         }
         .modal.hidden {
             display: none !important;
@@ -777,7 +780,7 @@
     </div>
 
     <!-- Schedule Modal -->
-    <div id="schedule-modal" class="modal">
+    <div id="schedule-modal" class="modal hidden">
         <div class="modal-content" style="max-width: 600px; padding: 0;">
             <div style="background:linear-gradient(to right, var(--primary), var(--secondary)); padding:20px; display:flex; justify-content:space-between; align-items:center;">
                 <h3 id="schedule-modal-title" style="font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:800; color:#fff; margin:0;">Edit Weekly Schedule</h3>
