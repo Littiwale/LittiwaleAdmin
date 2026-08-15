@@ -11,16 +11,26 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+const { seedAdminUser } = require("./utils/seedAdmin");
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/littiwale-admin";
 
+let isSeeded = false;
 const connectDB = async (req, res, next) => {
     if (mongoose.connection.readyState >= 1) {
+        if (!isSeeded) {
+            isSeeded = true;
+            seedAdminUser().catch(console.error);
+        }
         return next();
     }
     try {
         await mongoose.connect(MONGODB_URI, {
             serverSelectionTimeoutMS: 5000
         });
+        if (!isSeeded) {
+            isSeeded = true;
+            seedAdminUser().catch(console.error);
+        }
         next();
     } catch (err) {
         console.error("MongoDB Connection Error:", err);
