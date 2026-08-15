@@ -1188,30 +1188,29 @@
                     <!-- Clean Distance-Based GPS Delivery Settings -->
                     <div class="card-panel" style="margin-top:20px;">
                         <div class="card-panel-header">
-                            <h3 class="card-panel-title"><span>🛵</span> Distance Delivery Pricing (GPS Distance × Rate)</h3>
+                            <div>
+                                <h3 class="card-panel-title"><span>🛵</span> Distance Delivery Pricing (₹30 / KM)</h3>
+                                <p class="card-panel-subtitle">Every order is calculated purely as: Distance (KM) × ₹30 (No minimum order restrictions).</p>
+                            </div>
                         </div>
 
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
                             <div class="form-group">
                                 <label class="form-label">Delivery Rate (₹ per KM)</label>
                                 <input type="number" id="setting-delivery-rate-km" class="form-control" value="30" placeholder="30">
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label">Minimum Order Value (₹)</label>
-                                <input type="number" id="setting-delivery-min-order" class="form-control" value="99" placeholder="99">
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Kitchen GPS Coordinates (Barbil)</label>
                                 <input type="text" id="setting-kitchen-gps" class="form-control" value="22.1221, 85.3942" placeholder="22.1221, 85.3942">
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Average Delivery Time</label>
+                                <label class="form-label">Average Dispatch Time</label>
                                 <input type="text" id="setting-delivery-est-time" class="form-control" value="25-35 mins" placeholder="25-35 mins">
                             </div>
                         </div>
 
                         <div style="text-align:right; margin-top:12px;">
-                            <button class="btn btn-primary" onclick="showAdminToast('Delivery pricing saved!', 'success')">Save Delivery Pricing</button>
+                            <button class="btn btn-primary" onclick="showAdminToast('Distance delivery pricing saved!', 'success')">💾 Save Delivery Pricing</button>
                         </div>
                     </div>
                 </section>
