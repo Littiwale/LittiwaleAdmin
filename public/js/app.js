@@ -3566,18 +3566,49 @@ function populateDealItemDropdowns(selectedName1, selectedName2) {
     sel1.innerHTML = optionsHtml;
     sel2.innerHTML = optionsHtml;
 
-    // Smart auto-select matching dishes from note
+    // Smart auto-select matching dishes from note with Exact & Best Longest Substring Match
     function matchOption(selectEl, query) {
         if (!query || !query.trim()) return;
-        const q = query.toLowerCase().trim();
+        const q = query.toLowerCase().replace(/[\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
+        
+        let bestIndex = -1;
+        let bestScore = 0;
+
         for (let i = 1; i < selectEl.options.length; i++) {
             const opt = selectEl.options[i];
-            const optName = (opt.getAttribute('data-name') || '').toLowerCase().trim();
+            const rawOptName = (opt.getAttribute('data-name') || '').toLowerCase();
+            const optName = rawOptName.replace(/[\(\)]/g, ' ').replace(/\s+/g, ' ').trim();
             if (!optName) continue;
-            if (optName === q || q.includes(optName) || optName.includes(q)) {
+
+            // 1. Exact match (highest priority)
+            if (optName === q) {
                 selectEl.selectedIndex = i;
                 return;
             }
+
+            // 2. Score by common words and length (prefer longer match: "veg fried rice" over "rice")
+            let score = 0;
+            if (q.includes(optName)) {
+                score = optName.length * 10;
+            } else if (optName.includes(q)) {
+                score = q.length * 8;
+            } else {
+                const qWords = q.split(' ').filter(w => w.length > 2);
+                const optWords = optName.split(' ').filter(w => w.length > 2);
+                const common = qWords.filter(w => optWords.includes(w));
+                if (common.length > 0) {
+                    score = common.length * 5;
+                }
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex > 0) {
+            selectEl.selectedIndex = bestIndex;
         }
     }
 
@@ -3640,9 +3671,11 @@ window.recalculateDealPrices = function(updateInputs = true) {
 
     if (breakdownEl) {
         if (price1 > 0 && price2 > 0) {
-            breakdownEl.innerHTML = `Combined dishes: ₹${price1} + ₹${price2} = <strong style="color:#fff;">₹${origTotal}</strong>`;
+            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 1:</span> ${name1} (₹${price1}) + <span style="color:#fb923c;">Dish 2:</span> ${name2} (₹${price2}) = <strong style="color:#fff;">Original ₹${origTotal}</strong>`;
         } else if (price1 > 0) {
-            breakdownEl.innerHTML = `Selected dish: <strong style="color:#fff;">₹${price1}</strong>`;
+            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 1:</span> ${name1} (<strong style="color:#fff;">₹${price1}</strong>)`;
+        } else if (price2 > 0) {
+            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 2:</span> ${name2} (<strong style="color:#fff;">₹${price2}</strong>)`;
         } else {
             breakdownEl.innerHTML = '';
         }
@@ -3662,7 +3695,7 @@ window.recalculateDealPrices = function(updateInputs = true) {
 
         if (origTotal > 0) {
             // Apply attractive rounded deal discount (~15% off)
-            const finalPrice = Math.round((origTotal * 0.85) / 10) * 10 - 1; // e.g. 490 -> 419 or 399
+            const finalPrice = Math.round((origTotal * 0.85) / 10) * 10 - 1;
             const priceInput = document.getElementById('deal-price');
             if (priceInput) priceInput.value = finalPrice > 0 ? finalPrice : Math.round(origTotal * 0.85);
         }
