@@ -3532,11 +3532,9 @@ window.deleteAnnouncementCms = async function(id) {
 };
 
 // --- SUB-TAB 3: CRAZIEST DEALS OF THE HOUR ---
-window.regularMenuItems = [];
-
-function populateDealItemDropdowns(selectedName1 = '', selectedName2 = '') {
-    const sel1 = document.getElementById('deal-item1-select');
-    const sel2 = document.getElementById('deal-item2-select');
+function populateDealItemDropdowns(selectedName1, selectedName2) {
+    const sel1 = document.getElementById('deal-item-1') || document.getElementById('deal-item1-select');
+    const sel2 = document.getElementById('deal-item-2') || document.getElementById('deal-item2-select');
     if (!sel1 || !sel2) return;
 
     // Filter out deals, combos, thalis
@@ -3592,8 +3590,8 @@ function populateDealItemDropdowns(selectedName1 = '', selectedName2 = '') {
 }
 
 window.recalculateDealPrices = function(updateInputs = true) {
-    const sel1 = document.getElementById('deal-item1-select');
-    const sel2 = document.getElementById('deal-item2-select');
+    const sel1 = document.getElementById('deal-item-1') || document.getElementById('deal-item1-select');
+    const sel2 = document.getElementById('deal-item-2') || document.getElementById('deal-item2-select');
     if (!sel1 || !sel2) return;
 
     const opt1 = sel1.options[sel1.selectedIndex];
@@ -3607,32 +3605,39 @@ window.recalculateDealPrices = function(updateInputs = true) {
     const origTotal = price1 + price2;
 
     const breakdownEl = document.getElementById('deal-calc-breakdown');
+    const origPriceEl = document.getElementById('deal-orig-price') || document.getElementById('deal-origprice-input');
+    
+    if (origPriceEl) {
+        if (origPriceEl.tagName === 'INPUT') origPriceEl.value = origTotal;
+        else origPriceEl.textContent = `₹${origTotal}`;
+    }
+
     if (breakdownEl) {
         if (price1 > 0 && price2 > 0) {
-            breakdownEl.innerHTML = `Value: ₹${price1} + ₹${price2} = <strong>₹${origTotal}</strong>`;
+            breakdownEl.innerHTML = `Combined: ₹${price1} + ₹${price2} = <strong>₹${origTotal}</strong>`;
         } else if (price1 > 0) {
-            breakdownEl.innerHTML = `Value: <strong>₹${price1}</strong>`;
+            breakdownEl.innerHTML = `Combined: <strong>₹${price1}</strong>`;
         } else {
             breakdownEl.innerHTML = '';
         }
     }
 
     if (updateInputs && (name1 || name2)) {
-        if (name1 && name2) {
-            document.getElementById('deal-note-input').value = `Includes: ${name1} + ${name2}`;
-        } else if (name1) {
-            document.getElementById('deal-note-input').value = `Includes: ${name1}`;
-        } else if (name2) {
-            document.getElementById('deal-note-input').value = `Includes: ${name2}`;
+        const noteInput = document.getElementById('deal-note') || document.getElementById('deal-note-input');
+        if (noteInput) {
+            if (name1 && name2) {
+                noteInput.value = `Includes: ${name1} + ${name2}`;
+            } else if (name1) {
+                noteInput.value = `Includes: ${name1}`;
+            } else if (name2) {
+                noteInput.value = `Includes: ${name2}`;
+            }
         }
 
         if (origTotal > 0) {
-            // Formula requested: Clean round figure ending in 0 (e.g. Total 240 -> Deal Price 250, Strikethrough 300)
             const finalPrice = Math.ceil((origTotal * 1.04) / 10) * 10;
-            const fakePrice = Math.ceil((origTotal * 1.25) / 10) * 10;
-
-            document.getElementById('deal-price-input').value = finalPrice;
-            document.getElementById('deal-origprice-input').value = fakePrice;
+            const priceInput = document.getElementById('deal-price') || document.getElementById('deal-price-input');
+            if (priceInput) priceInput.value = finalPrice;
         }
     }
 };
@@ -3694,24 +3699,39 @@ window.openNewDealModal = function() {
     const modal = document.getElementById('deal-modal');
     if (!modal) return;
 
-    document.getElementById('deal-modal-title').textContent = '➕ Add Custom Craziest Deal';
-    const nameBadge = document.getElementById('deal-name-badge');
-    if (nameBadge) nameBadge.textContent = 'Custom Deal Combo';
+    const titleEl = document.getElementById('deal-modal-title');
+    if (titleEl) titleEl.textContent = '➕ Add Custom Craziest Deal';
 
-    document.getElementById('deal-id').value = '';
-    document.getElementById('deal-title-input').value = 'Custom Craziest Deal 🔥';
-    document.getElementById('deal-note-input').value = '';
-    document.getElementById('deal-price-input').value = '';
-    document.getElementById('deal-origprice-input').value = '';
-    document.getElementById('deal-image-input').value = '';
-    document.getElementById('deal-file-input').value = '';
+    const idEl = document.getElementById('deal-id');
+    if (idEl) idEl.value = '';
+
+    const nameEl = document.getElementById('deal-name') || document.getElementById('deal-title-input');
+    if (nameEl) nameEl.value = 'Custom Craziest Deal 🔥';
+
+    const noteEl = document.getElementById('deal-note') || document.getElementById('deal-note-input');
+    if (noteEl) noteEl.value = '';
+
+    const priceEl = document.getElementById('deal-price') || document.getElementById('deal-price-input');
+    if (priceEl) priceEl.value = '';
+
+    const origPriceEl = document.getElementById('deal-orig-price') || document.getElementById('deal-origprice-input');
+    if (origPriceEl) {
+        if (origPriceEl.tagName === 'INPUT') origPriceEl.value = '';
+        else origPriceEl.textContent = '₹0';
+    }
+
+    const imgUrlEl = document.getElementById('deal-image-url') || document.getElementById('deal-image-input');
+    if (imgUrlEl) imgUrlEl.value = '';
+
+    const imgFileEl = document.getElementById('deal-image-file');
+    if (imgFileEl) imgFileEl.value = '';
 
     populateDealItemDropdowns('', '');
 
     const preview = document.getElementById('deal-image-preview');
     if (preview) {
-        preview.src = '';
-        preview.style.display = 'none';
+        preview.src = 'images/logo.png';
+        preview.style.display = 'block';
     }
 
     modal.classList.add('active');
@@ -3720,27 +3740,39 @@ window.openNewDealModal = function() {
 };
 
 window.openDealModal = function(dealId) {
-    const deal = adminDealsList.find(d => d._id === dealId);
+    const deal = adminDealsList.find(d => String(d._id) === String(dealId));
     if (!deal) return;
 
     const modal = document.getElementById('deal-modal');
     if (!modal) return;
 
-    document.getElementById('deal-modal-title').textContent = '🔥 Configure Deal Combo';
-    const nameBadge = document.getElementById('deal-name-badge');
-    if (nameBadge) nameBadge.textContent = deal.name;
+    const titleEl = document.getElementById('deal-modal-title');
+    if (titleEl) titleEl.textContent = `🔥 Configure: ${deal.name}`;
 
-    document.getElementById('deal-id').value = deal._id;
-    document.getElementById('deal-title-input').value = deal.name;
-    document.getElementById('deal-note-input').value = deal.note || deal.description || '';
-    document.getElementById('deal-price-input').value = deal.price;
-    document.getElementById('deal-origprice-input').value = deal.originalPrice || '';
-    document.getElementById('deal-image-input').value = deal.image || '';
-    document.getElementById('deal-file-input').value = '';
+    const idEl = document.getElementById('deal-id');
+    if (idEl) idEl.value = deal._id;
+
+    const nameEl = document.getElementById('deal-name') || document.getElementById('deal-title-input');
+    if (nameEl) nameEl.value = deal.name;
+
+    const noteEl = document.getElementById('deal-note') || document.getElementById('deal-note-input');
+    if (noteEl) noteEl.value = deal.note || deal.description || '';
+
+    const priceEl = document.getElementById('deal-price') || document.getElementById('deal-price-input');
+    if (priceEl) priceEl.value = deal.price;
+
+    const origPriceEl = document.getElementById('deal-orig-price') || document.getElementById('deal-origprice-input');
+    if (origPriceEl) {
+        if (origPriceEl.tagName === 'INPUT') origPriceEl.value = deal.originalPrice || '';
+        else origPriceEl.textContent = `₹${deal.originalPrice || deal.price || 0}`;
+    }
+
+    const imgUrlEl = document.getElementById('deal-image-url') || document.getElementById('deal-image-input');
+    if (imgUrlEl) imgUrlEl.value = deal.image || '';
 
     const preview = document.getElementById('deal-image-preview');
-    if (preview && deal.image) {
-        preview.src = deal.image;
+    if (preview) {
+        preview.src = deal.image || 'images/logo.png';
         preview.style.display = 'block';
     }
 
@@ -3755,8 +3787,6 @@ window.openDealModal = function(dealId) {
     }
 
     populateDealItemDropdowns(part1, part2);
-    
-    // Trigger price calculation display
     window.recalculateDealPrices(false);
 
     modal.classList.add('active');
@@ -3778,7 +3808,8 @@ window.handleDealImageUpload = async function(event) {
     if (!file) return;
     try {
         const webpData = await window.compressImageToWebP(file, 800, 0.82);
-        document.getElementById('deal-image-input').value = webpData;
+        const urlEl = document.getElementById('deal-image-url') || document.getElementById('deal-image-input');
+        if (urlEl) urlEl.value = webpData;
         const preview = document.getElementById('deal-image-preview');
         if (preview) {
             preview.src = webpData;
@@ -3843,14 +3874,15 @@ function updateAutoShuffleButtonUI() {
 }
 
 window.saveDealCms = async function(event) {
-    event.preventDefault();
+    if (event) event.preventDefault();
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
-    const id = document.getElementById('deal-id').value;
-    const name = document.getElementById('deal-title-input').value;
-    const note = document.getElementById('deal-note-input').value;
-    const price = Number(document.getElementById('deal-price-input').value);
-    const originalPrice = Number(document.getElementById('deal-origprice-input').value) || undefined;
-    const image = document.getElementById('deal-image-input').value;
+    const id = document.getElementById('deal-id')?.value || '';
+    const name = (document.getElementById('deal-name') || document.getElementById('deal-title-input'))?.value || '';
+    const note = (document.getElementById('deal-note') || document.getElementById('deal-note-input'))?.value || '';
+    const price = Number((document.getElementById('deal-price') || document.getElementById('deal-price-input'))?.value) || 0;
+    const origPriceInput = document.getElementById('deal-orig-price') || document.getElementById('deal-origprice-input');
+    const originalPrice = origPriceInput ? (Number(origPriceInput.value || origPriceInput.textContent?.replace(/[^\d]/g, '')) || undefined) : undefined;
+    const image = (document.getElementById('deal-image-url') || document.getElementById('deal-image-input'))?.value || 'images/logo.png';
 
     const payload = {
         name,
@@ -3861,7 +3893,7 @@ window.saveDealCms = async function(event) {
         description: note,
         price,
         originalPrice,
-        image: image || 'images/logo.png',
+        image,
         isAvailable: true
     };
 
@@ -4732,15 +4764,15 @@ function triggerAdminPwaInstall() {
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPwaPrompt = e;
-    const headerBtn = document.getElementById('pwa-header-install-btn');
-    if (headerBtn) headerBtn.onclick = triggerAdminPwaInstall;
+    const stripBtn = document.getElementById('pwa-strip-install-btn');
+    if (stripBtn) stripBtn.onclick = triggerAdminPwaInstall;
     const sidebarBtn = document.getElementById('pwa-install-btn');
     if (sidebarBtn) sidebarBtn.onclick = triggerAdminPwaInstall;
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    const headerBtn = document.getElementById('pwa-header-install-btn');
-    if (headerBtn) headerBtn.addEventListener('click', triggerAdminPwaInstall);
+    const stripBtn = document.getElementById('pwa-strip-install-btn');
+    if (stripBtn) stripBtn.addEventListener('click', triggerAdminPwaInstall);
     const sidebarBtn = document.getElementById('pwa-install-btn');
     if (sidebarBtn) sidebarBtn.addEventListener('click', triggerAdminPwaInstall);
 });

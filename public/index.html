@@ -317,18 +317,13 @@
                         </div>
                     </div>
 
-                    <!-- User Profile Pill & Download App under Profile -->
-                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
-                        <div class="header-profile-menu" onclick="window.switchSection('settings-section')" title="Admin Settings">
-                            <img src="images/logo.png" alt="Admin" class="header-avatar">
-                            <div class="header-profile-info">
-                                <span class="header-profile-name">Tushar</span>
-                                <span class="header-profile-role">Super Admin</span>
-                            </div>
+                    <!-- User Profile Pill -->
+                    <div class="header-profile-menu" onclick="window.switchSection('settings-section')" title="Admin Settings">
+                        <img src="images/logo.png" alt="Admin" class="header-avatar">
+                        <div class="header-profile-info">
+                            <span class="header-profile-name">Tushar</span>
+                            <span class="header-profile-role">Super Admin</span>
                         </div>
-                        <button type="button" id="pwa-header-install-btn" style="display:inline-flex; align-items:center; gap:4px; background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.35); border-radius:6px; padding:2px 8px; color:#f97316; font-size:10.5px; font-weight:800; cursor:pointer; transition:all 0.2s;" title="Install Admin Web App on your Device">
-                            <span>📲 Download App</span>
-                        </button>
                     </div>
                 </div>
             </header>
@@ -336,7 +331,7 @@
             <!-- Scrollable Content Canvas -->
             <main class="content-body">
 
-                <!-- Dedicated Action Strip: Universal Back Button & Contextual Search Bar -->
+                <!-- Dedicated Action Strip: Universal Back Button, Search Bar & Download App -->
                 <div class="content-action-strip" id="content-action-strip">
                     <button class="content-back-btn" id="content-back-btn" onclick="navigateAdminBack()" title="Back to Previous Screen" style="display:none;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
@@ -351,6 +346,10 @@
                         <!-- Floating Live Search Dropdown -->
                         <div id="global-search-results" class="content-search-dropdown" style="display:none;"></div>
                     </div>
+                    <button type="button" id="pwa-strip-install-btn" class="action-strip-install-btn" title="Download / Install Admin Web App on your device">
+                        <span>📲</span>
+                        <span>Download App</span>
+                    </button>
                 </div>
 
                 <!-- ==========================================================================
@@ -1972,7 +1971,7 @@
         <div class="modal-content" style="max-width:580px;">
             <div class="modal-header">
                 <div>
-                    <h3 class="modal-title" id="deal-modal-title">Configure Craziest Deal</h3>
+                    <h3 class="modal-title" id="deal-modal-title">🔥 Configure Craziest Deal</h3>
                     <p style="font-size:11px; color:var(--text-muted); margin-top:2px;">Select dishes to create an automated discount combo.</p>
                 </div>
                 <button type="button" class="modal-close-btn" onclick="closeModal('deal-modal')">✕</button>
@@ -1980,6 +1979,8 @@
 
             <form id="deal-form" onsubmit="saveDealCms(event)">
                 <input type="hidden" id="deal-id">
+                <input type="hidden" id="deal-image-url">
+
                 <div class="form-group">
                     <label class="form-label">Deal Name</label>
                     <input type="text" id="deal-name" class="form-control" placeholder="e.g. Bhook Lagi Hai Boss 🔥" required>
@@ -1988,16 +1989,21 @@
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
                     <div class="form-group">
                         <label class="form-label">Primary Dish *</label>
-                        <select id="deal-item-1" class="form-control" required onchange="recalculateDealPrices()">
+                        <select id="deal-item-1" class="form-control" required onchange="recalculateDealPrices(true)">
                             <!-- Injected by app.js -->
                         </select>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Secondary Dish *</label>
-                        <select id="deal-item-2" class="form-control" required onchange="recalculateDealPrices()">
+                        <select id="deal-item-2" class="form-control" required onchange="recalculateDealPrices(true)">
                             <!-- Injected by app.js -->
                         </select>
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Deal Subtitle / Note (e.g. Includes: Item 1 + Item 2)</label>
+                    <input type="text" id="deal-note" class="form-control" placeholder="Includes: Dish A + Dish B">
                 </div>
 
                 <!-- Price Calculation Breakdown -->
@@ -2006,25 +2012,28 @@
                         <span style="color:var(--text-muted);">Combined Original Price:</span>
                         <strong id="deal-orig-price" style="color:#fff;">₹0</strong>
                     </div>
+                    <div id="deal-calc-breakdown" style="font-size:11px; color:#94a3b8; margin-bottom:8px;"></div>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <span style="color:var(--brand-orange); font-weight:700;">Special Deal Price (₹):</span>
-                        <input type="number" id="deal-price" class="form-control" style="width:120px; font-weight:800; color:var(--brand-gold);" required>
+                        <input type="number" id="deal-price" class="form-control" style="width:130px; font-weight:800; color:var(--brand-gold); font-size:1.1rem;" required>
                     </div>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Deal Image (Optional - will use primary dish photo if empty)</label>
-                    <input type="file" id="deal-image-file" class="form-control" accept="image/*">
+                    <label class="form-label">Deal Image</label>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <img id="deal-image-preview" src="images/logo.png" style="width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid rgba(255,255,255,0.15);">
+                        <input type="file" id="deal-image-file" class="form-control" accept="image/*" onchange="handleDealImageUpload(event)">
+                    </div>
                 </div>
 
                 <div style="display:flex; gap:10px; margin-top:20px;">
                     <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('deal-modal')">Cancel</button>
-                    <button type="submit" class="btn btn-primary" style="flex:1;">Publish Deal</button>
+                    <button type="submit" class="btn btn-primary" style="flex:1;">Save & Publish Deal</button>
                 </div>
             </form>
         </div>
     </div>
-
 
     <!-- Order Confirmation & WhatsApp Reply Modal -->
     <div id="order-confirm-modal" class="modal hidden">
