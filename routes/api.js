@@ -683,5 +683,15 @@ router.put('/orders/:id', checkPin, async (req, res) => {
     }
 });
 
+router.delete('/orders/:id', checkPin, async (req, res) => {
+    try {
+        const deleted = await Order.findByIdAndDelete(req.params.id);
+        if (!deleted) return res.status(404).json({ error: 'Order not found' });
+        res.json({ success: true, message: 'Order permanently deleted' });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
 module.exports = router;
 

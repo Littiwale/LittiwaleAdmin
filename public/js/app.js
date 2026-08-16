@@ -942,14 +942,15 @@ window.loadFinanceData = function() {
 
 function renderWebsiteRevenue() {
     const orders = window.cachedOrders || [];
-    const validOrders = orders.filter(o => o.status !== 'cancelled');
-    const totalOrders = validOrders.length;
+    // Only count DELIVERED orders towards revenue & completed orders count
+    const deliveredOrders = orders.filter(o => o.status === 'delivered');
+    const totalDeliveredOrders = deliveredOrders.length;
     
     let totalFoodRevenue = 0; // Pure Food Item Net Revenue (excl. delivery fee)
     let totalDeliveryFee = 0; // Total Delivery Charges (Paid to Rider)
     let totalGrandSales = 0;  // Grand total collected
 
-    validOrders.forEach(o => {
+    deliveredOrders.forEach(o => {
         const itemSubtotal = Number(o.subtotal || 0);
         const discount = Number(o.discount || 0);
         const netItemTotal = Math.max(0, itemSubtotal - discount);
@@ -964,13 +965,13 @@ function renderWebsiteRevenue() {
         totalGrandSales += Number(o.finalTotal || (foodAmount + delFee));
     });
 
-    const foodAov = totalOrders > 0 ? Math.round(totalFoodRevenue / totalOrders) : 0;
+    const foodAov = totalDeliveredOrders > 0 ? Math.round(totalFoodRevenue / totalDeliveredOrders) : 0;
 
     const elWebRev = document.getElementById('fin-website-revenue');
     if (elWebRev) elWebRev.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
 
     const elWebOrd = document.getElementById('fin-website-orders');
-    if (elWebOrd) elWebOrd.textContent = `${totalOrders} orders`;
+    if (elWebOrd) elWebOrd.textContent = `${totalDeliveredOrders} delivered orders`;
 
     const elWebAov = document.getElementById('fin-website-aov');
     if (elWebAov) elWebAov.textContent = `₹${foodAov}`;
@@ -979,7 +980,7 @@ function renderWebsiteRevenue() {
     if (elDashRev) elDashRev.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
 
     const elDashOrd = document.getElementById('kpi-orders-count');
-    if (elDashOrd) elDashOrd.textContent = `${totalOrders} website orders`;
+    if (elDashOrd) elDashOrd.textContent = `${totalDeliveredOrders} delivered orders`;
 
     // Render Detailed Finance Register Table
     const finTbody = document.getElementById('finance-tbody');
@@ -1628,11 +1629,11 @@ window.renderDynamicDashboard = function() {
     const elCouponsKpi = document.getElementById('kpi-coupons-count');
     if (elCouponsKpi) elCouponsKpi.textContent = totalCoupons;
 
-    // Live Revenue calculation (connected to orders database)
+    // Live Revenue calculation (connected to orders database - DELIVERED orders only)
     const orders = window.cachedOrders || [];
-    const validOrders = orders.filter(o => o.status !== 'cancelled');
+    const deliveredOrders = orders.filter(o => o.status === 'delivered');
     let totalFoodRevenue = 0;
-    validOrders.forEach(o => {
+    deliveredOrders.forEach(o => {
         const itemSubtotal = Number(o.subtotal || 0);
         const discount = Number(o.discount || 0);
         const netItemTotal = Math.max(0, itemSubtotal - discount);
@@ -1645,7 +1646,7 @@ window.renderDynamicDashboard = function() {
     if (elRevenue) elRevenue.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
     
     const elOrdersCount = document.getElementById('kpi-orders-count');
-    if (elOrdersCount) elOrdersCount.textContent = `${validOrders.length} website orders`;
+    if (elOrdersCount) elOrdersCount.textContent = `${deliveredOrders.length} delivered orders`;
 
     // 2. Modules Status
     const elModMenu = document.getElementById('module-menu-stat');
@@ -4677,7 +4678,25 @@ window.confirmOrderAndWhatsApp = async function() {
     }
 };
 
-window.cancelOrderPrompt = async function(orderId = null) {
+window.selectRejectReason = function(reasonText, btnEl) {
+    const input = document.getElementById('ord-reject-reason-input');
+    if (input) input.value = reasonText;
+    
+    // Update active style on chips
+    const chips = document.querySelectorAll('#reject-reason-chips .chip-btn');
+    chips.forEach(c => {
+        c.style.background = 'rgba(255,255,255,0.05)';
+        c.style.color = '#cbd5e1';
+        c.style.borderColor = 'rgba(255,255,255,0.1)';
+    });
+    if (btnEl) {
+        btnEl.style.background = 'rgba(239,68,68,0.15)';
+        btnEl.style.color = '#fca5a5';
+        btnEl.style.borderColor = 'rgba(239,68,68,0.3)';
+    }
+};
+
+window.cancelOrderPrompt = function(orderId = null) {
     let order = null;
     if (orderId) {
         order = (window.cachedOrders || []).find(o => String(o._id) === String(orderId) || String(o._id).slice(-6).toUpperCase() === String(orderId).toUpperCase());
@@ -4690,9 +4709,36 @@ window.cancelOrderPrompt = async function(orderId = null) {
         return;
     }
 
+    window.currentRejectOrder = order;
     const shortId = String(order._id).slice(-6).toUpperCase();
-    const reason = prompt(`Reason for Rejecting / Cancelling Order #${shortId} (e.g. Kitchen overloaded / Item out of stock / Location unserviceable):`, 'Kitchen at maximum capacity / Item out of stock');
-    if (reason === null) return; // User pressed Cancel in prompt
+    
+    const titleEl = document.getElementById('ord-reject-modal-title');
+    if (titleEl) titleEl.textContent = `Reject / Cancel Order #${shortId}`;
+    
+    const subEl = document.getElementById('ord-reject-modal-subtitle');
+    if (subEl) subEl.textContent = `Customer: ${order.customerName || 'Guest'} (${order.customerPhone || 'N/A'})`;
+
+    const idInput = document.getElementById('ord-reject-order-id');
+    if (idInput) idInput.value = order._id;
+
+    // Reset default reason
+    const reasonInput = document.getElementById('ord-reject-reason-input');
+    if (reasonInput) reasonInput.value = '🍳 Kitchen at maximum capacity / heavy rush';
+
+    openModal('order-reject-modal');
+};
+
+window.executeOrderCancellation = async function() {
+    const order = window.currentRejectOrder;
+    if (!order || !order._id) {
+        window.showAdminToast('No order selected', 'error');
+        return;
+    }
+
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const reasonInput = document.getElementById('ord-reject-reason-input');
+    const reason = (reasonInput?.value || 'Kitchen at maximum capacity').trim();
+    const notifyWa = document.getElementById('ord-reject-notify-wa')?.checked || false;
 
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
@@ -4706,30 +4752,30 @@ window.cancelOrderPrompt = async function(orderId = null) {
             },
             body: JSON.stringify({ 
                 status: 'cancelled',
-                cancelReason: reason.trim() || 'Kitchen at maximum capacity'
+                cancelReason: reason
             })
         });
 
         if (res.ok) {
-            window.showAdminToast(`❌ Order #${shortId} Cancelled`, 'warning', 'Order Rejected');
+            closeModal('order-reject-modal');
             closeModal('order-confirm-modal');
+            window.showAdminToast(`❌ Order #${shortId} Rejected`, 'warning', 'Order Cancelled');
             window.fetchAndRenderOrders();
 
-            // Send polite cancellation notice to customer via WhatsApp
-            const targetPhone = order.whatsappPhone || order.customerPhone || '';
-            const rawPhone = String(targetPhone).replace(/\D/g, '');
-            const cleanPhone = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
+            // Send polite cancellation notice to customer via WhatsApp if checked
+            if (notifyWa) {
+                const targetPhone = order.whatsappPhone || order.customerPhone || '';
+                const rawPhone = String(targetPhone).replace(/\D/g, '');
+                const cleanPhone = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
 
-            if (cleanPhone) {
-                const cancelMsg = `*❌ ORDER CANCELLATION UPDATE — LITTIWALE BARBIL*\n\n` +
-                                  `Dear *${order.customerName || 'Customer'}*,\n` +
-                                  `We regret to inform you that your order *#${shortId}* could not be fulfilled at this time.\n\n` +
-                                  `*Reason:* ${reason.trim() || 'Kitchen temporarily overloaded / Item out of stock'}\n\n` +
-                                  `We sincerely apologize for the inconvenience caused. If you have already completed an online payment, our team will initiate your refund.\n\n` +
-                                  `For any queries or direct assistance, please reply to this WhatsApp message. Thank you for your understanding! 🙏`;
+                if (cleanPhone) {
+                    const cancelMsg = `*❌ ORDER CANCELLATION UPDATE — LITTIWALE BARBIL*\n\n` +
+                                      `Dear *${order.customerName || 'Customer'}*,\n` +
+                                      `We regret to inform you that your order *#${shortId}* could not be accepted at this time.\n\n` +
+                                      `*Reason:* ${reason}\n\n` +
+                                      `We sincerely apologize for the inconvenience caused. If you have already completed an online payment, our team will initiate your refund promptly.\n\n` +
+                                      `For any queries or direct assistance, please reply to this WhatsApp message. Thank you for your understanding! 🙏`;
 
-                const notifyWa = confirm(`Order #${shortId} has been marked CANCELLED in database.\n\nWould you like to send a cancellation update to the customer on WhatsApp?`);
-                if (notifyWa) {
                     const waUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(cancelMsg)}`;
                     window.open(waUrl, '_blank');
                 }
@@ -4743,10 +4789,34 @@ window.cancelOrderPrompt = async function(orderId = null) {
     }
 };
 
+window.deleteOrderPermanently = async function(orderId) {
+    if (!orderId) return;
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            }
+        });
+        if (res.ok) {
+            window.showAdminToast('Order permanently deleted from database', 'info');
+            closeModal('order-confirm-modal');
+            closeModal('order-reject-modal');
+            window.fetchAndRenderOrders();
+        } else {
+            window.showAdminToast('Failed to delete order', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error deleting order', 'error');
+    }
+};
+
 window.quickUpdateOrderStatus = async function(newStatus) {
     const order = window.currentSelectedOrder;
     if (!order || !order._id) return;
-
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
     try {
