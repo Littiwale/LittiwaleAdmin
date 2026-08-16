@@ -144,6 +144,7 @@ router.get('/config', (req, res) => {
 // =======================
 router.get('/categories', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
         const categories = await Category.find().sort({ displayOrder: 1, createdAt: 1 });
         res.json(categories);
     } catch (err) {
@@ -206,6 +207,7 @@ router.delete('/categories/:id', checkPin, async (req, res) => {
 // =======================
 router.get('/menu', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
         const menu = await Menu.find().sort({ createdAt: -1 }).lean();
         res.json(menu);
     } catch (err) {
@@ -215,13 +217,14 @@ router.get('/menu', async (req, res) => {
 
 router.get('/deals', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
         const deals = await Menu.find({
             $or: [
                 { isCraziestDeal: true },
                 { category: 'Craziest Deals of the Hour' }
             ]
         }).sort({ createdAt: -1 }).lean();
-        res.json(deals);
+        res.json(deals || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -262,6 +265,7 @@ router.delete('/menu/:id', checkPin, async (req, res) => {
 // Lightweight route for public website â€” NO image data (avoids 15MB response)
 router.get('/announcements/public', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
         const announcements = await Announcement.find({ isActive: true })
             .select('-image')
             .sort({ createdAt: -1 });
@@ -273,6 +277,7 @@ router.get('/announcements/public', async (req, res) => {
 
 router.get('/announcements', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
         const announcements = await Announcement.find().sort({ createdAt: -1 }).lean();
         res.json(announcements || []);
     } catch (err) {
@@ -313,6 +318,7 @@ router.delete('/announcements/:id', checkPin, async (req, res) => {
 // =======================
 router.get('/coupons', async (req, res) => {
     try {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
         const coupons = await Coupon.find().sort({ createdAt: -1 }).lean();
         res.json(coupons || []);
     } catch (err) {
