@@ -317,13 +317,18 @@
                         </div>
                     </div>
 
-                    <!-- User Profile Pill -->
-                    <div class="header-profile-menu" onclick="window.switchSection('settings-section')" title="Admin Settings">
-                        <img src="images/logo.png" alt="Admin" class="header-avatar">
-                        <div class="header-profile-info">
-                            <span class="header-profile-name">Tushar</span>
-                            <span class="header-profile-role">Super Admin</span>
+                    <!-- User Profile Pill & Download App under Profile -->
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                        <div class="header-profile-menu" onclick="window.switchSection('settings-section')" title="Admin Settings">
+                            <img src="images/logo.png" alt="Admin" class="header-avatar">
+                            <div class="header-profile-info">
+                                <span class="header-profile-name">Tushar</span>
+                                <span class="header-profile-role">Super Admin</span>
+                            </div>
                         </div>
+                        <button type="button" id="pwa-header-install-btn" style="display:inline-flex; align-items:center; gap:4px; background:rgba(249,115,22,0.12); border:1px solid rgba(249,115,22,0.35); border-radius:6px; padding:2px 8px; color:#f97316; font-size:10.5px; font-weight:800; cursor:pointer; transition:all 0.2s;" title="Install Admin Web App on your Device">
+                            <span>📲 Download App</span>
+                        </button>
                     </div>
                 </div>
             </header>

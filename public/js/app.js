@@ -3789,8 +3789,62 @@ window.handleDealImageUpload = async function(event) {
     }
 };
 
+window.isAutoShuffleDealsActive = true;
+
+window.toggleAutoShuffleDeals = async function() {
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    window.isAutoShuffleDealsActive = !window.isAutoShuffleDealsActive;
+    updateAutoShuffleButtonUI();
+
+    try {
+        const res = await fetch(`${API_URL}/settings/cloud`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ autoShuffleDeals: window.isAutoShuffleDealsActive })
+        });
+        if (res.ok) {
+            window.showAdminToast(
+                window.isAutoShuffleDealsActive ? 'Auto-Shuffle Activated (ON) 🔄' : 'Auto-Shuffle Paused (OFF) ⏸️',
+                'success'
+            );
+        } else {
+            window.showAdminToast('Failed to update Auto-Shuffle setting', 'error');
+        }
+    } catch(e) {
+        console.error('Error toggling auto shuffle:', e);
+        window.showAdminToast('Error toggling Auto-Shuffle', 'error');
+    }
+};
+
+function updateAutoShuffleButtonUI() {
+    const btnText = document.getElementById('deal-shuffle-btn-text');
+    const btn = btnText?.closest('button');
+    if (!btnText) return;
+
+    if (window.isAutoShuffleDealsActive) {
+        btnText.innerHTML = '🔄 Auto-Shuffle: ON';
+        if (btn) {
+            btn.style.background = 'rgba(34, 197, 94, 0.15)';
+            btn.style.borderColor = '#22c55e';
+            btn.style.color = '#4ade80';
+        }
+    } else {
+        btnText.innerHTML = '⏸️ Auto-Shuffle: OFF';
+        if (btn) {
+            btn.style.background = 'rgba(239, 68, 68, 0.15)';
+            btn.style.borderColor = '#ef4444';
+            btn.style.color = '#f87171';
+        }
+    }
+}
+
 window.saveDealCms = async function(event) {
     event.preventDefault();
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     const id = document.getElementById('deal-id').value;
     const name = document.getElementById('deal-title-input').value;
     const note = document.getElementById('deal-note-input').value;
@@ -3802,6 +3856,7 @@ window.saveDealCms = async function(event) {
         name,
         category: 'Craziest Deals of the Hour',
         isCombo: true,
+        isCraziestDeal: true,
         note,
         description: note,
         price,
@@ -3848,6 +3903,7 @@ window.saveDealCms = async function(event) {
 
 window.deleteDealCms = async function(dealId) {
     if (!confirm('Are you sure you want to remove this deal from Craziest Deals?')) return;
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     try {
         const res = await fetch(`${API_URL}/menu/${dealId}`, {
             method: 'DELETE',
@@ -4655,29 +4711,41 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+function triggerAdminPwaInstall() {
+    if (deferredPwaPrompt) {
+        deferredPwaPrompt.prompt();
+        deferredPwaPrompt.userChoice.then(({ outcome }) => {
+            if (outcome === 'accepted') {
+                window.showAdminToast('Admin App Installed Successfully! 📲', 'success');
+            }
+            deferredPwaPrompt = null;
+        });
+    } else {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Tap Menu (⋮) in Chrome and select "Install App" or "Add to Home Screen"', 'info');
+        } else {
+            alert('Tap Menu (⋮) in Chrome and select "Install App" or "Add to Home Screen"');
+        }
+    }
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPwaPrompt = e;
-    const installBtn = document.getElementById('pwa-install-btn');
-    if (installBtn) {
-        installBtn.style.display = 'flex';
-        installBtn.onclick = async () => {
-            if (deferredPwaPrompt) {
-                deferredPwaPrompt.prompt();
-                const { outcome } = await deferredPwaPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    installBtn.style.display = 'none';
-                    window.showAdminToast('Admin App Installed Successfully! 📲', 'success');
-                }
-                deferredPwaPrompt = null;
-            }
-        };
-    }
+    const headerBtn = document.getElementById('pwa-header-install-btn');
+    if (headerBtn) headerBtn.onclick = triggerAdminPwaInstall;
+    const sidebarBtn = document.getElementById('pwa-install-btn');
+    if (sidebarBtn) sidebarBtn.onclick = triggerAdminPwaInstall;
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const headerBtn = document.getElementById('pwa-header-install-btn');
+    if (headerBtn) headerBtn.addEventListener('click', triggerAdminPwaInstall);
+    const sidebarBtn = document.getElementById('pwa-install-btn');
+    if (sidebarBtn) sidebarBtn.addEventListener('click', triggerAdminPwaInstall);
 });
 
 window.addEventListener('appinstalled', () => {
     console.log('✅ Littiwale Admin PWA Installed Successfully');
-    const installBtn = document.getElementById('pwa-install-btn');
-    if (installBtn) installBtn.style.display = 'none';
     window.showAdminToast('Admin App Installed on Device! 📲', 'success');
 });

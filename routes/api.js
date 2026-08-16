@@ -213,6 +213,20 @@ router.get('/menu', async (req, res) => {
     }
 });
 
+router.get('/deals', async (req, res) => {
+    try {
+        const deals = await Menu.find({
+            $or: [
+                { isCraziestDeal: true },
+                { category: 'Craziest Deals of the Hour' }
+            ]
+        }).sort({ createdAt: -1 }).lean();
+        res.json(deals);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.post('/menu', checkPin, async (req, res) => {
     try {
         const newItem = new Menu(req.body);
