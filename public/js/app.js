@@ -906,6 +906,9 @@ function renderOrdersTable(filterQuery = '') {
                         <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" title="Direct WhatsApp Chat">
                             💬
                         </a>
+                        <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:rgba(239,68,68,0.35); color:#f87171;" onclick="window.confirmDeleteOrder('${ord._id}', '#${orderId}')" title="Permanently Delete Test Order">
+                            🗑️
+                        </button>
                     </div>
                 </td>
             </tr>
@@ -4835,6 +4838,32 @@ window.executeOrderCancellation = async function() {
     }
 };
 
+window.confirmDeleteOrder = function(orderId, orderShortId) {
+    if (!orderId) return;
+    const modal = document.getElementById('order-delete-confirm-modal');
+    if (modal) {
+        const idInput = document.getElementById('delete-order-target-id');
+        const labelEl = document.getElementById('delete-order-target-label');
+        if (idInput) idInput.value = orderId;
+        if (labelEl) labelEl.textContent = `Order ${orderShortId || ''}`;
+        modal.classList.add('active');
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+    } else {
+        if (confirm(`Permanently delete order ${orderShortId || ''} from database?`)) {
+            window.deleteOrderPermanently(orderId);
+        }
+    }
+};
+
+window.executePermanentDelete = function() {
+    const id = document.getElementById('delete-order-target-id')?.value;
+    if (id) {
+        window.deleteOrderPermanently(id);
+        closeModal('order-delete-confirm-modal');
+    }
+};
+
 window.deleteOrderPermanently = async function(orderId) {
     if (!orderId) return;
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
@@ -4851,6 +4880,7 @@ window.deleteOrderPermanently = async function(orderId) {
             window.showAdminToast('Order permanently deleted from database', 'info');
             closeModal('order-confirm-modal');
             closeModal('order-reject-modal');
+            closeModal('order-delete-confirm-modal');
             window.fetchAndRenderOrders();
         } else {
             window.showAdminToast('Failed to delete order', 'error');
