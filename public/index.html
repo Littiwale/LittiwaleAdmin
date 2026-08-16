@@ -4,8 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <meta name="theme-color" content="#0f1117">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Littiwale Admin">
     <title>Littiwale Admin Panel</title>
     <link rel="icon" type="image/png" href="images/logo.png">
+    <link rel="apple-touch-icon" href="images/logo.png">
+    <link rel="manifest" href="manifest.json">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -231,6 +238,12 @@
                     <span class="nav-item-text">Settings</span>
                 </button>
             </nav>
+
+            <!-- Install Web App Button -->
+            <button id="pwa-install-btn" class="sidebar-install-btn" style="display:none; margin: 10px 14px; padding: 10px 14px; background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 88, 12, 0.08)); border: 1.5px solid rgba(249, 115, 22, 0.4); border-radius: 12px; color: #f97316; font-size: 12.5px; font-weight: 800; cursor: pointer; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s ease;">
+                <span>📲</span>
+                <span>Install Admin App</span>
+            </button>
 
             <!-- Logout Button -->
             <button id="logout-btn" class="sidebar-logout-btn">

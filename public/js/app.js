@@ -4641,3 +4641,43 @@ window.quickUpdateOrderStatus = async function(newStatus) {
         window.showAdminToast('Error updating status', 'error');
     }
 };
+
+// ==========================================================================
+// PROGRESSIVE WEB APP (PWA) SERVICE WORKER & INSTALLATION CONTROLLER
+// ==========================================================================
+let deferredPwaPrompt = null;
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ Littiwale Admin PWA Service Worker Registered:', reg.scope))
+            .catch(err => console.warn('PWA SW Register warning:', err));
+    });
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) {
+        installBtn.style.display = 'flex';
+        installBtn.onclick = async () => {
+            if (deferredPwaPrompt) {
+                deferredPwaPrompt.prompt();
+                const { outcome } = await deferredPwaPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.style.display = 'none';
+                    window.showAdminToast('Admin App Installed Successfully! 📲', 'success');
+                }
+                deferredPwaPrompt = null;
+            }
+        };
+    }
+});
+
+window.addEventListener('appinstalled', () => {
+    console.log('✅ Littiwale Admin PWA Installed Successfully');
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) installBtn.style.display = 'none';
+    window.showAdminToast('Admin App Installed on Device! 📲', 'success');
+});

@@ -1,0 +1,48 @@
+{
+  "name": "Littiwale Admin Partner",
+  "short_name": "Littiwale Admin",
+  "description": "Official Restaurant Management & Kitchen POS App for Littiwale Barbil",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0c",
+  "theme_color": "#0f1117",
+  "categories": ["business", "food", "productivity"],
+  "icons": [
+    {
+      "src": "images/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "images/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Live Orders",
+      "short_name": "Orders",
+      "description": "View incoming live orders",
+      "url": "/#orders-section",
+      "icons": [{ "src": "images/logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Menu Management",
+      "short_name": "Menu",
+      "description": "Manage catalog & dishes",
+      "url": "/#menu-section",
+      "icons": [{ "src": "images/logo.png", "sizes": "192x192" }]
+    }
+  ]
+}
