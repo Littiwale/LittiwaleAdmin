@@ -9,6 +9,7 @@ const Category = require('../models/Category');
 const Reel = require('../models/Reel');
 const DailyFinance = require('../models/DailyFinance');
 const AdminUser = require('../models/AdminUser');
+const Order = require('../models/Order');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -341,8 +342,8 @@ router.get('/settings', async (req, res) => {
         let docs = await StoreSetting.find();
         if (docs.length === 0) {
             // Initialize default settings if none exist
-            const defaultOutlet = new StoreSetting({ storeId: 'outlet', storeName: 'Littiwale Outlet' });
-            const defaultCloud = new StoreSetting({ storeId: 'cloud', storeName: 'Cloud Kitchen' });
+            const defaultOutlet = new StoreSetting({ storeId: 'outlet', storeName: 'Littiwale Outlet', latitude: 22.099435, longitude: 85.386035, deliveryRateKm: 30 });
+            const defaultCloud = new StoreSetting({ storeId: 'cloud', storeName: 'Cloud Kitchen', latitude: 22.1152751, longitude: 85.3871145, deliveryRateKm: 30 });
             await defaultOutlet.save();
             await defaultCloud.save();
             docs = [defaultOutlet, defaultCloud];
@@ -369,7 +370,14 @@ router.get('/settings', async (req, res) => {
                 }
             });
 
-            if (setting.autoSchedule) {
+            // AutoSchedule only runs if admin has NOT manually forced the store offline.
+            // A manual offline is detected by: isOnline===false AND (offlineReason is set OR offlineUntil is in future)
+            const isManuallyOffline = setting.isOnline === false && (
+                setting.offlineReason ||
+                (setting.offlineUntil && new Date(setting.offlineUntil) > new Date())
+            );
+
+            if (setting.autoSchedule && !isManuallyOffline) {
                 const todaySchedule = setting.schedule[todayStr];
                 
                 if (!todaySchedule.isOpen) {
@@ -381,7 +389,6 @@ router.get('/settings', async (req, res) => {
                         setting.offlineReason = '';
                     } else {
                         setting.isOnline = false;
-                        // Determine next open day to show a better message
                         setting.offlineReason = `Closed right now. Opens at ${todaySchedule.openTime}.`;
                     }
                 }
@@ -524,6 +531,135 @@ router.delete('/finance/:id', checkPin, async (req, res) => {
         res.json({ message: 'Finance entry deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// =======================
+// ORDERS ROUTES (MONGODB)
+// =======================
+router.get('/orders', async (req, res) => {
+    try {
+        const orders = await Order.find().sort({ createdAt: -1 }).limit(100).lean();
+        res.json(orders || []);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.get('/orders/customer/:phone', async (req, res) => {
+    try {
+        const rawPhone = String(req.params.phone || '').replace(/\D/g, '');
+        if (!rawPhone || rawPhone.length < 6) {
+            return res.status(400).json({ success: false, error: 'Valid phone number required' });
+        }
+        
+        const last10 = rawPhone.slice(-10);
+        const queryRegex = new RegExp(last10 + '$|' + last10);
+
+        const orders = await Order.find({
+            $or: [
+                { customerPhone: queryRegex },
+                { whatsappPhone: queryRegex }
+            ]
+        }).sort({ createdAt: -1 }).limit(50).lean();
+
+        let customer = null;
+        if (orders && orders.length > 0) {
+            const latest = orders[0];
+            customer = {
+                name: latest.customerName || '',
+                phone: last10,
+                address: latest.deliveryAddress || '',
+                landmark: latest.landmark || '',
+                lat: latest.lat || latest.latitude || null,
+                lng: latest.lng || latest.longitude || null
+            };
+        }
+
+        res.json({
+            success: true,
+            phone: last10,
+            hasOrders: orders && orders.length > 0,
+            customer,
+            orders: orders || []
+        });
+    } catch (err) {
+        console.error('Customer orders lookup error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.get('/orders/:id', async (req, res) => {
+    try {
+        const idParam = String(req.params.id).trim();
+        let order = null;
+
+        if (mongoose.Types.ObjectId.isValid(idParam) && idParam.length === 24) {
+            order = await Order.findById(idParam).lean();
+        }
+
+        if (!order) {
+            // Find by orderId field
+            order = await Order.findOne({
+                $or: [
+                    { orderId: idParam },
+                    { orderId: idParam.toUpperCase() }
+                ]
+            }).lean();
+        }
+
+        if (!order) {
+            // Find by matching last 6 chars of ObjectId
+            const recent = await Order.find().sort({ createdAt: -1 }).limit(150).lean();
+            order = recent.find(o => String(o._id).slice(-6).toUpperCase() === idParam.toUpperCase() || String(o._id) === idParam);
+        }
+
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        res.json(order);
+    } catch (err) {
+        console.error('Order fetch error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/orders', async (req, res) => {
+    try {
+        const orderData = req.body;
+        if (!orderData.customerName || !orderData.customerPhone) {
+            return res.status(400).json({ error: 'Customer name and phone are required' });
+        }
+        const newOrder = new Order(orderData);
+        await newOrder.save();
+        res.status(201).json({ success: true, order: newOrder });
+    } catch (err) {
+        console.error('Order creation error:', err);
+        res.status(400).json({ error: err.message });
+    }
+});
+
+router.put('/orders/:id/status', checkPin, async (req, res) => {
+    try {
+        const { status } = req.body;
+        const updated = await Order.findByIdAndUpdate(req.params.id, { $set: { status } }, { new: true });
+        res.json(updated);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+router.put('/orders/:id', checkPin, async (req, res) => {
+    try {
+        const { status, deliveryCharge, finalTotal, notes } = req.body;
+        const updateData = {};
+        if (status) updateData.status = status;
+        if (deliveryCharge !== undefined) updateData.deliveryCharge = Number(deliveryCharge);
+        if (finalTotal !== undefined) updateData.finalTotal = Number(finalTotal);
+        if (notes !== undefined) updateData.notes = notes;
+
+        const updated = await Order.findByIdAndUpdate(req.params.id, { $set: updateData }, { new: true });
+        res.json(updated);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
     }
 });
 

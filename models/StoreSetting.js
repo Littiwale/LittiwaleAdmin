@@ -66,6 +66,26 @@ const storeSettingSchema = new mongoose.Schema({
     bulkBannerCtaText: { type: String, default: "Contact Us on WhatsApp" },
     bulkBannerCtaLink: { type: String, default: "https://wa.me/916370680744?text=Hi%20Littiwale,%20I'd%20like%20to%20inquire%20about%20a%20bulk%20party%20/%20office%20lunch%20/%20event%20order." },
 
+    // Dabba Meal Subscription CMS
+    dabbaVegTitle: { type: String, default: "Desi Veg Dabba" },
+    dabbaVegSubtitle: { type: String, default: "Pure vegetarian. Best value for daily regulars." },
+    dabbaVegWeeklyOldPrice: { type: String, default: "₹1,500" },
+    dabbaVegWeeklyNewPrice: { type: String, default: "₹1,200" },
+    dabbaVegMonthlyOldPrice: { type: String, default: "₹6,000" },
+    dabbaVegMonthlyNewPrice: { type: String, default: "₹5,500" },
+    dabbaNonvegTitle: { type: String, default: "Desi Feast Dabba" },
+    dabbaNonvegSubtitle: { type: String, default: "4 days veg + 3 days non-veg (Wed, Fri, Sun)." },
+    dabbaNonvegWeeklyOldPrice: { type: String, default: "₹2,000" },
+    dabbaNonvegWeeklyNewPrice: { type: String, default: "₹1,500" },
+    dabbaNonvegMonthlyOldPrice: { type: String, default: "₹7,500" },
+    // SEO & Google Search Meta Settings
+    seoTitle: { type: String, default: "Littiwale Barbil | Authentic Litti Chokha, Thalis & Best Cloud Kitchen in Barbil" },
+    seoDescription: { type: String, default: "Order authentic wood-fired Litti Chokha, North & South Indian Thalis, Veg & Non-Veg meals online from Littiwale - Barbil's premier cloud kitchen. Fast delivery in Barbil." },
+    seoKeywords: { type: String, default: "littiwale barbil, best restaurant in barbil, litti chokha barbil, online food delivery barbil, cloud kitchen barbil, thali barbil, veg nonveg food barbil, food delivery near me barbil" },
+    seoOgImage: { type: String, default: "images/logo.png" },
+    googleVerificationTag: { type: String, default: "" },
+    canonicalUrl: { type: String, default: "https://littiwale.com" },
+
     updatedAt: { type: Date, default: Date.now }
 }, { strict: false });
 

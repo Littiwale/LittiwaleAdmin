@@ -603,32 +603,427 @@ function showConfirm(title, message, okText = 'Yes', isDanger = true) {
 }
 
 // =======================
-// WEBSITE ORDERS REVENUE TRACKER
+// WEBSITE ORDERS REVENUE TRACKER & LIVE ORDERS (REAL-TIME AUTO SYNC)
 // =======================
+window.cachedOrders = [];
+window.knownOrderIds = new Set();
+let isInitialOrdersLoaded = false;
+
+function playNewOrderChime() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
+        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.2); // A5
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+    } catch(e) {}
+}
+
+window.fetchAndRenderOrders = async function() {
+    try {
+        const res = await fetch('/api/orders');
+        if (res.ok) {
+            const orders = await res.json();
+            const orderList = Array.isArray(orders) ? orders : [];
+            
+            // Check for new incoming orders
+            if (isInitialOrdersLoaded) {
+                const newOrders = orderList.filter(o => o._id && !window.knownOrderIds.has(String(o._id)));
+                if (newOrders.length > 0) {
+                    playNewOrderChime();
+                    const latest = newOrders[0];
+                    const shortId = latest._id ? String(latest._id).slice(-6).toUpperCase() : 'LW';
+                    if (typeof window.showAdminToast === 'function') {
+                        window.showAdminToast(`🔔 New Order #${shortId} Received from ${latest.customerName || 'Customer'}!`, 'success');
+                    }
+                }
+            }
+
+            // Update known IDs
+            window.knownOrderIds = new Set(orderList.map(o => String(o._id)));
+            isInitialOrdersLoaded = true;
+
+            window.cachedOrders = orderList;
+            const currentSearch = document.getElementById('global-search-input')?.value?.trim() || window.currentSearchQuery || '';
+            renderOrdersTable(currentSearch);
+            if (typeof renderOrderNotifications === 'function') renderOrderNotifications();
+            if (typeof renderWebsiteRevenue === 'function') renderWebsiteRevenue();
+            if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
+        }
+    } catch(e) {
+        console.error('Failed to load orders:', e);
+    }
+};
+
+window.renderOrderNotifications = function() {
+    const orders = window.cachedOrders || [];
+    // Active orders only: pending, accepted, dispatched. Delivered & cancelled automatically disappear!
+    const activeOrders = orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
+    const pendingOrders = activeOrders.filter(o => o.status === 'pending');
+
+    const badgeEl = document.getElementById('header-notifications-badge');
+    const countBadgeEl = document.getElementById('notif-unread-count') || document.getElementById('notif-active-count-badge');
+    const listEl = document.getElementById('notif-list-container') || document.getElementById('notif-orders-list');
+
+    if (badgeEl) {
+        if (activeOrders.length > 0) {
+            badgeEl.style.display = 'inline-flex';
+            badgeEl.textContent = activeOrders.length;
+            if (pendingOrders.length > 0) {
+                badgeEl.style.background = '#ef4444'; // Red alert for pending orders
+            } else {
+                badgeEl.style.background = 'var(--brand-orange)';
+            }
+        } else {
+            badgeEl.style.display = 'none';
+        }
+    }
+
+    if (countBadgeEl) {
+        countBadgeEl.textContent = `${activeOrders.length} New`;
+        countBadgeEl.className = pendingOrders.length > 0 ? 'notif-badge' : 'notif-badge';
+    }
+
+    if (listEl) {
+        if (activeOrders.length === 0) {
+            listEl.innerHTML = `
+                <div class="notif-empty" style="text-align:center; padding:32px 16px; color:var(--text-muted);">
+                    <div style="font-size:32px; margin-bottom:8px;">🎉</div>
+                    <div style="font-size:13.5px; font-weight:700; color:#fff; margin-bottom:2px;">All Caught Up!</div>
+                    <div style="font-size:11.5px; color:var(--text-dim);">No pending or active orders right now.</div>
+                </div>
+            `;
+            return;
+        }
+
+        listEl.innerHTML = activeOrders.map(ord => {
+            const shortId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+            const status = (ord.status || 'pending').toLowerCase();
+            const total = ord.finalTotal || ord.subtotal || 0;
+            const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Items';
+            const timeStr = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+            let statusPill = `<span class="badge badge-new" style="font-size:10px;">Pending</span>`;
+            let actionBtn = `
+                <div style="display:flex; gap:6px;">
+                    <button class="btn btn-sm btn-primary" style="padding:4px 9px; font-size:11.5px; background:#25d366; color:#000; font-weight:800;" onclick="closeOrderNotifications(); openOrderConfirmModal('${ord._id}')" title="Confirm Order">✅ Confirm</button>
+                    <button class="btn btn-sm btn-outline" style="padding:4px 8px; font-size:11.5px; border-color:#ef4444; color:#ef4444;" onclick="closeOrderNotifications(); cancelOrderPrompt('${ord._id}')" title="Reject Order">✕</button>
+                </div>
+            `;
+            
+            if (status === 'accepted' || status === 'confirmed') {
+                statusPill = `<span class="badge badge-active" style="font-size:10px;">Kitchen</span>`;
+                actionBtn = `<button class="btn btn-sm btn-info" style="padding:4px 10px; font-size:11.5px; font-weight:700;" onclick="closeOrderNotifications(); openOrderConfirmModal('${ord._id}')">📦 Dispatch</button>`;
+            } else if (status === 'dispatched') {
+                statusPill = `<span class="badge badge-info" style="font-size:10px;">On Way</span>`;
+                actionBtn = `<button class="btn btn-sm btn-success" style="padding:4px 10px; font-size:11.5px; font-weight:700;" onclick="closeOrderNotifications(); openOrderConfirmModal('${ord._id}')">🎉 Deliver</button>`;
+            }
+
+            return `
+                <div class="notif-item ${status}" style="padding:13px 16px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:7px;">
+                    <!-- Top Row: Order ID, Status, Time -->
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <strong style="font-size:12.5px; color:#fff; font-family:monospace; background:rgba(255,255,255,0.07); padding:2px 6px; border-radius:4px;">#${shortId}</strong>
+                            ${statusPill}
+                        </div>
+                        <span style="font-size:11px; color:#94a3b8; font-weight:500;">${timeStr}</span>
+                    </div>
+
+                    <!-- Middle Row: Customer Name & Items -->
+                    <div style="font-size:12px; color:#e2e8f0; line-height:1.4;">
+                        <div style="font-weight:700; color:#fff; margin-bottom:2px;">${ord.customerName || 'Customer'}</div>
+                        <div style="color:#94a3b8; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${itemsStr}</div>
+                    </div>
+
+                    <!-- Bottom Row: Price & Action -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.08);">
+                        <span style="font-size:13.5px; font-weight:800; color:var(--brand-orange, #f97316);">₹${total}</span>
+                        ${actionBtn}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+};
+
+window.toggleOrderNotificationsDropdown = function(e) {
+    if (e) e.stopPropagation();
+    const drop = document.getElementById('order-notifications-dropdown');
+    if (drop) {
+        window.renderOrderNotifications();
+        drop.classList.toggle('show');
+    }
+};
+
+window.closeOrderNotifications = function() {
+    const drop = document.getElementById('order-notifications-dropdown');
+    if (drop) drop.classList.remove('show');
+};
+
+window.openAllOrdersSection = function() {
+    window.closeOrderNotifications();
+    window.switchSection('orders-section');
+};
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#order-notifications-dropdown') && !e.target.closest('.header-icon-btn')) {
+        window.closeOrderNotifications();
+    }
+});
+
+// Start Continuous Background Polling every 3 seconds for zero-refresh live updates
+if (!window.adminOrdersLivePollInterval) {
+    window.adminOrdersLivePollInterval = setInterval(() => {
+        window.fetchAndRenderOrders();
+        if (typeof loadStoreSettings === 'function') loadStoreSettings();
+    }, 3000);
+}
+
+// Initial fetch on script execution
+window.fetchAndRenderOrders();
+
+function renderOrdersTable(filterQuery = '') {
+    const tbody = document.getElementById('live-orders-tbody');
+    if (!tbody) return;
+    let orders = window.cachedOrders || [];
+    const activeInput = document.getElementById('global-search-input');
+    const rawQ = (filterQuery !== '' ? filterQuery : (activeInput ? activeInput.value : (window.currentSearchQuery || ''))).trim();
+
+    if (rawQ) {
+        const q = rawQ.toLowerCase();
+        const qClean = q.replace(/^#/, '');
+        const qPhone = q.replace(/\D/g, '');
+
+        orders = orders.filter(ord => {
+            const shortId = ord._id ? String(ord._id).slice(-6).toLowerCase() : '';
+            const fullId = ord._id ? String(ord._id).toLowerCase() : '';
+            const name = (ord.customerName || '').toLowerCase();
+            const phone = (ord.customerPhone || ord.whatsappPhone || '').replace(/\D/g, '');
+            const items = (ord.items || []).map(i => i.name || '').join(' ').toLowerCase();
+
+            const matchId = shortId.includes(qClean) || fullId.includes(qClean);
+            const matchName = name.includes(q);
+            const matchPhone = qPhone.length >= 3 && phone.includes(qPhone);
+            const matchItems = items.includes(q);
+
+            return matchId || matchName || matchPhone || matchItems;
+        });
+    }
+
+    if (orders.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align:center; padding:48px 20px; color:var(--text-muted);">
+                    <div style="font-size:36px; margin-bottom:10px;">${rawQ ? '🔍' : '🛍️'}</div>
+                    <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:4px;">${rawQ ? `No Orders Matching "${rawQ}"` : 'No Active Live Orders'}</div>
+                    <div style="font-size:12px; color:var(--text-dim); max-width:380px; margin:0 auto;">
+                        ${rawQ ? 'Try searching with a different order ID, customer name, or phone number.' : 'Incoming customer orders placed from the website or WhatsApp checkout will appear here in real-time.'}
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = orders.map(ord => {
+        const orderId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+        const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Custom items';
+        const total = ord.finalTotal || ord.subtotal || 0;
+        const delCharge = Number(ord.deliveryCharge || 0);
+        const status = (ord.status || 'pending').toLowerCase();
+        const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
+        const formattedDate = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+        const targetPhone = ord.whatsappPhone || ord.customerPhone || '';
+        const rawPhone = targetPhone.replace(/\D/g, '').slice(-10);
+
+        let actionBtnHtml = '';
+        if (status === 'pending') {
+            actionBtnHtml = `
+                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 12px; font-size:11.5px; font-weight:800; background:#25d366; color:#000;" onclick="openOrderConfirmModal('${ord._id}')" title="Confirm Order & Reply via WhatsApp">
+                    ✅ Confirm
+                </button>
+                <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Reject / Cancel Order">
+                    ✕ Reject
+                </button>
+            `;
+        } else if (status === 'accepted' || status === 'confirmed') {
+            actionBtnHtml = `
+                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:700; background:#3b82f6; color:#fff;" onclick="directUpdateOrderStatus('${ord._id}', 'dispatched')" title="Mark Out for Delivery">
+                    📦 Dispatch
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
+                    👁️
+                </button>
+                <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Cancel Order">
+                    ✕
+                </button>
+            `;
+        } else if (status === 'dispatched') {
+            actionBtnHtml = `
+                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered')" title="Mark Order Delivered">
+                    🎉 Deliver
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
+                    👁️
+                </button>
+            `;
+        } else {
+            actionBtnHtml = `
+                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 10px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
+                    👁️ Details
+                </button>
+            `;
+        }
+
+        return `
+            <tr>
+                <td style="font-family:monospace; font-weight:800; color:var(--brand-orange);">#${orderId}</td>
+                <td>
+                    <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
+                    <div style="font-size:11px; color:var(--text-dim);">${formattedDate} • <span style="text-transform:capitalize; color:var(--brand-gold);">${ord.orderType || 'delivery'}</span></div>
+                </td>
+                <td><a href="tel:${ord.customerPhone}" style="color:var(--text-muted); text-decoration:none; font-weight:600;">${ord.customerPhone || 'N/A'}</a></td>
+                <td style="max-width:220px; font-size:12.5px;" title="${itemsStr}">${itemsStr}</td>
+                <td>
+                    <div style="font-weight:900; color:var(--brand-gold);">₹${total}</div>
+                    <div style="font-size:10.5px; color:var(--text-dim);">Del: ₹${delCharge}</div>
+                </td>
+                <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
+                <td>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        ${actionBtnHtml}
+                        <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="View & Print Official Bill (A4 PDF)">
+                            📄
+                        </button>
+                        <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" title="Direct WhatsApp Chat">
+                            💬
+                        </a>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+window.directUpdateOrderStatus = async function(orderId, newStatus) {
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/orders/${orderId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+            window.showAdminToast(`Order status updated to: ${newStatus.toUpperCase()}`, 'success');
+            window.fetchAndRenderOrders();
+        } else {
+            window.showAdminToast('Failed to update order status', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error updating status', 'error');
+    }
+};
+
 window.loadFinanceData = function() {
     renderWebsiteRevenue();
 };
 
 function renderWebsiteRevenue() {
-    // Calculated live from incoming website customer orders
-    const totalOrders = 0;
-    const totalRevenue = 0;
-    const aov = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+    const orders = window.cachedOrders || [];
+    const validOrders = orders.filter(o => o.status !== 'cancelled');
+    const totalOrders = validOrders.length;
+    
+    let totalFoodRevenue = 0; // Pure Food Item Net Revenue (excl. delivery fee)
+    let totalDeliveryFee = 0; // Total Delivery Charges (Paid to Rider)
+    let totalGrandSales = 0;  // Grand total collected
+
+    validOrders.forEach(o => {
+        const itemSubtotal = Number(o.subtotal || 0);
+        const discount = Number(o.discount || 0);
+        const netItemTotal = Math.max(0, itemSubtotal - discount);
+        
+        // Fallback: if subtotal is missing, derive food amount by subtracting deliveryCharge from finalTotal
+        const fallbackFood = o.finalTotal ? Math.max(0, Number(o.finalTotal) - Number(o.deliveryCharge || 0)) : 0;
+        const foodAmount = netItemTotal > 0 ? netItemTotal : fallbackFood;
+        const delFee = Number(o.deliveryCharge || 0);
+
+        totalFoodRevenue += foodAmount;
+        totalDeliveryFee += delFee;
+        totalGrandSales += Number(o.finalTotal || (foodAmount + delFee));
+    });
+
+    const foodAov = totalOrders > 0 ? Math.round(totalFoodRevenue / totalOrders) : 0;
 
     const elWebRev = document.getElementById('fin-website-revenue');
-    if (elWebRev) elWebRev.textContent = `₹${totalRevenue.toLocaleString('en-IN')}`;
+    if (elWebRev) elWebRev.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
 
     const elWebOrd = document.getElementById('fin-website-orders');
     if (elWebOrd) elWebOrd.textContent = `${totalOrders} orders`;
 
     const elWebAov = document.getElementById('fin-website-aov');
-    if (elWebAov) elWebAov.textContent = `₹${aov}`;
+    if (elWebAov) elWebAov.textContent = `₹${foodAov}`;
 
     const elDashRev = document.getElementById('kpi-revenue');
-    if (elDashRev) elDashRev.textContent = `₹${totalRevenue.toLocaleString('en-IN')}`;
+    if (elDashRev) elDashRev.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
 
     const elDashOrd = document.getElementById('kpi-orders-count');
     if (elDashOrd) elDashOrd.textContent = `${totalOrders} website orders`;
+
+    // Render Detailed Finance Register Table
+    const finTbody = document.getElementById('finance-tbody');
+    if (finTbody) {
+        if (orders.length === 0) {
+            finTbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
+                        <div style="font-size:32px; margin-bottom:8px;">🛒</div>
+                        <div style="font-size:14px; font-weight:700; color:#fff; margin-bottom:4px;">No Website Orders Yet</div>
+                        <div style="font-size:12px; color:var(--text-dim);">When customers place orders, their food revenue and delivery fee breakdown will appear here in real-time.</div>
+                    </td>
+                </tr>
+            `;
+        } else {
+            finTbody.innerHTML = orders.map(ord => {
+                const orderId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+                const dateStr = ord.createdAt ? new Date(ord.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Today';
+                const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Custom items';
+                const itemSubtotal = Number(ord.subtotal || 0);
+                const discount = Number(ord.discount || 0);
+                const netFood = Math.max(0, itemSubtotal - discount) || (ord.finalTotal ? Math.max(0, Number(ord.finalTotal) - Number(ord.deliveryCharge || 0)) : 0);
+                const delFee = Number(ord.deliveryCharge || 0);
+                const grandTotal = Number(ord.finalTotal || (netFood + delFee));
+                const statusBadge = ord.status === 'delivered' ? 'badge-open' : (ord.status === 'cancelled' ? 'badge-closed' : (ord.status === 'accepted' ? 'badge-active' : 'badge-new'));
+
+                return `
+                    <tr>
+                        <td style="font-family:monospace; font-weight:800; color:var(--brand-orange);">#${orderId}</td>
+                        <td style="font-size:11.5px; color:var(--text-dim);">${dateStr}</td>
+                        <td>
+                            <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
+                            <div style="font-size:11px; color:var(--text-muted);">${ord.customerPhone || 'N/A'}</div>
+                        </td>
+                        <td style="max-width:200px; font-size:12px;" title="${itemsStr}">${itemsStr}</td>
+                        <td style="font-weight:800; color:var(--brand-gold);">₹${netFood}</td>
+                        <td style="color:var(--brand-orange); font-weight:600;">₹${delFee}</td>
+                        <td style="font-weight:900; color:#fff;">₹${grandTotal}</td>
+                        <td><span class="badge ${statusBadge}">${ord.status || 'pending'}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    }
 }
 
 // =======================
@@ -747,14 +1142,32 @@ window.renderAnalyticsData = function() {
 // =======================
 // NAVIGATION & UI HELPERS
 // =======================
+window.navigateAdminBack = function() {
+    window.switchSection('dashboard-section');
+};
+
 window.switchSection = function(targetId) {
+    if (!targetId) targetId = 'dashboard-section';
+
+    // Toggle Back button visibility (Visible on all sections except home Dashboard)
+    const backBtn = document.getElementById('content-back-btn') || document.getElementById('header-back-btn');
+    if (backBtn) {
+        if (targetId !== 'dashboard-section') {
+            backBtn.style.display = 'inline-flex';
+        } else {
+            backBtn.style.display = 'none';
+        }
+    }
+
     const allNavs = document.querySelectorAll('.nav-item');
     const allTabs = document.querySelectorAll('.tab-section');
     
+    let matchedNav = false;
     allNavs.forEach(n => {
         if (n.getAttribute('data-target') === targetId) {
             n.classList.add('active');
-            const title = n.getAttribute('data-title') || 'Dashboard';
+            matchedNav = true;
+            const title = n.getAttribute('data-title') || (targetId === 'dashboard-section' ? 'Dashboard' : 'Admin Panel');
             const bc = n.getAttribute('data-bc') || title;
             const titleEl = document.getElementById('header-page-title');
             const bcEl = document.getElementById('breadcrumb-current');
@@ -764,6 +1177,15 @@ window.switchSection = function(targetId) {
             n.classList.remove('active');
         }
     });
+
+    if (!matchedNav && targetId === 'dashboard-section') {
+        const dashNav = document.querySelector('.nav-item[data-target="dashboard-section"]');
+        if (dashNav) dashNav.classList.add('active');
+        const titleEl = document.getElementById('header-page-title');
+        const bcEl = document.getElementById('breadcrumb-current');
+        if (titleEl) titleEl.textContent = 'Dashboard';
+        if (bcEl) bcEl.textContent = 'Dashboard';
+    }
     
     allTabs.forEach(s => {
         if (s.id === targetId) {
@@ -775,17 +1197,29 @@ window.switchSection = function(targetId) {
         }
     });
 
+    if (targetId === 'dashboard-section') {
+        if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
+    }
     if (targetId === 'media-section') fetchReels();
     if (targetId === 'menu-section') loadMenu();
     if (targetId === 'coupons-section') loadCoupons();
     if (targetId === 'settings-section') loadStoreSettings();
     if (targetId === 'analytics-section') window.renderAnalyticsData();
     if (targetId === 'finance-section') window.loadFinanceData();
+    if (targetId === 'orders-section') window.fetchAndRenderOrders();
+    if (targetId === 'seo-section') window.loadSeoSettings();
+    if (targetId === 'media-library-section') window.renderMediaLibrary();
+
+    if (typeof window.updateContextualSearchPlaceholder === 'function') {
+        window.updateContextualSearchPlaceholder(targetId);
+    }
+
+    // Scroll to top of page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Close sidebar on mobile after navigating
-    if (window.innerWidth <= 900) {
-        const sidebar = document.getElementById('sidebar');
-        if (sidebar) sidebar.classList.remove('open');
+    if (typeof window.closeSidebarMobile === 'function') {
+        window.closeSidebarMobile();
     }
 };
 
@@ -846,6 +1280,7 @@ window.showNotificationDrawer = function() {
 };
 
 window.refreshOrders = function() {
+    if (typeof window.fetchAndRenderOrders === 'function') window.fetchAndRenderOrders();
     window.showAdminToast('Orders refreshed and up to date!', 'success');
 };
 
@@ -854,58 +1289,182 @@ window.openAnnouncementModal = function() {
     document.getElementById('cms-announcements-grid')?.scrollIntoView({ behavior: 'smooth' });
 };
 
-window.handleGlobalSearch = function(e) {
-    const query = (e.target.value || '').toLowerCase().trim();
+// ==========================================
+// CONTEXTUAL LIVE SEARCH CONTROLLER
+// ==========================================
+window.currentSearchQuery = '';
+
+window.handleContextualSearch = function(e) {
+    const query = (e.target.value || '').trim();
+    window.currentSearchQuery = query;
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn) clearBtn.style.display = query ? 'inline-block' : 'none';
+
+    const activeTab = document.querySelector('.tab-section.active')?.id || 'dashboard-section';
+
+    if (activeTab === 'orders-section') {
+        renderOrdersTable(query);
+    } else if (activeTab === 'menu-section') {
+        renderMenuGrid(query);
+    } else if (activeTab === 'coupons-section' && typeof renderCoupons === 'function') {
+        renderCoupons(query);
+    } else if (activeTab === 'announcements-section' && typeof renderAnnouncements === 'function') {
+        renderAnnouncements(query);
+    } else {
+        renderDashboardSearchDropdown(query.toLowerCase());
+    }
+};
+
+window.clearContextualSearch = function() {
+    const input = document.getElementById('global-search-input');
+    if (input) {
+        input.value = '';
+        input.dispatchEvent(new Event('input'));
+    }
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+};
+
+window.updateContextualSearchPlaceholder = function(targetId) {
+    const input = document.getElementById('global-search-input');
+    if (!input) return;
+    
+    // Clear search on tab switch so user has clean context
+    input.value = '';
+    window.currentSearchQuery = '';
+    const clearBtn = document.getElementById('clear-search-btn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    const dropdown = document.getElementById('global-search-results');
+    if (dropdown) dropdown.style.display = 'none';
+
+    if (targetId === 'orders-section') {
+        input.placeholder = 'Search orders by ID (#LW...), Customer Name, Phone...';
+    } else if (targetId === 'menu-section') {
+        input.placeholder = 'Search menu by Dish Name, Category, Veg/Non-Veg...';
+    } else if (targetId === 'coupons-section') {
+        input.placeholder = 'Search coupons by promo code...';
+    } else if (targetId === 'media-section' || targetId === 'announcements-section') {
+        input.placeholder = 'Search banners, announcements, deals...';
+    } else if (targetId === 'settings-section') {
+        input.placeholder = 'Search store timings & delivery settings...';
+    } else {
+        input.placeholder = 'Search dishes, categories, sections...';
+    }
+};
+
+window.renderDashboardSearchDropdown = function(query) {
+    const dropdown = document.getElementById('global-search-results');
+    if (!dropdown) return;
+
     if (!query) {
-        renderMenuGrid();
+        dropdown.style.display = 'none';
+        dropdown.innerHTML = '';
         return;
     }
-    const currentTab = document.querySelector('.tab-section.active');
-    if (!currentTab || currentTab.id !== 'menu-section') {
-        window.switchSection('menu-section');
-    }
-    
-    const container = document.getElementById('menu-grid-container');
-    if (!container) return;
-    
-    const filtered = (window.cachedMenuItems || []).filter(item => {
-        return (item.name && item.name.toLowerCase().includes(query)) ||
-               (item.category && item.category.toLowerCase().includes(query)) ||
-               (item.description && item.description.toLowerCase().includes(query));
+
+    const results = [];
+
+    // 1. Search Sections
+    const sections = [
+        { name: 'Dashboard Overview', icon: '📊', sectionId: 'dashboard-section' },
+        { name: 'Menu Catalog (151 Dishes)', icon: '🍱', sectionId: 'menu-section' },
+        { name: 'Live Orders Management', icon: '🛍️', sectionId: 'orders-section' },
+        { name: 'Finance & Online Revenue', icon: '💰', sectionId: 'finance-section' },
+        { name: 'Analytics & Reports', icon: '📈', sectionId: 'analytics-section' },
+        { name: 'Store Opening Hours & Delivery', icon: '⏰', sectionId: 'settings-section' },
+        { name: 'Discount Coupons & Promos', icon: '🏷️', sectionId: 'coupons-section' },
+        { name: 'Media Library Gallery', icon: '🖼️', sectionId: 'media-library-section' },
+        { name: 'Website Hero Section CMS', icon: '✨', sectionId: 'media-section', tab: 'hero-tab' },
+        { name: 'About Us Story CMS', icon: 'ℹ️', sectionId: 'media-section', tab: 'about-tab' },
+        { name: 'Social Reels & Instagram CMS', icon: '📱', sectionId: 'media-section', tab: 'reels-tab' },
+        { name: 'Craziest Deals CMS', icon: '🔥', sectionId: 'media-section', tab: 'deals-tab' },
+        { name: 'Announcements Banner CMS', icon: '📢', sectionId: 'media-section', tab: 'announcements-tab' }
+    ];
+
+    sections.forEach(s => {
+        if (s.name.toLowerCase().includes(query)) {
+            results.push({
+                type: 'Section',
+                title: s.name,
+                subtitle: 'Navigation Jump',
+                icon: s.icon,
+                onClick: `window.switchSection('${s.sectionId}'); ${s.tab ? `window.switchToCmsTab('${s.tab}');` : ''} document.getElementById('global-search-results').style.display='none';`
+            });
+        }
     });
 
-    if (filtered.length === 0) {
-        container.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:40px;">No dishes matching "${query}" found.</div>`;
+    // 2. Search Dishes (Strict Name & Category matching)
+    (window.cachedMenuItems || []).forEach(dish => {
+        const dishName = (dish.name || '').toLowerCase();
+        const category = (dish.category || '').toLowerCase();
+        if (dishName.includes(query) || category.includes(query)) {
+            results.push({
+                type: 'Dish',
+                title: dish.name,
+                subtitle: `₹${dish.price} • ${dish.category || 'General'}`,
+                icon: '🍲',
+                onClick: `window.switchSection('menu-section'); if(typeof editMenu==='function') editMenu('${dish._id}'); document.getElementById('global-search-results').style.display='none';`
+            });
+        }
+    });
+
+    // 3. Search Orders (Strict ID, Customer Name & Phone matching)
+    const qClean = query.replace(/^#/, '').toLowerCase();
+    const qPhone = query.replace(/\D/g, '');
+
+    (window.cachedOrders || []).forEach(ord => {
+        const id = String(ord._id || '');
+        const shortId = id.slice(-6).toLowerCase();
+        const fullId = id.toLowerCase();
+        const name = (ord.customerName || '').toLowerCase();
+        const phone = (ord.customerPhone || ord.whatsappPhone || '').replace(/\D/g, '');
+
+        const matchId = shortId.includes(qClean) || fullId.includes(qClean);
+        const matchName = name.includes(query);
+        const matchPhone = qPhone.length >= 3 && phone.includes(qPhone);
+
+        if (matchId || matchName || matchPhone) {
+            results.push({
+                type: 'Order',
+                title: `Order #${id.slice(-6).toUpperCase()} - ${ord.customerName || 'Customer'}`,
+                subtitle: `₹${ord.finalTotal || ord.subtotal || 0} • ${ord.status || 'pending'}`,
+                icon: '🛍️',
+                onClick: `window.switchSection('orders-section'); if(typeof openOrderConfirmModal==='function') openOrderConfirmModal('${ord._id}'); document.getElementById('global-search-results').style.display='none';`
+            });
+        }
+    });
+
+    if (results.length === 0) {
+        dropdown.innerHTML = `<div style="padding:14px 16px; font-size:12.5px; color:var(--text-dim); text-align:center;">No matching results for "${query}"</div>`;
+        dropdown.style.display = 'block';
         return;
     }
 
-    container.innerHTML = `
-        <div style="background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-lg); padding:20px;">
-            <div style="font-size:15px; font-weight:800; color:#fff; margin-bottom:16px;">Search Results for "${query}" (${filtered.length} dishes)</div>
-            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:20px;">
-                ${filtered.map(item => `
-                    <div class="food-card">
-                        <div class="food-card-img-wrap">
-                            ${item.image ? `<img src="${item.image}" class="food-card-img">` : `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);">No Image</div>`}
-                            <div class="food-loc-badge">${item.locationAvailability === 'cloud_only' ? '☁️ CLOUD' : item.locationAvailability === 'outlet_only' ? '🏪 OUTLET' : '🌐 BOTH'}</div>
-                        </div>
-                        <div class="food-card-body">
-                            <div class="food-card-title-row">
-                                <h4 class="food-card-name">${item.dietaryPreference === 'non-veg' ? '🔴' : '🟢'} ${item.name}</h4>
-                                <span class="food-card-price">₹${item.price}</span>
-                            </div>
-                            <p class="food-card-desc">${item.description || 'Authentic Desi Taste'}</p>
-                            <div class="food-card-actions">
-                                <button class="btn btn-sm btn-secondary" style="flex:1;" onclick="editMenu('${item._id}')">✏️ Edit</button>
-                                <button class="btn btn-sm ${item.isAvailable !== false ? 'btn-outline' : 'btn-danger'}" style="flex:1;" onclick="toggleMenuStock('${item._id}', ${item.isAvailable})">${item.isAvailable !== false ? 'In Stock' : 'Out of Stock'}</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteMenu('${item._id}')">🗑</button>
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
+    dropdown.innerHTML = results.slice(0, 8).map(r => `
+        <div class="search-result-item" onclick="${r.onClick}" style="display:flex; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.05); transition:background 0.2s;">
+            <span style="font-size:18px;">${r.icon}</span>
+            <div style="flex:1;">
+                <div style="font-size:13px; font-weight:700; color:#fff;">${r.title}</div>
+                <div style="font-size:11px; color:var(--text-dim);">${r.type} • ${r.subtitle}</div>
             </div>
         </div>
-    `;
+    `).join('');
+    dropdown.style.display = 'block';
+};
+
+window.handleHeaderStoreToggle = async function(e) {
+    const toggleInput = document.getElementById('header-store-switch');
+    if (!toggleInput) return;
+    const isNowChecked = toggleInput.checked;
+
+    if (!isNowChecked) {
+        // User wants to turn store OFFLINE -> Revert switch momentarily until offline reason/duration is submitted
+        toggleInput.checked = true;
+        openOfflineStatusModal();
+    } else {
+        // User wants to turn store ONLINE -> Go online instantly!
+        confirmGoOnline();
+    }
 };
 
 function updateLiveHeaderDate() {
@@ -924,17 +1483,46 @@ document.querySelectorAll('.nav-item').forEach(item => {
 });
 
 // Sidebar Collapsing & Mobile Toggles
-document.getElementById('sidebar-toggle-btn')?.addEventListener('click', () => {
+window.closeSidebarMobile = function() {
     const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = '';
+};
+
+window.toggleSidebarMobile = function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar) return;
+    
     if (window.innerWidth <= 900) {
-        sidebar?.classList.toggle('open');
+        const isOpen = sidebar.classList.toggle('open');
+        if (overlay) overlay.classList.toggle('active', isOpen);
+        document.body.style.overflow = isOpen ? 'hidden' : '';
     } else {
-        sidebar?.classList.toggle('collapsed');
+        sidebar.classList.toggle('collapsed');
     }
+};
+
+document.getElementById('sidebar-toggle-btn')?.addEventListener('click', window.toggleSidebarMobile);
+document.getElementById('mobile-menu-btn')?.addEventListener('click', window.toggleSidebarMobile);
+document.getElementById('sidebar-close-btn')?.addEventListener('click', window.closeSidebarMobile);
+
+// Close sidebar on navigation
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+        if (window.innerWidth <= 900) {
+            window.closeSidebarMobile();
+        }
+    });
 });
 
-document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
-    document.getElementById('sidebar')?.classList.toggle('open');
+// Close sidebar on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        window.closeSidebarMobile();
+    }
 });
 
 updateLiveHeaderDate();
@@ -994,6 +1582,9 @@ async function fetchData() {
     await loadAnnouncements();
     await loadCoupons();
     await loadStoreSettings();
+    if (typeof window.fetchAndRenderOrders === 'function') {
+        try { await window.fetchAndRenderOrders(); } catch(e) {}
+    }
     if (typeof window.loadFinanceData === 'function') {
         try { await window.loadFinanceData(); } catch(e) {}
     }
@@ -1038,12 +1629,23 @@ window.renderDynamicDashboard = function() {
     if (elCouponsKpi) elCouponsKpi.textContent = totalCoupons;
 
     // Live Revenue calculation (connected to orders database)
-    const revenue = 0;
+    const orders = window.cachedOrders || [];
+    const validOrders = orders.filter(o => o.status !== 'cancelled');
+    let totalFoodRevenue = 0;
+    validOrders.forEach(o => {
+        const itemSubtotal = Number(o.subtotal || 0);
+        const discount = Number(o.discount || 0);
+        const netItemTotal = Math.max(0, itemSubtotal - discount);
+        const fallbackFood = o.finalTotal ? Math.max(0, Number(o.finalTotal) - Number(o.deliveryCharge || 0)) : 0;
+        const foodAmount = netItemTotal > 0 ? netItemTotal : fallbackFood;
+        totalFoodRevenue += foodAmount;
+    });
+
     const elRevenue = document.getElementById('kpi-revenue');
-    if (elRevenue) elRevenue.textContent = `₹${revenue.toLocaleString('en-IN')}`;
+    if (elRevenue) elRevenue.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
     
     const elOrdersCount = document.getElementById('kpi-orders-count');
-    if (elOrdersCount) elOrdersCount.textContent = `0 orders`;
+    if (elOrdersCount) elOrdersCount.textContent = `${validOrders.length} website orders`;
 
     // 2. Modules Status
     const elModMenu = document.getElementById('module-menu-stat');
@@ -1446,7 +2048,7 @@ function updateCategoryFilterOptions() {
     }
 }
 
-function renderMenuGrid() {
+function renderMenuGrid(searchQuery = '') {
     const container = document.getElementById('menu-grid-container');
     if (!container) return; // Prevent error if run before DOM update
     container.innerHTML = '';
@@ -1454,6 +2056,7 @@ function renderMenuGrid() {
     const locFilter = document.getElementById('menu-filter-location')?.value || 'all';
     const catFilter = document.getElementById('menu-filter-category')?.value || 'all';
     const dietFilter = document.getElementById('menu-filter-diet')?.value || 'all';
+    const q = (searchQuery || '').toLowerCase().trim();
 
     // Filter items
     let filteredMenus = window.cachedMenuItems.filter(item => {
@@ -1461,12 +2064,13 @@ function renderMenuGrid() {
         if (item.category === 'Craziest Deals of the Hour' || (item.category && item.category.toLowerCase().includes('craziest deal')) || item.isCraziestDeal === true) return false;
         let matchLoc = (locFilter === 'all' || item.locationAvailability === locFilter || item.locationAvailability === 'both');
         let matchCat = (catFilter === 'all' || item.category === catFilter || (!item.category && catFilter === 'Uncategorized'));
-        let matchDiet = (dietFilter === 'all' || item.dietaryPreference === dietFilter || (!item.dietaryPreference && dietFilter === 'veg'));
-        return matchLoc && matchCat && matchDiet;
+        let matchDiet = (dietFilter === 'all' || (dietFilter === 'veg' && item.isVeg) || (dietFilter === 'non-veg' && !item.isVeg));
+        let matchQuery = !q || (item.name && item.name.toLowerCase().includes(q)) || (item.category && item.category.toLowerCase().includes(q));
+        return matchLoc && matchCat && matchDiet && matchQuery;
     });
 
     if (filteredMenus.length === 0) {
-        container.innerHTML = '<div style="color:#6b7280; text-align:center; padding:40px;">No items match the selected filters.</div>';
+        container.innerHTML = `<div style="color:#6b7280; text-align:center; padding:40px;">${q ? `No dishes matching "${q}" found.` : 'No items match the selected filters.'}</div>`;
         return;
     }
 
@@ -1993,7 +2597,6 @@ document.getElementById('announcement-image').addEventListener('change', async (
             const compressedKB = Math.round((compressed.length * 0.75) / 1024);
             console.log(`Image compressed: ${originalKB}KB → ~${compressedKB}KB`);
         } catch(err) {
-            // Fallback: use original
             const reader = new FileReader();
             reader.onload = (e) => {
                 currentAnnouncementImage = e.target.result;
@@ -2004,127 +2607,159 @@ document.getElementById('announcement-image').addEventListener('change', async (
     }
 });
 
+window.renderAnnouncements = function(filterQuery = '') {
+    const container = document.getElementById('announcements-list-container');
+    if (!container) return;
+    let items = window.cachedAnnouncements || [];
+    const q = (filterQuery || '').toLowerCase().trim();
+    if (q) {
+        items = items.filter(a => (a.title && a.title.toLowerCase().includes(q)) || (a.content && a.content.toLowerCase().includes(q)));
+    }
+    if (items.length === 0) {
+        container.innerHTML = `<div style="color:#6b7280; text-align:center; padding:20px;">No announcements found${q ? ` matching "${q}"` : ''}.</div>`;
+        return;
+    }
+    container.innerHTML = '';
+    items.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '16px';
+        row.style.padding = '12px';
+        row.style.background = '#1a1c23';
+        row.style.borderRadius = '12px';
+        row.style.border = '1px solid #2e3140';
+
+        const isActive = item.isActive !== false;
+        let expiryText = 'NO EXPIRY';
+        if (item.expiry) {
+            expiryText = new Date(item.expiry).toLocaleDateString('en-GB');
+        }
+
+        row.innerHTML = `
+            <div style="width:24px; text-align:center; color:#4b5563; font-weight:800; font-size:12px;">≡</div>
+            <div style="width:120px; height:68px; background:#12141b; border-radius:8px; overflow:hidden; border:1px solid #252830; flex-shrink:0;">
+                ${item.image ? `<img src="${item.image}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#4b5563; font-size:10px;">NO IMAGE</div>`}
+            </div>
+            <div style="flex:1;">
+                <h4 style="margin:0 0 6px 0; font-size:15px; font-weight:800; color:#fff;">${item.title || '(No title)'}</h4>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="background:${isActive ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}; color:${isActive ? '#22c55e' : '#ef4444'}; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:800; text-transform:uppercase;">${isActive ? 'Live' : 'Hidden'}</span>
+                    <span style="color:#6b7280; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">ENDS: ${expiryText}</span>
+                    <span style="color:#4b5563; font-size:10px; font-weight:800;">#${items.length - index}</span>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button onclick="toggleAnnouncement('${item._id}', ${isActive})" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid #2e3140; color:#e5e7eb; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">${isActive ? 'HIDE' : 'SHOW'}</button>
+                <button onclick="deleteAnnouncement('${item._id}')" style="padding:8px 16px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">DELETE</button>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+};
+
 async function loadAnnouncements() {
     try {
         const items = await apiCall('/announcements');
         window.cachedAnnouncements = items || [];
         if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
-        
-        const container = document.getElementById('announcements-list-container');
-        if (!container) return;
-        container.innerHTML = '';
-        
-        if (items.length === 0) {
-            container.innerHTML = '<div style="color:#6b7280; text-align:center; padding:20px;">No announcements yet.</div>';
-            return;
-        }
-
-        items.forEach((item, index) => {
-            const row = document.createElement('div');
-            row.style.display = 'flex';
-            row.style.alignItems = 'center';
-            row.style.gap = '16px';
-            row.style.padding = '12px';
-            row.style.background = '#1a1c23';
-            row.style.borderRadius = '12px';
-            row.style.border = '1px solid #2e3140';
-
-            const isActive = item.isActive !== false;
-            let expiryText = 'NO EXPIRY';
-            if (item.expiry) {
-                expiryText = new Date(item.expiry).toLocaleDateString('en-GB');
-            }
-
-            row.innerHTML = `
-                <div style="width:24px; text-align:center; color:#4b5563; font-weight:800; font-size:12px;">
-                    ≡
-                </div>
-                <div style="width:120px; height:68px; background:#12141b; border-radius:8px; overflow:hidden; border:1px solid #252830; flex-shrink:0;">
-                    ${item.image ? `<img src="${item.image}" style="width:100%; height:100%; object-fit:cover;">` : `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:#4b5563; font-size:10px;">NO IMAGE</div>`}
-                </div>
-                <div style="flex:1;">
-                    <h4 style="margin:0 0 6px 0; font-size:15px; font-weight:800; color:#fff;">${item.title || '(No title)'}</h4>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span style="background:${isActive ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}; color:${isActive ? '#22c55e' : '#ef4444'}; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:800; text-transform:uppercase;">${isActive ? 'Live' : 'Hidden'}</span>
-                        <span style="color:#6b7280; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px;">ENDS: ${expiryText}</span>
-                        <span style="color:#4b5563; font-size:10px; font-weight:800;">#${items.length - index}</span>
-                    </div>
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button onclick="toggleAnnouncement('${item._id}', ${isActive})" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid #2e3140; color:#e5e7eb; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">${isActive ? 'HIDE' : 'SHOW'}</button>
-                    <button onclick="deleteAnnouncement('${item._id}')" style="padding:8px 16px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">DELETE</button>
-                </div>
-            `;
-            container.appendChild(row);
-        });
+        window.renderAnnouncements(document.getElementById('global-search-input')?.value || '');
     } catch (e) { console.error(e); }
 }
 
 document.getElementById('announcement-inline-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!currentAnnouncementImage) {
-        window.showAdminToast('Please select a banner image first.', "error");
+    const title = document.getElementById('announcement-title').value.trim();
+    const link = document.getElementById('announcement-link').value.trim();
+    const expiry = document.getElementById('announcement-expiry').value;
+
+    if (!title && !currentAnnouncementImage) {
+        showToast('Please provide a title or image for the announcement', 'error');
         return;
     }
 
-    const body = {
-        title: document.getElementById('announcement-title').value,
-        expiry: document.getElementById('announcement-expiry').value || null,
+    const payload = {
+        title,
+        link,
         image: currentAnnouncementImage,
+        expiry: expiry || null,
         isActive: true
     };
 
-    await apiCall('/announcements', 'POST', body);
-    
-    // Reset Form
-    currentAnnouncementImage = '';
-    document.getElementById('announcement-image-preview').style.display = 'none';
-    document.getElementById('announcement-image-placeholder').style.display = 'flex';
-    document.getElementById('announcement-title').value = '';
-    document.getElementById('announcement-expiry').value = '';
-    document.getElementById('announcement-image').value = '';
+    try {
+        await apiCall('/announcements', 'POST', payload);
+        showToast('Announcement published successfully!', 'success');
+        
+        // Reset form
+        document.getElementById('announcement-title').value = '';
+        document.getElementById('announcement-link').value = '';
+        document.getElementById('announcement-expiry').value = '';
+        currentAnnouncementImage = '';
+        document.getElementById('announcement-image-preview').style.display = 'none';
+        document.getElementById('announcement-image-placeholder').style.display = 'block';
 
-    loadAnnouncements();
+        loadAnnouncements();
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to save announcement', 'error');
+    }
 });
 
-async function toggleAnnouncement(id, currentState) {
-    await apiCall(`/announcements/${id}`, 'PUT', { isActive: !currentState });
-    loadAnnouncements();
+async function toggleAnnouncement(id, currentStatus) {
+    try {
+        await apiCall(`/announcements/${id}`, 'PUT', { isActive: !currentStatus });
+        loadAnnouncements();
+        showToast(`Announcement ${!currentStatus ? 'activated' : 'hidden'}`, 'success');
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to update announcement', 'error');
+    }
 }
 
 async function deleteAnnouncement(id) {
-    if (await showConfirm('Delete Announcement', 'Are you sure you want to delete this announcement?')) {
+    if (await showConfirm('Delete Announcement', 'Are you sure you want to permanently delete this announcement?')) {
         await apiCall(`/announcements/${id}`, 'DELETE');
         loadAnnouncements();
+        showToast('Announcement deleted', 'success');
     }
 }
 
 // =======================
 // COUPONS LOGIC
 // =======================
+window.renderCoupons = function(filterQuery = '') {
+    const tbody = document.getElementById('coupons-tbody');
+    if (!tbody) return;
+    let items = window.cachedCoupons || [];
+    const q = (filterQuery || '').toLowerCase().trim();
+    if (q) {
+        items = items.filter(c => (c.code && c.code.toLowerCase().includes(q)) || (c.discountType && c.discountType.toLowerCase().includes(q)));
+    }
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">No coupons found${q ? ` matching "${q}"` : ''}.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = items.map(item => `
+        <tr>
+            <td><strong>${item.code}</strong></td>
+            <td>${item.discountType === 'percentage' ? '%' : 'Fixed'}</td>
+            <td>${item.discountValue}</td>
+            <td>₹${item.minOrderValue}</td>
+            <td><span class="badge ${item.isActive ? 'active' : 'inactive'}">${item.isActive ? 'Yes' : 'No'}</span></td>
+            <td>
+                <button class="btn-sm btn-edit" onclick="editCoupon('${item._id}')">Edit</button>
+                <button class="btn-sm btn-delete" onclick="deleteCoupon('${item._id}')">Del</button>
+            </td>
+        </tr>
+    `).join('');
+};
+
 async function loadCoupons() {
     try {
         const items = await apiCall('/coupons');
         window.cachedCoupons = items || [];
         if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
-        
-        const tbody = document.getElementById('coupons-tbody');
-        tbody.innerHTML = '';
-        items.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${item.code}</strong></td>
-                <td>${item.discountType === 'percentage' ? '%' : 'Fixed'}</td>
-                <td>${item.discountValue}</td>
-                <td>₹${item.minOrderValue}</td>
-                <td><span class="badge ${item.isActive ? 'active' : 'inactive'}">${item.isActive ? 'Yes' : 'No'}</span></td>
-                <td>
-                    <button class="btn-sm btn-edit" onclick="editCoupon('${item._id}')">Edit</button>
-                    <button class="btn-sm btn-delete" onclick="deleteCoupon('${item._id}')">Del</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
+        window.renderCoupons(document.getElementById('global-search-input')?.value || '');
     } catch (e) { console.error(e); }
 }
 
@@ -2179,8 +2814,10 @@ async function deleteCoupon(id) {
 let cachedStoreSettings = [];
 
 function toggleAutoSchedule(storeId) {
-    const isAuto = document.getElementById(`${storeId}-auto`).checked;
+    const autoEl = document.getElementById(`${storeId}-auto`);
     const manualGroup = document.getElementById(`${storeId}-manual-group`);
+    if (!autoEl || !manualGroup) return;
+    const isAuto = autoEl.checked;
     if (isAuto) {
         manualGroup.style.display = 'none';
     } else {
@@ -2190,8 +2827,10 @@ function toggleAutoSchedule(storeId) {
 }
 
 function toggleReasonInput(storeId) {
-    const isOnline = document.getElementById(`${storeId}-online`).checked;
+    const onlineEl = document.getElementById(`${storeId}-online`);
     const reasonGroup = document.getElementById(`${storeId}-reason-group`);
+    if (!onlineEl || !reasonGroup) return;
+    const isOnline = onlineEl.checked;
     if (isOnline) {
         reasonGroup.style.display = 'none';
     } else {
@@ -2289,30 +2928,59 @@ async function loadStoreSettings() {
         
         let anyOnline = false;
 
+        // Primary signal: cloud kitchen online status drives the header pill.
+        // If cloud is explicitly offline (isOnline===false), the whole ordering is paused.
+        const cloudDoc  = settings.find(s => s.storeId === 'cloud');
+        const outletDoc = settings.find(s => s.storeId === 'outlet');
+        if (cloudDoc) {
+            // Cloud kitchen is the master — use its value
+            anyOnline = cloudDoc.isOnline !== false;
+        } else {
+            // Fallback: any store online
+            settings.forEach(s => { if (s.isOnline) anyOnline = true; });
+        }
+            
+        // Populate each store's toggle controls
         settings.forEach(setting => {
             const idPrefix = setting.storeId;
-            if (setting.isOnline) anyOnline = true;
-            
-            const autoEl = document.getElementById(`${idPrefix}-auto`);
+            const autoEl    = document.getElementById(`${idPrefix}-auto`);
             const isOnlineEl = document.getElementById(`${idPrefix}-online`);
-            const reasonEl = document.getElementById(`${idPrefix}-reason`);
-            
+            const reasonEl  = document.getElementById(`${idPrefix}-reason`);
             if (autoEl && isOnlineEl && reasonEl) {
-                autoEl.checked = setting.autoSchedule || false;
+                autoEl.checked    = setting.autoSchedule || false;
                 isOnlineEl.checked = setting.isOnline;
-                reasonEl.value = setting.offlineReason || '';
-                
+                reasonEl.value    = setting.offlineReason || '';
                 toggleAutoSchedule(idPrefix);
             }
         });
 
-        // Update Header & Dashboard Status Indicators
+        // Populate Distance Delivery Pricing
+        const cloudSetting = settings.find(s => s.storeId === 'cloud') || settings[0];
+        if (cloudSetting) {
+            const rateEl = document.getElementById('setting-delivery-rate-km');
+            const timeEl = document.getElementById('setting-delivery-est-time');
+            if (rateEl) {
+                const rate = cloudSetting.deliveryRateKm !== undefined ? cloudSetting.deliveryRateKm : (cloudSetting.deliveryRate || 30);
+                rateEl.value = rate;
+            }
+            if (timeEl && cloudSetting.deliveryEstTime) timeEl.value = cloudSetting.deliveryEstTime;
+        }
+
+        // Update Header Switch & Dashboard Status Indicators
+        const headerSwitch = document.getElementById('header-store-switch');
+        const storeIndicator = document.getElementById('store-status-indicator');
+        const storeStatusLabel = document.getElementById('store-status-label');
         const headerStatusPill = document.getElementById('header-status-pill');
         const headerStatusText = document.getElementById('header-status-text');
         const dbStoreStatusBadge = document.getElementById('db-store-status-badge');
         const dbTodayPill = document.getElementById('db-today-schedule-pill');
+        const dbOrderingStatus = document.getElementById('db-ordering-status');
+        const dbDeliveryStatus = document.getElementById('db-delivery-status');
 
         if (anyOnline) {
+            if (headerSwitch) headerSwitch.checked = true;
+            if (storeIndicator) storeIndicator.classList.remove('offline');
+            if (storeStatusLabel) storeStatusLabel.textContent = 'Restaurant Open';
             if (headerStatusPill) headerStatusPill.classList.remove('offline');
             if (headerStatusText) headerStatusText.textContent = 'Restaurant Open';
             if (dbStoreStatusBadge) {
@@ -2323,7 +2991,18 @@ async function loadStoreSettings() {
                 dbTodayPill.className = 'status-badge-pill active';
                 dbTodayPill.textContent = 'Open';
             }
+            if (dbOrderingStatus) {
+                dbOrderingStatus.className = 'status-badge-pill active';
+                dbOrderingStatus.textContent = 'Enabled';
+            }
+            if (dbDeliveryStatus) {
+                dbDeliveryStatus.className = 'status-badge-pill active';
+                dbDeliveryStatus.textContent = 'Enabled';
+            }
         } else {
+            if (headerSwitch) headerSwitch.checked = false;
+            if (storeIndicator) storeIndicator.classList.add('offline');
+            if (storeStatusLabel) storeStatusLabel.textContent = 'Restaurant Closed';
             if (headerStatusPill) headerStatusPill.classList.add('offline');
             if (headerStatusText) headerStatusText.textContent = 'Restaurant Closed';
             if (dbStoreStatusBadge) {
@@ -2334,8 +3013,19 @@ async function loadStoreSettings() {
                 dbTodayPill.className = 'status-badge-pill danger';
                 dbTodayPill.textContent = 'Closed';
             }
+            if (dbOrderingStatus) {
+                dbOrderingStatus.className = 'status-badge-pill danger';
+                dbOrderingStatus.textContent = 'Paused (Offline)';
+            }
+            if (dbDeliveryStatus) {
+                dbDeliveryStatus.className = 'status-badge-pill danger';
+                dbDeliveryStatus.textContent = 'Paused (Offline)';
+            }
         }
         if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
+
+        // Auto-reopen if offlineUntil timer has expired
+        autoReopenIfTimePassed();
     } catch (e) { console.error(e); }
 }
 
@@ -2350,6 +3040,192 @@ async function saveStoreSetting(storeId) {
         loadStoreSettings();
     } catch (e) {
         window.showAdminToast(`Error saving ${storeId} settings`, "error");
+    }
+}
+
+// ==========================================
+// ZOMATO/SWIGGY-STYLE OFFLINE / STATUS FLOW CONTROLLER
+// ==========================================
+let currentOfflineMode = 'now';
+
+window.openOfflineStatusModal = async function() {
+    const modal = document.getElementById('offline-status-modal');
+    if (!modal) return;
+
+    // Refresh live store state
+    try {
+        const settings = await apiCall('/settings');
+        cachedStoreSettings = settings;
+    } catch(e) {}
+
+    const settings = cachedStoreSettings || [];
+    const cloudDoc = settings.find(s => s.storeId === 'cloud');
+    const isOnline = cloudDoc ? (cloudDoc.isOnline !== false) : settings.some(s => s.isOnline !== false);
+    const store = cloudDoc || settings[0] || {};
+
+    const badgeEl = document.getElementById('offline-modal-current-badge');
+    const quickOnlineBtn = document.getElementById('offline-modal-quick-online-btn');
+
+    if (isOnline) {
+        if (badgeEl) {
+            badgeEl.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e;"></span><span style="color:#4ade80; font-weight:700;">Receiving orders (Online)</span>`;
+        }
+        if (quickOnlineBtn) quickOnlineBtn.style.display = 'none';
+        goToOfflineStep(1);
+    } else {
+        const reason = store.offlineReason || 'Kitchen is offline';
+        const dur = store.offlineDuration || 'Until turned back on';
+        if (badgeEl) {
+            badgeEl.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ef4444;"></span><span style="color:#f87171; font-weight:700;">Offline (${reason})</span>`;
+        }
+        if (quickOnlineBtn) quickOnlineBtn.style.display = 'inline-block';
+        goToOfflineStep(1);
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('show');
+};
+
+window.quickToggleStoreModal = window.openOfflineStatusModal;
+
+window.goToOfflineStep = function(stepNum, mode = null) {
+    if (mode) currentOfflineMode = mode;
+    if (mode === 'schedule') {
+        closeModal('offline-status-modal');
+        openScheduleModal('cloud');
+        return;
+    }
+
+    document.getElementById('offline-step-1').style.display = stepNum === 1 ? 'block' : 'none';
+    document.getElementById('offline-step-2').style.display = stepNum === 2 ? 'block' : 'none';
+    document.getElementById('offline-step-3').style.display = stepNum === 3 ? 'block' : 'none';
+};
+
+window.confirmGoOffline = async function() {
+    const reasonRadio = document.querySelector('input[name="offline-reason-radio"]:checked')?.value || 'Temporarily closed';
+    const customReason = document.getElementById('offline-custom-reason-input')?.value?.trim();
+    const finalReason = customReason || reasonRadio;
+
+    const duration = document.querySelector('input[name="offline-duration-radio"]:checked')?.value || '30 minutes';
+
+    // Optimistic UI Update (Immediate visual feedback)
+    const headerSwitch = document.getElementById('header-store-switch');
+    const storeIndicator = document.getElementById('store-status-indicator');
+    const storeStatusLabel = document.getElementById('store-status-label');
+    const dbStoreStatusBadge = document.getElementById('db-store-status-badge');
+    const dbTodayPill = document.getElementById('db-today-schedule-pill');
+    const dbOrderingStatus = document.getElementById('db-ordering-status');
+    const dbDeliveryStatus = document.getElementById('db-delivery-status');
+
+    if (headerSwitch) headerSwitch.checked = false;
+    if (storeIndicator) storeIndicator.classList.add('offline');
+    if (storeStatusLabel) storeStatusLabel.textContent = 'Restaurant Closed';
+    if (dbStoreStatusBadge) { dbStoreStatusBadge.className = 'badge cancelled'; dbStoreStatusBadge.textContent = '● Closed'; }
+    if (dbTodayPill) { dbTodayPill.className = 'status-badge-pill danger'; dbTodayPill.textContent = 'Closed'; }
+    if (dbOrderingStatus) { dbOrderingStatus.className = 'status-badge-pill danger'; dbOrderingStatus.textContent = 'Paused (Offline)'; }
+    if (dbDeliveryStatus) { dbDeliveryStatus.className = 'status-badge-pill danger'; dbDeliveryStatus.textContent = 'Paused (Offline)'; }
+
+    // Calculate offlineUntil ISO date
+    const now = new Date();
+    let untilDate = new Date(now);
+    if (duration === '30 minutes') {
+        untilDate = new Date(now.getTime() + 30 * 60 * 1000);
+    } else if (duration === '2 hours') {
+        untilDate = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    } else if (duration === 'Tomorrow, opening time') {
+        untilDate.setDate(untilDate.getDate() + 1);
+        untilDate.setHours(9, 0, 0, 0);
+    } else {
+        untilDate = null;
+    }
+
+    const payload = {
+        isOnline: false,
+        autoSchedule: false,
+        offlineReason: finalReason,
+        offlineDuration: duration,
+        offlineUntil: untilDate ? untilDate.toISOString() : '',
+        offlineType: currentOfflineMode
+    };
+
+    try {
+        await apiCall('/settings/cloud', 'PUT', payload);
+        await apiCall('/settings/outlet', 'PUT', payload);
+
+        window.showAdminToast(`🔴 Restaurant is now OFFLINE (${finalReason})`, 'warning', 'Restaurant Closed');
+        closeModal('offline-status-modal');
+        loadStoreSettings();
+    } catch(e) {
+        console.error(e);
+        window.showAdminToast('Failed to update restaurant status', 'error');
+        loadStoreSettings();
+    }
+};
+
+window.confirmGoOnline = async function() {
+    // Optimistic UI Update (Immediate visual feedback)
+    const headerSwitch = document.getElementById('header-store-switch');
+    const storeIndicator = document.getElementById('store-status-indicator');
+    const storeStatusLabel = document.getElementById('store-status-label');
+    const dbStoreStatusBadge = document.getElementById('db-store-status-badge');
+    const dbTodayPill = document.getElementById('db-today-schedule-pill');
+    const dbOrderingStatus = document.getElementById('db-ordering-status');
+    const dbDeliveryStatus = document.getElementById('db-delivery-status');
+
+    if (headerSwitch) headerSwitch.checked = true;
+    if (storeIndicator) storeIndicator.classList.remove('offline');
+    if (storeStatusLabel) storeStatusLabel.textContent = 'Restaurant Open';
+    if (dbStoreStatusBadge) { dbStoreStatusBadge.className = 'badge active'; dbStoreStatusBadge.textContent = '● Open'; }
+    if (dbTodayPill) { dbTodayPill.className = 'status-badge-pill active'; dbTodayPill.textContent = 'Open'; }
+    if (dbOrderingStatus) { dbOrderingStatus.className = 'status-badge-pill active'; dbOrderingStatus.textContent = 'Enabled'; }
+    if (dbDeliveryStatus) { dbDeliveryStatus.className = 'status-badge-pill active'; dbDeliveryStatus.textContent = 'Enabled'; }
+
+    const payload = {
+        isOnline: true,
+        offlineReason: '',
+        offlineDuration: '',
+        offlineUntil: '',
+        autoSchedule: false
+    };
+
+    try {
+        await apiCall('/settings/cloud', 'PUT', payload);
+        await apiCall('/settings/outlet', 'PUT', payload);
+
+        window.showAdminToast(`🟢 Restaurant is now ONLINE & Receiving Orders!`, 'success', 'Restaurant Open');
+        closeModal('offline-status-modal');
+        loadStoreSettings();
+    } catch(e) {
+        console.error(e);
+        window.showAdminToast('Failed to update restaurant status', 'error');
+        loadStoreSettings();
+    }
+};
+
+// ---------------------------------------------------------------
+// AUTO-REOPEN: If offlineUntil has passed, automatically go online
+// Called every time store settings are refreshed.
+// ---------------------------------------------------------------
+async function autoReopenIfTimePassed() {
+    if (!cachedStoreSettings || !cachedStoreSettings.length) return;
+
+    const offlineStore = cachedStoreSettings.find(s => s.isOnline === false && s.offlineUntil);
+    if (!offlineStore) return;
+
+    const untilDate = new Date(offlineStore.offlineUntil);
+    if (isNaN(untilDate.getTime())) return;
+    if (untilDate > new Date()) return; // still in the future — wait
+
+    // Time has passed — auto go online
+    console.log('[LittiWale Admin] offlineUntil has passed — auto going online');
+    try {
+        const payload = { isOnline: true, offlineReason: '', offlineDuration: '', offlineUntil: '', autoSchedule: false };
+        await apiCall('/settings/cloud', 'PUT', payload);
+        await apiCall('/settings/outlet', 'PUT', payload);
+        window.showAdminToast('🟢 Restaurant auto-reopened (timer expired)', 'success', 'Back Online!');
+        loadStoreSettings();
+    } catch(e) {
+        console.error('[AutoReopen]', e);
     }
 }
 
@@ -3117,6 +3993,21 @@ window.loadHeroCmsSettings = async function() {
             setVal(['perk3-desc', 'perk3-text', 'cms-perk3-text'], s.perk3Text || "Dispatched steaming hot straight from our Barbil kitchen.");
             setVal(['perk4-title', 'cms-perk4-title'], s.perk4Title || "Hygiene First");
             setVal(['perk4-desc', 'perk4-text', 'cms-perk4-text'], s.perk4Text || "Prepared with strict FSSAI certified sanitary standards.");
+
+            // Dabba Subscription fields
+            setVal(['dabba-veg-title'], s.dabbaVegTitle || "Desi Veg Dabba");
+            setVal(['dabba-veg-sub'], s.dabbaVegSubtitle || "Pure vegetarian. Best value for daily regulars.");
+            setVal(['dabba-veg-weekly-old'], s.dabbaVegWeeklyOldPrice || "₹1,500");
+            setVal(['dabba-veg-weekly-new'], s.dabbaVegWeeklyNewPrice || "₹1,200");
+            setVal(['dabba-veg-monthly-old'], s.dabbaVegMonthlyOldPrice || "₹6,000");
+            setVal(['dabba-veg-monthly-new'], s.dabbaVegMonthlyNewPrice || "₹5,500");
+
+            setVal(['dabba-nonveg-title'], s.dabbaNonvegTitle || "Desi Feast Dabba");
+            setVal(['dabba-nonveg-sub'], s.dabbaNonvegSubtitle || "4 days veg + 3 days non-veg (Wed, Fri, Sun).");
+            setVal(['dabba-nonveg-weekly-old'], s.dabbaNonvegWeeklyOldPrice || "₹2,000");
+            setVal(['dabba-nonveg-weekly-new'], s.dabbaNonvegWeeklyNewPrice || "₹1,500");
+            setVal(['dabba-nonveg-monthly-old'], s.dabbaNonvegMonthlyOldPrice || "₹7,500");
+            setVal(['dabba-nonveg-monthly-new'], s.dabbaNonvegMonthlyNewPrice || "₹6,500");
         }
     } catch(e) {}
 };
@@ -3151,7 +4042,19 @@ window.saveHeroCms = async function(event) {
         perk3Title: getVal('perk3-title', 'cms-perk3-title'),
         perk3Text: getVal('perk3-desc', 'perk3-text'),
         perk4Title: getVal('perk4-title', 'cms-perk4-title'),
-        perk4Text: getVal('perk4-desc', 'perk4-text')
+        perk4Text: getVal('perk4-desc', 'perk4-text'),
+        dabbaVegTitle: getVal('dabba-veg-title'),
+        dabbaVegSubtitle: getVal('dabba-veg-sub'),
+        dabbaVegWeeklyOldPrice: getVal('dabba-veg-weekly-old'),
+        dabbaVegWeeklyNewPrice: getVal('dabba-veg-weekly-new'),
+        dabbaVegMonthlyOldPrice: getVal('dabba-veg-monthly-old'),
+        dabbaVegMonthlyNewPrice: getVal('dabba-veg-monthly-new'),
+        dabbaNonvegTitle: getVal('dabba-nonveg-title'),
+        dabbaNonvegSubtitle: getVal('dabba-nonveg-sub'),
+        dabbaNonvegWeeklyOldPrice: getVal('dabba-nonveg-weekly-old'),
+        dabbaNonvegWeeklyNewPrice: getVal('dabba-nonveg-weekly-new'),
+        dabbaNonvegMonthlyOldPrice: getVal('dabba-nonveg-monthly-old'),
+        dabbaNonvegMonthlyNewPrice: getVal('dabba-nonveg-monthly-new')
     };
 
     try {
@@ -3173,5 +4076,568 @@ window.saveHeroCms = async function(event) {
         }
     } catch(e) {
         window.showAdminToast('Error saving settings', 'error');
+    }
+};
+
+// ==========================================================================
+// MEDIA ASSET LIBRARY (24 Core Assets)
+// ==========================================================================
+window.allMediaAssets = [
+    { name: "Brand Logo (Official)", path: "images/logo.png", category: "gallery", desc: "Main brand badge & header icon" },
+    { name: "Hero Showcase Banner", path: "images/hero-banner.png", category: "banner", desc: "Customer hero graphic plate" },
+    { name: "Hero Dark Background", path: "images/hero-bg.jpg", category: "banner", desc: "Atmospheric hero backdrop" },
+    { name: "Litti Chokha Dish", path: "images/menu-litti.jpg", category: "menu", desc: "Signature wood-fired litti plate" },
+    { name: "Special Biryani Handi", path: "images/menu-biryani.jpg", category: "menu", desc: "Aromatic Hyderabadi biryani" },
+    { name: "Special Indian Thali", path: "images/menu-thali.jpg", category: "menu", desc: "Grand North & South Indian thali" },
+    { name: "Wood-Fired Pizza", path: "images/menu-pizza.jpg", category: "menu", desc: "Loaded cheesy pizza special" },
+    { name: "About Story Showcase", path: "images/about-img.jpg", category: "gallery", desc: "Authentic cloud kitchen story" },
+    { name: "Announcement Banner 1", path: "images/current-offer1.png", category: "banner", desc: "LPG Operational notice banner" },
+    { name: "Announcement Banner 2", path: "images/current-offer2.png", category: "banner", desc: "Pure Veg & Non-Veg meal plans" },
+    { name: "Announcement Banner 3", path: "images/current-offer3.png", category: "banner", desc: "Special festival combo offer" },
+    { name: "Announcement Banner 4", path: "images/current-offer4.png", category: "banner", desc: "Bulk & party order discount" },
+    { name: "Announcement Banner 5", path: "images/current-offer5.png", category: "banner", desc: "Weekend special food festival" },
+    { name: "Instagram Reel Cover 1", path: "images/reel1.png", category: "social", desc: "Customer tasting review reel" },
+    { name: "Instagram Reel Cover 2", path: "images/reel2.png", category: "social", desc: "Kitchen making of litti chokha" },
+    { name: "Instagram Reel Cover 3", path: "images/reel3.png", category: "social", desc: "Barbil foodies meetup reel" },
+    { name: "Instagram Reel Cover 4", path: "images/reel4.png", category: "social", desc: "Packaging & cloud dispatch reel" },
+    { name: "Instagram Reel Cover 5", path: "images/reel5.png", category: "social", desc: "Happy customer smiles reel" },
+    { name: "Instagram Reel Cover 6", path: "images/reel6.png", category: "social", desc: "Weekend family feast reel" },
+    { name: "Dining Gallery 1", path: "images/gallery-1.jpg", category: "gallery", desc: "Fresh hot served dishes" },
+    { name: "Dining Gallery 2", path: "images/gallery-2.jpg", category: "gallery", desc: "Spiced condiments & chutney" },
+    { name: "Dining Gallery 3", path: "images/gallery-3.jpg", category: "gallery", desc: "Clay oven roasting showcase" },
+    { name: "Dining Gallery 4", path: "images/gallery-4.jpg", category: "gallery", desc: "Cloud kitchen packing station" },
+    { name: "UPI QR Payment Code", path: "images/upi-qr.jpeg", category: "gallery", desc: "Direct payment QR code" }
+];
+
+window.currentMediaFilter = 'all';
+
+window.renderMediaLibrary = function(filterCategory = 'all') {
+    const grid = document.getElementById('media-library-grid');
+    if (!grid) return;
+
+    window.currentMediaFilter = filterCategory;
+    const items = filterCategory === 'all' 
+        ? window.allMediaAssets 
+        : window.allMediaAssets.filter(item => item.category === filterCategory);
+
+    const statEl = document.getElementById('module-media-stat');
+    if (statEl) statEl.textContent = `${window.allMediaAssets.length} Media Assets`;
+
+    grid.innerHTML = items.map(item => `
+        <div class="banner-preview-card" style="background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-md); padding:12px; display:flex; flex-direction:column; gap:10px; transition:all 0.2s;">
+            <div style="position:relative; width:100%; height:140px; border-radius:var(--radius-sm); overflow:hidden; background:#0b0d11; display:flex; align-items:center; justify-content:center;">
+                <img src="${item.path}" alt="${item.name}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="this.src='images/logo.png'">
+                <span style="position:absolute; top:8px; left:8px; background:rgba(0,0,0,0.75); backdrop-filter:blur(4px); color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:12px; text-transform:uppercase;">
+                    ${item.category}
+                </span>
+            </div>
+            <div>
+                <div style="font-size:13px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${item.name}">${item.name}</div>
+                <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${item.desc}</div>
+                <div style="font-size:11px; color:var(--brand-gold); font-family:monospace; margin-top:4px;">${item.path}</div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:auto;">
+                <button type="button" class="btn btn-sm btn-secondary" style="flex:1; font-size:11.5px; padding:6px 8px;" onclick="copyMediaPath('${item.path}')">
+                    📋 Copy Path
+                </button>
+                <a href="${item.path}" target="_blank" class="btn btn-sm btn-outline" style="font-size:11.5px; padding:6px 10px;" title="View Full Image">
+                    👁️
+                </a>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.filterMediaLibrary = function(cat, btn) {
+    document.querySelectorAll('#media-category-filters .media-filter-btn').forEach(b => {
+        b.classList.remove('btn-primary', 'active');
+        b.classList.add('btn-secondary');
+    });
+    if (btn) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary', 'active');
+    }
+    window.renderMediaLibrary(cat);
+};
+
+window.copyMediaPath = function(path) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(path).then(() => {
+            window.showAdminToast(`Copied "${path}" to clipboard!`, 'success', 'Path Copied');
+        }).catch(() => {
+            prompt('Copy image path:', path);
+        });
+    } else {
+        prompt('Copy image path:', path);
+    }
+};
+
+window.saveDeliveryPricing = async function() {
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    const rate = Number(document.getElementById('setting-delivery-rate-km')?.value) || 30;
+    const estTime = document.getElementById('setting-delivery-est-time')?.value || '25-35 mins';
+
+    try {
+        const res = await fetch(`${API_URL}/settings/cloud`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ 
+                deliveryRateKm: rate, 
+                deliveryRate: rate, 
+                deliveryEstTime: estTime 
+            })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(`✅ Delivery rate saved: ₹${rate} / KM`, 'success', 'Delivery Pricing Updated');
+            loadStoreSettings();
+        } else {
+            window.showAdminToast('Failed to save delivery pricing. Please check PIN.', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error saving delivery pricing', 'error');
+    }
+};
+
+// ==========================================================================
+// SEO & GOOGLE SEARCH META TAGS CONTROLLER
+// ==========================================================================
+window.loadSeoSettings = async function() {
+    try {
+        const settings = await apiCall('/settings');
+        if (!settings || !Array.isArray(settings) || settings.length === 0) return;
+        const cloud = settings.find(s => s.storeId === 'cloud') || settings[0];
+        
+        const titleEl = document.getElementById('seo-input-title');
+        const descEl = document.getElementById('seo-input-desc');
+        const keywordsEl = document.getElementById('seo-input-keywords');
+        
+        if (titleEl) titleEl.value = cloud.seoTitle || "Littiwale Barbil | Authentic Litti Chokha, Thalis & Best Cloud Kitchen in Barbil";
+        if (descEl) descEl.value = cloud.seoDescription || "Order authentic wood-fired Litti Chokha, North & South Indian Thalis, Veg & Non-Veg meals online from Littiwale - Barbil's premier cloud kitchen. Fast delivery in Barbil.";
+        if (keywordsEl) keywordsEl.value = cloud.seoKeywords || "littiwale barbil, best restaurant in barbil, litti chokha barbil, online food delivery barbil, cloud kitchen barbil, thali barbil, veg nonveg food barbil, food delivery near me barbil";
+
+        window.updateSeoPreview();
+    } catch(e) {
+        console.error('Error loading SEO settings:', e);
+    }
+};
+
+window.updateSeoPreview = function() {
+    const titleVal = document.getElementById('seo-input-title')?.value || "Littiwale Barbil | Authentic Litti Chokha, Thalis & Best Cloud Kitchen in Barbil";
+    const descVal = document.getElementById('seo-input-desc')?.value || "Order authentic wood-fired Litti Chokha, North & South Indian Thalis, Veg & Non-Veg meals online from Littiwale - Barbil's premier cloud kitchen. Fast delivery in Barbil.";
+
+    const previewTitle = document.getElementById('seo-preview-title');
+    const previewDesc = document.getElementById('seo-preview-desc');
+    const titleCount = document.getElementById('seo-title-count');
+    const descCount = document.getElementById('seo-desc-count');
+
+    if (previewTitle) previewTitle.textContent = titleVal;
+    if (previewDesc) previewDesc.textContent = descVal;
+    if (titleCount) titleCount.textContent = `${titleVal.length} / 75 chars`;
+    if (descCount) descCount.textContent = `${descVal.length} / 200 chars`;
+};
+
+window.saveSeoSettings = async function(event) {
+    if (event && event.preventDefault) event.preventDefault();
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    const payload = {
+        seoTitle: document.getElementById('seo-input-title')?.value,
+        seoDescription: document.getElementById('seo-input-desc')?.value,
+        seoKeywords: document.getElementById('seo-input-keywords')?.value
+    };
+
+    try {
+        const res = await fetch(`${API_URL}/settings/cloud`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            window.showAdminToast('✅ SEO Meta Tags saved & live on Google crawler endpoint!', 'success');
+            window.loadSeoSettings();
+        } else {
+            window.showAdminToast('Failed to save SEO settings. Please check PIN.', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error saving SEO settings', 'error');
+    }
+};
+
+window.resetSeoDefaults = function() {
+    if (document.getElementById('seo-input-title')) document.getElementById('seo-input-title').value = "Littiwale Barbil | Authentic Litti Chokha, Thalis & Best Cloud Kitchen in Barbil";
+    if (document.getElementById('seo-input-desc')) document.getElementById('seo-input-desc').value = "Order authentic wood-fired Litti Chokha, North & South Indian Thalis, Veg & Non-Veg meals online from Littiwale - Barbil's premier cloud kitchen. Fast delivery in Barbil.";
+    if (document.getElementById('seo-input-keywords')) document.getElementById('seo-input-keywords').value = "littiwale barbil, best restaurant in barbil, litti chokha barbil, online food delivery barbil, cloud kitchen barbil, thali barbil, veg nonveg food barbil, food delivery near me barbil";
+    window.updateSeoPreview();
+    window.showAdminToast('SEO fields reset to recommended high-ranking defaults.', 'info');
+};
+
+// ==========================================================================
+// ORDER CONFIRMATION & WHATSAPP CUSTOMER MESSAGING
+// ==========================================================================
+window.openOrderConfirmModal = function(orderId) {
+    const order = (window.cachedOrders || []).find(o => String(o._id) === String(orderId) || String(o._id).slice(-6).toUpperCase() === String(orderId).toUpperCase());
+    if (!order) {
+        window.showAdminToast('Order not found', 'error');
+        return;
+    }
+
+    window.currentSelectedOrder = order;
+
+    const shortId = order._id ? String(order._id).slice(-6).toUpperCase() : 'LW-ORD';
+    const modalTitle = document.getElementById('order-modal-title');
+    if (modalTitle) modalTitle.innerHTML = `<span>🛍️</span> <span>Order #${shortId} Confirmation</span>`;
+
+    const custNameEl = document.getElementById('ord-modal-cust-name');
+    const custPhoneEl = document.getElementById('ord-modal-cust-phone');
+    const custWhatsappWrap = document.getElementById('ord-modal-whatsapp-wrap');
+    const custWhatsappEl = document.getElementById('ord-modal-cust-whatsapp');
+    const custAddrEl = document.getElementById('ord-modal-cust-address');
+    const ordTypeEl = document.getElementById('ord-modal-order-type');
+    const statusBadgeEl = document.getElementById('ord-modal-status-badge');
+    const delChargeEl = document.getElementById('ord-modal-del-charge');
+    const delLockBadge = document.getElementById('ord-modal-del-lock-badge');
+    const dispatchBtn = document.getElementById('ord-modal-btn-dispatch');
+    const estLabel = document.getElementById('ord-modal-est-label');
+    const estTimeEl = document.getElementById('ord-modal-est-time');
+
+    if (custNameEl) custNameEl.textContent = order.customerName || 'Customer';
+    if (custPhoneEl) custPhoneEl.textContent = order.customerPhone || 'N/A';
+    
+    // WhatsApp Phone Indicator
+    if (order.whatsappPhone && order.whatsappPhone !== order.customerPhone) {
+        if (custWhatsappWrap) custWhatsappWrap.style.display = 'block';
+        if (custWhatsappEl) custWhatsappEl.textContent = order.whatsappPhone;
+    } else {
+        if (custWhatsappWrap) custWhatsappWrap.style.display = 'none';
+    }
+
+    const isTakeaway = (order.orderType === 'takeaway');
+    if (custAddrEl) custAddrEl.textContent = isTakeaway ? '🛍️ Self Pickup: Littiwale Cloud Kitchen, Barbil' : (order.deliveryAddress || 'Not Provided');
+    if (ordTypeEl) ordTypeEl.textContent = isTakeaway ? '🛍️ Takeaway (Self Pickup)' : '🛵 Home Delivery';
+    
+    if (statusBadgeEl) {
+        statusBadgeEl.className = `badge ${order.status === 'delivered' ? 'badge-open' : (order.status === 'cancelled' ? 'badge-closed' : 'badge-new')}`;
+        statusBadgeEl.textContent = order.status || 'pending';
+    }
+
+    const isPending = (order.status || 'pending').toLowerCase() === 'pending';
+
+    // Handle Takeaway Delivery Charge Lock & Confirmed Status Locking
+    if (delChargeEl) {
+        if (isTakeaway) {
+            delChargeEl.value = 0;
+            delChargeEl.disabled = true;
+            delChargeEl.style.opacity = '0.6';
+            delChargeEl.style.cursor = 'not-allowed';
+            if (delLockBadge) {
+                delLockBadge.style.display = 'inline-block';
+                delLockBadge.textContent = 'Takeaway Free';
+            }
+            if (dispatchBtn) dispatchBtn.innerHTML = '🛍️ Ready for Pickup';
+            if (estLabel) estLabel.textContent = 'Estimated Prep / Pickup Time';
+            if (estTimeEl) {
+                estTimeEl.value = order.estimatedTime || '15-20 mins';
+                estTimeEl.disabled = !isPending;
+            }
+        } else {
+            const currentDel = order.deliveryCharge !== undefined ? order.deliveryCharge : 30;
+            delChargeEl.value = currentDel;
+            delChargeEl.disabled = !isPending;
+            delChargeEl.style.opacity = isPending ? '1' : '0.7';
+            delChargeEl.style.cursor = isPending ? 'text' : 'not-allowed';
+            if (delLockBadge) {
+                delLockBadge.style.display = isPending ? 'none' : 'inline-block';
+                delLockBadge.textContent = 'Confirmed (Locked)';
+            }
+            if (dispatchBtn) dispatchBtn.innerHTML = '📦 Out for Delivery';
+            if (estLabel) estLabel.textContent = 'Estimated Delivery Time';
+            if (estTimeEl) {
+                estTimeEl.value = order.estimatedTime || '25-35 mins';
+                estTimeEl.disabled = !isPending;
+            }
+        }
+    }
+
+    // Render items list
+    const itemsListEl = document.getElementById('ord-modal-items-list');
+    const itemsCountEl = document.getElementById('ord-modal-items-count');
+    const items = order.items || [];
+    if (itemsCountEl) itemsCountEl.textContent = `${items.length} items`;
+    if (itemsListEl) {
+        if (items.length === 0) {
+            itemsListEl.innerHTML = '<div style="color:var(--text-muted); font-size:12px;">Custom Order Items</div>';
+        } else {
+            itemsListEl.innerHTML = items.map(it => `
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
+                    <div>
+                        <span style="font-weight:700; color:#fff;">${it.quantity}x</span> 
+                        <span style="color:var(--text-main); margin-left:4px;">${it.name}</span>
+                    </div>
+                    <div style="font-weight:700; color:var(--brand-gold);">₹${it.subtotal || (it.price * it.quantity)}</div>
+                </div>
+            `).join('');
+        }
+    }
+
+    // Render Dynamic Action Buttons Based on Status
+    const actionBtnsContainer = document.getElementById('ord-modal-action-buttons');
+    if (actionBtnsContainer) {
+        const rawPhone = (order.customerPhone || '').replace(/\D/g, '').slice(-10);
+        const status = (order.status || 'pending').toLowerCase();
+        
+        let buttonsHtml = `
+            <button type="button" class="btn btn-secondary" style="background:rgba(16, 185, 129, 0.15); border:1.5px solid rgba(16, 185, 129, 0.4); color:#10b981; font-weight:800; font-size:13px; padding:10px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="window.openA4InvoiceModal(window.currentSelectedOrder)">
+                <span>📄 View & Print Official Bill (A4 PDF)</span>
+            </button>
+        `;
+
+        if (status === 'pending') {
+            buttonsHtml += `
+                <button type="button" class="btn btn-primary" style="background:#25d366; color:#000; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="confirmOrderAndWhatsApp()">
+                    <span>💬 Confirm Order & Send WhatsApp Reply</span>
+                </button>
+                <button type="button" class="btn btn-outline" style="border-color:#ef4444; color:#ef4444; font-size:12.5px; padding:10px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="cancelOrderPrompt()">
+                    <span>✕ Reject / Cancel Order</span>
+                </button>
+            `;
+        } else if (status === 'accepted' || status === 'confirmed') {
+            buttonsHtml += `
+                <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="quickUpdateOrderStatus('dispatched')">
+                    <span>📦 Mark Out for Delivery (Dispatch)</span>
+                </button>
+                <div style="display:flex; gap:10px;">
+                    <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-secondary" style="flex:1; background:#25d366; color:#000; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;">
+                        <span>💬 WhatsApp Customer</span>
+                    </a>
+                    <button type="button" class="btn btn-outline" style="flex:1; border-color:#ef4444; color:#ef4444; font-size:12px; font-weight:700;" onclick="cancelOrderPrompt()">
+                        <span>✕ Cancel Order</span>
+                    </button>
+                </div>
+            `;
+        } else if (status === 'dispatched') {
+            buttonsHtml += `
+                <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="quickUpdateOrderStatus('delivered')">
+                    <span>🎉 Mark Order as Delivered</span>
+                </button>
+                <div style="display:flex; gap:10px;">
+                    <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-secondary" style="flex:1; background:#25d366; color:#000; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;">
+                        <span>💬 WhatsApp Customer</span>
+                    </a>
+                    <button type="button" class="btn btn-outline" style="flex:1; border-color:#ef4444; color:#ef4444; font-size:12px; font-weight:700;" onclick="cancelOrderPrompt()">
+                        <span>✕ Cancel Order</span>
+                    </button>
+                </div>
+            `;
+        } else if (status === 'delivered') {
+            buttonsHtml += `
+                <div style="background:rgba(16, 185, 129, 0.1); border:1.5px solid #10b981; border-radius:10px; padding:12px; text-align:center; color:#34d399; font-weight:800; font-size:13.5px;">
+                    ✅ Order Successfully Delivered & Completed
+                </div>
+                <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-secondary" style="background:#25d366; color:#000; font-weight:700; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; text-decoration:none;">
+                    <span>💬 WhatsApp Customer</span>
+                </a>
+            `;
+        } else {
+            buttonsHtml += `
+                <div style="background:rgba(239, 68, 68, 0.1); border:1.5px solid #ef4444; border-radius:10px; padding:12px; text-align:center; color:#f87171; font-weight:800; font-size:13.5px;">
+                    ✕ This Order Was Cancelled
+                </div>
+            `;
+        }
+
+        actionBtnsContainer.innerHTML = buttonsHtml;
+    }
+
+    // Set Subtotal, Delivery Charge & Grand Total
+    const subtotal = Number(order.subtotal || order.finalTotal || 0);
+    const subtotalEl = document.getElementById('ord-modal-subtotal');
+    if (subtotalEl) subtotalEl.textContent = `₹${subtotal}`;
+
+    window.recalcOrderModalTotal();
+    openModal('order-confirm-modal');
+};
+
+window.recalcOrderModalTotal = function() {
+    const order = window.currentSelectedOrder;
+    if (!order) return;
+
+    const subtotal = Number(order.subtotal || order.finalTotal || 0);
+    const discount = Number(order.discount || 0);
+    const isTakeaway = (order.orderType === 'takeaway');
+    const delCharge = isTakeaway ? 0 : (Number(document.getElementById('ord-modal-del-charge')?.value) || 0);
+    const finalTotal = Math.max(0, subtotal - discount + delCharge);
+
+    const finalTotalEl = document.getElementById('ord-modal-final-total');
+    if (finalTotalEl) finalTotalEl.textContent = `₹${finalTotal}`;
+};
+
+window.confirmOrderAndWhatsApp = async function() {
+    const order = window.currentSelectedOrder;
+    if (!order || !order._id) return;
+
+    const isTakeaway = (order.orderType === 'takeaway');
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    const delCharge = isTakeaway ? 0 : (Number(document.getElementById('ord-modal-del-charge')?.value) || 0);
+    const subtotal = Number(order.subtotal || order.finalTotal || 0);
+    const discount = Number(order.discount || 0);
+    const finalTotal = Math.max(0, subtotal - discount + delCharge);
+    const estTime = document.getElementById('ord-modal-est-time')?.value || (isTakeaway ? '15-20 mins' : '25-35 mins');
+
+    try {
+        const res = await fetch(`${API_URL}/orders/${order._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({
+                status: 'accepted',
+                deliveryCharge: delCharge,
+                finalTotal: finalTotal
+            })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(`✅ Order #${String(order._id).slice(-6).toUpperCase()} Confirmed!`, 'success');
+            closeModal('order-confirm-modal');
+            window.fetchAndRenderOrders();
+
+            // Build formatted WhatsApp confirmation message
+            const shortId = String(order._id).slice(-6).toUpperCase();
+            const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Order Items';
+            
+            // Send to customer's WhatsApp phone (or calling phone as fallback)
+            const targetPhone = order.whatsappPhone || order.customerPhone || '';
+            const rawPhone = String(targetPhone).replace(/\D/g, '');
+            const cleanPhone = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
+
+            const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
+            const locationInfo = isTakeaway ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+
+            const msg = `${orderTypeHeader}\n\n` +
+                        `Hi *${order.customerName || 'Customer'}*,\n` +
+                        `Your order *#${shortId}* has been accepted and is now being prepared fresh! 👨‍🍳🔥\n\n` +
+                        `*📋 Order Items:*\n${itemsList}\n\n` +
+                        `*Items Total:* ₹${subtotal}\n` +
+                        (isTakeaway ? `*Delivery Fee:* ₹0 (Self Pickup)\n` : `*Delivery Fee:* ₹${delCharge}\n`) +
+                        `*Grand Total Payable:* ₹${finalTotal} (${order.paymentMethod || 'COD'})\n\n` +
+                        `${locationInfo}\n\n` +
+                        `*🧾 Live Status & Download Bill:* https://littiwale.com/track.html?id=${order._id}\n\n` +
+                        (isTakeaway ? `We look forward to serving you at our kitchen counter. Thank you for choosing *Littiwale*! ❤️` : `Your hot delicious food is on the way. Thank you for ordering from *Littiwale*! ❤️`);
+
+            const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`;
+            window.open(whatsappUrl, '_blank');
+        } else {
+            window.showAdminToast('Failed to confirm order. Please verify Admin PIN.', 'error');
+        }
+    } catch(e) {
+        console.error('Confirm order error:', e);
+        window.showAdminToast('Error confirming order', 'error');
+    }
+};
+
+window.cancelOrderPrompt = async function(orderId = null) {
+    let order = null;
+    if (orderId) {
+        order = (window.cachedOrders || []).find(o => String(o._id) === String(orderId) || String(o._id).slice(-6).toUpperCase() === String(orderId).toUpperCase());
+    } else {
+        order = window.currentSelectedOrder;
+    }
+
+    if (!order || !order._id) {
+        window.showAdminToast('Order not found', 'error');
+        return;
+    }
+
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const reason = prompt(`Reason for Rejecting / Cancelling Order #${shortId} (e.g. Kitchen overloaded / Item out of stock / Location unserviceable):`, 'Kitchen at maximum capacity / Item out of stock');
+    if (reason === null) return; // User pressed Cancel in prompt
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+
+    try {
+        const res = await fetch(`${API_URL}/orders/${order._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ 
+                status: 'cancelled',
+                cancelReason: reason.trim() || 'Kitchen at maximum capacity'
+            })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(`❌ Order #${shortId} Cancelled`, 'warning', 'Order Rejected');
+            closeModal('order-confirm-modal');
+            window.fetchAndRenderOrders();
+
+            // Send polite cancellation notice to customer via WhatsApp
+            const targetPhone = order.whatsappPhone || order.customerPhone || '';
+            const rawPhone = String(targetPhone).replace(/\D/g, '');
+            const cleanPhone = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
+
+            if (cleanPhone) {
+                const cancelMsg = `*❌ ORDER CANCELLATION UPDATE — LITTIWALE BARBIL*\n\n` +
+                                  `Dear *${order.customerName || 'Customer'}*,\n` +
+                                  `We regret to inform you that your order *#${shortId}* could not be fulfilled at this time.\n\n` +
+                                  `*Reason:* ${reason.trim() || 'Kitchen temporarily overloaded / Item out of stock'}\n\n` +
+                                  `We sincerely apologize for the inconvenience caused. If you have already completed an online payment, our team will initiate your refund.\n\n` +
+                                  `For any queries or direct assistance, please reply to this WhatsApp message. Thank you for your understanding! 🙏`;
+
+                const notifyWa = confirm(`Order #${shortId} has been marked CANCELLED in database.\n\nWould you like to send a cancellation update to the customer on WhatsApp?`);
+                if (notifyWa) {
+                    const waUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(cancelMsg)}`;
+                    window.open(waUrl, '_blank');
+                }
+            }
+        } else {
+            window.showAdminToast('Failed to cancel order. Please verify Admin PIN.', 'error');
+        }
+    } catch(e) {
+        console.error('Cancel order error:', e);
+        window.showAdminToast('Error cancelling order', 'error');
+    }
+};
+
+window.quickUpdateOrderStatus = async function(newStatus) {
+    const order = window.currentSelectedOrder;
+    if (!order || !order._id) return;
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+
+    try {
+        const res = await fetch(`${API_URL}/orders/${order._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ status: newStatus })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(`Order status updated to: ${newStatus.toUpperCase()}`, 'success');
+            closeModal('order-confirm-modal');
+            window.fetchAndRenderOrders();
+        } else {
+            window.showAdminToast('Failed to update status', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error updating status', 'error');
     }
 };
