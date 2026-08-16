@@ -3537,11 +3537,11 @@ function populateDealItemDropdowns(selectedName1, selectedName2) {
     const sel2 = document.getElementById('deal-item-2') || document.getElementById('deal-item2-select');
     if (!sel1 || !sel2) return;
 
-    // Filter out deals, combos, thalis
+    // Filter out existing craziest deals from item choices
     const items = (window.regularMenuItems || []).filter(item => {
         const cat = (item.category || '').toLowerCase();
         const n = (item.name || '').toLowerCase();
-        return !cat.includes('craziest') && !cat.includes('deal') && !n.includes('khila') && !n.includes('diet') && !n.includes('bhook');
+        return !cat.includes('craziest') && !item.isCraziestDeal;
     }).sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
 
     // Group by category
@@ -3556,7 +3556,7 @@ function populateDealItemDropdowns(selectedName1, selectedName2) {
     for (const cat in categories) {
         optionsHtml += `<optgroup label="${cat}">`;
         categories[cat].forEach(item => {
-            const price = item.price || item.full || item.half || 0;
+            const price = Number(item.price || item.full || item.half || 0);
             optionsHtml += `<option value="${item._id || item.id}" data-name="${item.name.replace(/"/g, '&quot;')}" data-price="${price}">${item.name} — ₹${price}</option>`;
         });
         optionsHtml += `</optgroup>`;
@@ -3565,29 +3565,55 @@ function populateDealItemDropdowns(selectedName1, selectedName2) {
     sel1.innerHTML = optionsHtml;
     sel2.innerHTML = optionsHtml;
 
-    // Try to auto-select matching dishes if note contains item names
-    if (selectedName1) {
-        for (let i = 0; i < sel1.options.length; i++) {
-            const opt = sel1.options[i];
-            const optName = (opt.getAttribute('data-name') || '').toLowerCase();
-            if (optName && (selectedName1.toLowerCase().includes(optName) || optName.includes(selectedName1.toLowerCase()))) {
-                sel1.selectedIndex = i;
-                break;
+    // Smart auto-select matching dishes from note
+    function matchOption(selectEl, query) {
+        if (!query || !query.trim()) return;
+        const q = query.toLowerCase().trim();
+        for (let i = 1; i < selectEl.options.length; i++) {
+            const opt = selectEl.options[i];
+            const optName = (opt.getAttribute('data-name') || '').toLowerCase().trim();
+            if (!optName) continue;
+            if (optName === q || q.includes(optName) || optName.includes(q)) {
+                selectEl.selectedIndex = i;
+                return;
             }
         }
     }
 
-    if (selectedName2) {
-        for (let i = 0; i < sel2.options.length; i++) {
-            const opt = sel2.options[i];
-            const optName = (opt.getAttribute('data-name') || '').toLowerCase();
-            if (optName && (selectedName2.toLowerCase().includes(optName) || optName.includes(selectedName2.toLowerCase()))) {
-                sel2.selectedIndex = i;
-                break;
-            }
+    matchOption(sel1, selectedName1);
+    matchOption(sel2, selectedName2);
+}
+
+window.updateDealPricePreviewBadge = function() {
+    const origInput = document.getElementById('deal-orig-price');
+    const priceInput = document.getElementById('deal-price');
+    const origVal = Number(origInput?.value || 0);
+    const priceVal = Number(priceInput?.value || 0);
+
+    const prevPriceEl = document.getElementById('preview-deal-price');
+    const prevOrigEl = document.getElementById('preview-orig-price');
+    const prevTagEl = document.getElementById('preview-discount-tag');
+
+    if (prevPriceEl) prevPriceEl.textContent = `₹${priceVal}`;
+    if (prevOrigEl) {
+        if (origVal > 0 && origVal > priceVal) {
+            prevOrigEl.textContent = `₹${origVal}`;
+            prevOrigEl.style.display = 'inline';
+        } else {
+            prevOrigEl.textContent = '';
+            prevOrigEl.style.display = 'none';
         }
     }
-}
+    if (prevTagEl) {
+        if (origVal > priceVal && origVal > 0) {
+            const pct = Math.round(((origVal - priceVal) / origVal) * 100);
+            prevTagEl.textContent = `${pct}% OFF`;
+            prevTagEl.style.display = 'inline-block';
+        } else {
+            prevTagEl.style.display = 'none';
+        }
+    }
+};
 
 window.recalculateDealPrices = function(updateInputs = true) {
     const sel1 = document.getElementById('deal-item-1') || document.getElementById('deal-item1-select');
@@ -3605,18 +3631,17 @@ window.recalculateDealPrices = function(updateInputs = true) {
     const origTotal = price1 + price2;
 
     const breakdownEl = document.getElementById('deal-calc-breakdown');
-    const origPriceEl = document.getElementById('deal-orig-price') || document.getElementById('deal-origprice-input');
+    const origPriceInput = document.getElementById('deal-orig-price');
     
-    if (origPriceEl) {
-        if (origPriceEl.tagName === 'INPUT') origPriceEl.value = origTotal;
-        else origPriceEl.textContent = `₹${origTotal}`;
+    if (origTotal > 0 && updateInputs && origPriceInput) {
+        origPriceInput.value = origTotal;
     }
 
     if (breakdownEl) {
         if (price1 > 0 && price2 > 0) {
-            breakdownEl.innerHTML = `Combined: ₹${price1} + ₹${price2} = <strong>₹${origTotal}</strong>`;
+            breakdownEl.innerHTML = `Combined dishes: ₹${price1} + ₹${price2} = <strong style="color:#fff;">₹${origTotal}</strong>`;
         } else if (price1 > 0) {
-            breakdownEl.innerHTML = `Combined: <strong>₹${price1}</strong>`;
+            breakdownEl.innerHTML = `Selected dish: <strong style="color:#fff;">₹${price1}</strong>`;
         } else {
             breakdownEl.innerHTML = '';
         }
@@ -3635,11 +3660,14 @@ window.recalculateDealPrices = function(updateInputs = true) {
         }
 
         if (origTotal > 0) {
-            const finalPrice = Math.ceil((origTotal * 1.04) / 10) * 10;
-            const priceInput = document.getElementById('deal-price') || document.getElementById('deal-price-input');
-            if (priceInput) priceInput.value = finalPrice;
+            // Apply attractive rounded deal discount (~15% off)
+            const finalPrice = Math.round((origTotal * 0.85) / 10) * 10 - 1; // e.g. 490 -> 419 or 399
+            const priceInput = document.getElementById('deal-price');
+            if (priceInput) priceInput.value = finalPrice > 0 ? finalPrice : Math.round(origTotal * 0.85);
         }
     }
+
+    window.updateDealPricePreviewBadge();
 };
 
 async function fetchCmsDeals() {
@@ -3680,8 +3708,10 @@ async function fetchCmsDeals() {
                     </div>
                     <h4 style="color:#fff; font-size:1.15rem; font-weight:700; margin-bottom:6px;">${deal.name}</h4>
                     <div style="color:#fb923c; font-size:0.85rem; line-height:1.4; margin-bottom:10px;">${deal.note || deal.description || 'Special Promotional Combo'}</div>
-                    <div style="font-weight:bold; color:#4ade80; font-size:1.3rem; margin-bottom:14px;">
-                        ₹${deal.price} ${deal.originalPrice ? `<span style="color:#64748b; text-decoration:line-through; font-size:0.95rem; margin-left:6px;">₹${deal.originalPrice}</span>` : ''}
+                    <div style="font-weight:bold; color:#4ade80; font-size:1.3rem; margin-bottom:14px; display:flex; align-items:center; gap:8px;">
+                        <span>₹${deal.price}</span>
+                        ${deal.originalPrice ? `<span style="color:#64748b; text-decoration:line-through; font-size:0.95rem;">₹${deal.originalPrice}</span>` : ''}
+                        ${deal.originalPrice && deal.originalPrice > deal.price ? `<span style="background:rgba(34,197,94,0.15); color:#4ade80; font-size:11px; padding:2px 6px; border-radius:4px;">${Math.round(((deal.originalPrice - deal.price) / deal.originalPrice) * 100)}% OFF</span>` : ''}
                     </div>
                 </div>
                 <div style="display:flex; gap:8px;">
@@ -3711,14 +3741,11 @@ window.openNewDealModal = function() {
     const noteEl = document.getElementById('deal-note') || document.getElementById('deal-note-input');
     if (noteEl) noteEl.value = '';
 
-    const priceEl = document.getElementById('deal-price') || document.getElementById('deal-price-input');
+    const priceEl = document.getElementById('deal-price');
     if (priceEl) priceEl.value = '';
 
-    const origPriceEl = document.getElementById('deal-orig-price') || document.getElementById('deal-origprice-input');
-    if (origPriceEl) {
-        if (origPriceEl.tagName === 'INPUT') origPriceEl.value = '';
-        else origPriceEl.textContent = '₹0';
-    }
+    const origPriceEl = document.getElementById('deal-orig-price');
+    if (origPriceEl) origPriceEl.value = '';
 
     const imgUrlEl = document.getElementById('deal-image-url') || document.getElementById('deal-image-input');
     if (imgUrlEl) imgUrlEl.value = '';
@@ -3734,17 +3761,27 @@ window.openNewDealModal = function() {
         preview.style.display = 'block';
     }
 
+    window.updateDealPricePreviewBadge();
+
     modal.classList.add('active');
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
 };
 
-window.openDealModal = function(dealId) {
-    const deal = adminDealsList.find(d => String(d._id) === String(dealId));
+window.openDealModal = async function(dealId) {
+    let deal = adminDealsList.find(d => String(d._id) === String(dealId));
     if (!deal) return;
 
     const modal = document.getElementById('deal-modal');
     if (!modal) return;
+
+    // Ensure menu items are loaded
+    if (!window.regularMenuItems || window.regularMenuItems.length === 0) {
+        try {
+            const res = await fetch(`${API_URL}/menu`);
+            window.regularMenuItems = await res.json();
+        } catch(e) {}
+    }
 
     const titleEl = document.getElementById('deal-modal-title');
     if (titleEl) titleEl.textContent = `🔥 Configure: ${deal.name}`;
@@ -3758,13 +3795,12 @@ window.openDealModal = function(dealId) {
     const noteEl = document.getElementById('deal-note') || document.getElementById('deal-note-input');
     if (noteEl) noteEl.value = deal.note || deal.description || '';
 
-    const priceEl = document.getElementById('deal-price') || document.getElementById('deal-price-input');
+    const priceEl = document.getElementById('deal-price');
     if (priceEl) priceEl.value = deal.price;
 
-    const origPriceEl = document.getElementById('deal-orig-price') || document.getElementById('deal-origprice-input');
+    const origPriceEl = document.getElementById('deal-orig-price');
     if (origPriceEl) {
-        if (origPriceEl.tagName === 'INPUT') origPriceEl.value = deal.originalPrice || '';
-        else origPriceEl.textContent = `₹${deal.originalPrice || deal.price || 0}`;
+        origPriceEl.value = deal.originalPrice || '';
     }
 
     const imgUrlEl = document.getElementById('deal-image-url') || document.getElementById('deal-image-input');
@@ -3787,7 +3823,13 @@ window.openDealModal = function(dealId) {
     }
 
     populateDealItemDropdowns(part1, part2);
-    window.recalculateDealPrices(false);
+    
+    // If original price is not yet set, compute from items
+    if (!deal.originalPrice) {
+        window.recalculateDealPrices(false);
+    } else {
+        window.updateDealPricePreviewBadge();
+    }
 
     modal.classList.add('active');
     modal.classList.remove('hidden');

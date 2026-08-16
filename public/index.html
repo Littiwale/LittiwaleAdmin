@@ -2006,16 +2006,33 @@
                     <input type="text" id="deal-note" class="form-control" placeholder="Includes: Dish A + Dish B">
                 </div>
 
-                <!-- Price Calculation Breakdown -->
-                <div style="padding:14px; background:var(--bg-card-inner); border-radius:var(--radius-md); margin-bottom:16px;">
-                    <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:6px;">
-                        <span style="color:var(--text-muted);">Combined Original Price:</span>
-                        <strong id="deal-orig-price" style="color:#fff;">₹0</strong>
+                <!-- Price Configuration & Strikethrough Display -->
+                <div style="padding:14px; background:var(--bg-card-inner); border-radius:var(--radius-md); margin-bottom:16px; border:1px solid rgba(255,255,255,0.06);">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:10px;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label" style="display:flex; justify-content:space-between;">
+                                <span>Original MRP (₹)</span>
+                                <span style="font-size:10px; color:#94a3b8;">(Strike-through)</span>
+                            </label>
+                            <input type="number" id="deal-orig-price" class="form-control" placeholder="e.g. 490" oninput="updateDealPricePreviewBadge()">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label" style="display:flex; justify-content:space-between;">
+                                <span style="color:var(--brand-orange);">Special Deal Price (₹)</span>
+                                <span style="font-size:10px; color:#4ade80;">(Customer Pays)</span>
+                            </label>
+                            <input type="number" id="deal-price" class="form-control" style="font-weight:800; color:var(--brand-gold); font-size:1.1rem;" placeholder="e.g. 399" required oninput="updateDealPricePreviewBadge()">
+                        </div>
                     </div>
                     <div id="deal-calc-breakdown" style="font-size:11px; color:#94a3b8; margin-bottom:8px;"></div>
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="color:var(--brand-orange); font-weight:700;">Special Deal Price (₹):</span>
-                        <input type="number" id="deal-price" class="form-control" style="width:130px; font-weight:800; color:var(--brand-gold); font-size:1.1rem;" required>
+                    <!-- Live Customer Preview Pill -->
+                    <div id="deal-price-preview-badge" style="padding:8px 12px; background:rgba(249,115,22,0.08); border:1px dashed rgba(249,115,22,0.3); border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-size:12.5px;">
+                        <span style="color:#cbd5e1; font-weight:600;">Customer Display:</span>
+                        <div>
+                            <strong style="color:#4ade80; font-size:1.15rem;" id="preview-deal-price">₹0</strong>
+                            <span style="color:#94a3b8; text-decoration:line-through; font-size:0.95rem; margin-left:6px;" id="preview-orig-price">₹0</span>
+                            <span style="background:rgba(34,197,94,0.2); color:#4ade80; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:bold; margin-left:6px;" id="preview-discount-tag">0% OFF</span>
+                        </div>
                     </div>
                 </div>
 
