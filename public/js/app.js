@@ -3660,22 +3660,38 @@ window.recalculateDealPrices = function(updateInputs = true) {
     const name1 = opt1 ? (opt1.getAttribute('data-name') || '') : '';
     const name2 = opt2 ? (opt2.getAttribute('data-name') || '') : '';
 
-    const origTotal = price1 + price2;
+    const baseFoodCost = price1 + price2;
+
+    // Formula: Original Strike-through MRP = Base Cost + ~30% (+₹50-100 extra inflated MRP)
+    const suggestedMRP = baseFoodCost > 0 ? Math.round((baseFoodCost * 1.30) / 10) * 10 : 0;
+    
+    // Formula: Special Deal Price = Base Cost + ~12% rounded attractive price (e.g. ₹240 -> ₹269)
+    const suggestedDealPrice = baseFoodCost > 0 ? Math.round((baseFoodCost * 1.12) / 10) * 10 - 1 : 0;
 
     const breakdownEl = document.getElementById('deal-calc-breakdown');
     const origPriceInput = document.getElementById('deal-orig-price');
+    const priceInput = document.getElementById('deal-price');
     
-    if (origTotal > 0 && updateInputs && origPriceInput) {
-        origPriceInput.value = origTotal;
+    if (baseFoodCost > 0 && updateInputs) {
+        if (origPriceInput) origPriceInput.value = suggestedMRP;
+        if (priceInput) priceInput.value = suggestedDealPrice;
     }
 
     if (breakdownEl) {
         if (price1 > 0 && price2 > 0) {
-            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 1:</span> ${name1} (₹${price1}) + <span style="color:#fb923c;">Dish 2:</span> ${name2} (₹${price2}) = <strong style="color:#fff;">Original ₹${origTotal}</strong>`;
+            const extraMRP = suggestedMRP - baseFoodCost;
+            breakdownEl.innerHTML = `
+                <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); line-height:1.5;">
+                    <div>🍽️ <strong>Dishes:</strong> ${name1} (<span style="color:#fb923c;">₹${price1}</span>) + ${name2} (<span style="color:#fb923c;">₹${price2}</span>) = Base: <strong style="color:#fff;">₹${baseFoodCost}</strong></div>
+                    <div style="font-size:10.5px; color:#94a3b8; margin-top:2px;">
+                        📈 <strong>MRP:</strong> ₹${suggestedMRP} (+₹${extraMRP} strike-through) • 🎯 <strong>Deal Price:</strong> ₹${suggestedDealPrice} (Margin added)
+                    </div>
+                </div>
+            `;
         } else if (price1 > 0) {
-            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 1:</span> ${name1} (<strong style="color:#fff;">₹${price1}</strong>)`;
+            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 1:</span> ${name1} (₹${price1})`;
         } else if (price2 > 0) {
-            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 2:</span> ${name2} (<strong style="color:#fff;">₹${price2}</strong>)`;
+            breakdownEl.innerHTML = `<span style="color:#fb923c;">Dish 2:</span> ${name2} (₹${price2})`;
         } else {
             breakdownEl.innerHTML = '';
         }
@@ -3691,13 +3707,6 @@ window.recalculateDealPrices = function(updateInputs = true) {
             } else if (name2) {
                 noteInput.value = `Includes: ${name2}`;
             }
-        }
-
-        if (origTotal > 0) {
-            // Apply attractive rounded deal discount (~15% off)
-            const finalPrice = Math.round((origTotal * 0.85) / 10) * 10 - 1;
-            const priceInput = document.getElementById('deal-price');
-            if (priceInput) priceInput.value = finalPrice > 0 ? finalPrice : Math.round(origTotal * 0.85);
         }
     }
 
@@ -3857,13 +3866,17 @@ window.openDealModal = async function(dealId) {
     }
 
     populateDealItemDropdowns(part1, part2);
-    
-    // If original price is not yet set, compute from items
-    if (!deal.originalPrice) {
-        window.recalculateDealPrices(false);
-    } else {
-        window.updateDealPricePreviewBadge();
+    window.recalculateDealPrices(false);
+
+    if (deal.originalPrice) {
+        const origPriceEl = document.getElementById('deal-orig-price');
+        if (origPriceEl) origPriceEl.value = deal.originalPrice;
     }
+    if (deal.price) {
+        const priceEl = document.getElementById('deal-price');
+        if (priceEl) priceEl.value = deal.price;
+    }
+    window.updateDealPricePreviewBadge();
 
     modal.classList.add('active');
     modal.classList.remove('hidden');
