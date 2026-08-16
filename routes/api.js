@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const { checkPin } = require('../middleware/auth');
 const Menu = require('../models/Menu');
 const Announcement = require('../models/Announcement');
