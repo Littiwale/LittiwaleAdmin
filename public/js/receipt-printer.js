@@ -221,13 +221,12 @@
     // Reset animations
     paper.className = 'receipt-paper-box retracted';
     if (tearBtn) tearBtn.style.display = 'inline-flex';
-
-    // Format Data
     const shortId = orderData._id ? String(orderData._id).slice(-6).toUpperCase() : (orderData.shortId || 'LW');
+    const isTakeaway = (orderData.orderType === 'takeaway');
     const dateStr = orderData.createdAt ? new Date(orderData.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const custName = orderData.customerName || 'Valued Customer';
     const custPhone = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
-    const custAddress = orderData.deliveryAddress || orderData.address || 'Takeaway / Dine-in';
+    const custAddress = isTakeaway ? '🛍️ Pickup Location: Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil' : (orderData.deliveryAddress || orderData.address || 'Barbil');
     const landmark = orderData.landmark ? `<div style="font-size:10px; color:#6b7280;">Landmark: ${orderData.landmark}</div>` : '';
     const paymentMode = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'CASH ON DELIVERY (COD)' : 'PAID ONLINE (UPI)');
 
@@ -245,7 +244,7 @@
     `;
 
     const subtotal = orderData.subtotal || orderData.finalTotal || 0;
-    const delivery = Number(orderData.deliveryCharge || orderData.deliveryFee || 0);
+    const delivery = isTakeaway ? 0 : Number(orderData.deliveryCharge || orderData.deliveryFee || 0);
     const discount = Number(orderData.discount || orderData.couponDiscount || 0);
     const grandTotal = orderData.finalTotal || (subtotal + delivery - discount);
 
@@ -253,7 +252,7 @@
     content.innerHTML = `
       <!-- Shop Header -->
       <div class="receipt-shop-header">
-        <img src="images/logo.png" onerror="this.src='https://littiwale.com/images/logo.png'" alt="Littiwale" class="receipt-shop-logo-img">
+        <img src="images/logo.png" onerror="this.src='/images/logo.png'" alt="Littiwale" class="receipt-shop-logo-img">
         <div class="receipt-shop-name">LITTIWALE</div>
         <div class="receipt-shop-tagline">Taste of Desi Swag • Cloud Kitchen & Restaurant</div>
         <div class="receipt-shop-address">
@@ -274,7 +273,7 @@
         <div class="receipt-meta-val">${paymentMode}</div>
 
         <div class="receipt-meta-label">ORDER TYPE:</div>
-        <div class="receipt-meta-val">DELIVERY / KOT</div>
+        <div class="receipt-meta-val">${isTakeaway ? 'TAKEAWAY (SELF PICKUP)' : 'HOME DELIVERY / KOT'}</div>
       </div>
 
       <!-- Customer Details Box -->
@@ -305,7 +304,7 @@
         </div>
         <div class="receipt-total-row">
           <span>Delivery Charges</span>
-          <span>${delivery > 0 ? `₹${delivery}` : '<strong style="color:#16a34a;">FREE</strong>'}</span>
+          <span>${isTakeaway ? '<strong style="color:#16a34a;">₹0 (Self Pickup)</strong>' : (delivery > 0 ? `₹${delivery}` : '<strong style="color:#16a34a;">FREE</strong>')}</span>
         </div>
         ${discount > 0 ? `
           <div class="receipt-total-row" style="color:#16a34a;">

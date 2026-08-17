@@ -1507,42 +1507,95 @@
 
                 <!-- ==========================================================================
                      TAB 8.5: WEBSITE ONLINE ORDER REVENUE
+                <!-- ==========================================================================
+                     TAB 8.5: WEBSITE ONLINE ORDER REVENUE & FINANCIAL TRACKER
                      ========================================================================== -->
                 <section id="finance-section" class="tab-section">
-                    <!-- 3 Website Revenue KPI Cards -->
-                    <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-bottom:24px;">
+                    <!-- Revenue Timeframe Selector Tabs & Custom Range -->
+                    <div style="background:var(--bg-surface); border:1px solid var(--border-card); border-radius:14px; padding:14px 18px; margin-bottom:20px; display:flex; flex-direction:column; gap:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:18px;">📊</span>
+                                <strong style="color:#fff; font-size:14px;">Revenue Timeframe:</strong>
+                            </div>
+                            <div class="revenue-tabs-wrap" style="display:flex; flex-wrap:wrap; gap:6px; background:rgba(0,0,0,0.35); padding:4px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);">
+                                <button type="button" class="btn btn-sm rev-tab-btn" id="rev-tab-daily" onclick="window.setRevenueTimeframe('daily')" style="padding:6px 14px; font-size:12px; font-weight:800; border-radius:8px; background:var(--brand-orange); color:#fff;">📅 Today</button>
+                                <button type="button" class="btn btn-sm rev-tab-btn" id="rev-tab-weekly" onclick="window.setRevenueTimeframe('weekly')" style="padding:6px 14px; font-size:12px; font-weight:700; border-radius:8px; background:transparent; color:#cbd5e1;">📆 This Week</button>
+                                <button type="button" class="btn btn-sm rev-tab-btn" id="rev-tab-monthly" onclick="window.setRevenueTimeframe('monthly')" style="padding:6px 14px; font-size:12px; font-weight:700; border-radius:8px; background:transparent; color:#cbd5e1;">🗓️ This Month</button>
+                                <button type="button" class="btn btn-sm rev-tab-btn" id="rev-tab-yearly" onclick="window.setRevenueTimeframe('yearly')" style="padding:6px 14px; font-size:12px; font-weight:700; border-radius:8px; background:transparent; color:#cbd5e1;">📈 This Year</button>
+                                <button type="button" class="btn btn-sm rev-tab-btn" id="rev-tab-all" onclick="window.setRevenueTimeframe('all')" style="padding:6px 14px; font-size:12px; font-weight:700; border-radius:8px; background:transparent; color:#cbd5e1;">🌐 All Time</button>
+                                <button type="button" class="btn btn-sm rev-tab-btn" id="rev-tab-custom" onclick="window.setRevenueTimeframe('custom')" style="padding:6px 14px; font-size:12px; font-weight:700; border-radius:8px; background:transparent; color:#cbd5e1;">🎯 Custom</button>
+                            </div>
+                        </div>
+
+                        <!-- Custom Date Range Picker (shown when 'custom' is active) -->
+                        <div id="rev-custom-date-container" style="display:none; align-items:center; gap:10px; flex-wrap:wrap; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.08);">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <label style="font-size:12px; color:var(--text-dim);">From:</label>
+                                <input type="date" id="rev-custom-from-date" class="form-control" style="width:145px; padding:6px 10px; font-size:12px; color:#fff; background:#1e1e28;">
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <label style="font-size:12px; color:var(--text-dim);">To:</label>
+                                <input type="date" id="rev-custom-to-date" class="form-control" style="width:145px; padding:6px 10px; font-size:12px; color:#fff; background:#1e1e28;">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="window.applyCustomRevenueFilter()" style="padding:7px 16px; font-weight:800; font-size:12px; background:var(--brand-orange); color:#fff; border-radius:8px;">
+                                Apply Date Filter
+                            </button>
+                            <span id="rev-custom-range-badge" style="font-size:12px; color:var(--brand-gold); font-weight:700;"></span>
+                        </div>
+
+                        <!-- Active Summary Subtitle -->
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-dim); border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                            <div>Active Period: <strong style="color:var(--brand-gold);" id="rev-active-period-label">Today</strong></div>
+                            <div id="rev-filtered-count-label" style="font-weight:700; color:#38bdf8;">0 Delivered Orders</div>
+                        </div>
+                    </div>
+
+                    <!-- 4 Website Revenue KPI Cards -->
+                    <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom:24px;">
                         <div class="kpi-card" style="border:1px solid rgba(245,158,11,0.3);">
                             <div class="kpi-header">
                                 <div class="kpi-icon-box gold">💰</div>
-                                <span class="kpi-label">Food Revenue (Items Net)</span>
+                                <span class="kpi-label">Food Revenue (Net)</span>
                             </div>
                             <div class="kpi-number" id="fin-website-revenue" style="color:var(--brand-gold);">₹0</div>
                             <div class="kpi-footer">
                                 <span style="color:#10b981; font-weight:700;">● Food Sales</span>
-                                <span>Excludes rider delivery fee</span>
+                                <span>Pure item sales</span>
                             </div>
                         </div>
 
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-icon-box green">🛍️</div>
-                                <span class="kpi-label">Total Completed Orders</span>
+                                <span class="kpi-label">Delivered Orders</span>
                             </div>
                             <div class="kpi-number" id="fin-website-orders">0</div>
                             <div class="kpi-footer">
-                                <span style="color:#10b981; font-weight:700;">● Direct Orders</span>
-                                <span>Placed via website</span>
+                                <span style="color:#10b981; font-weight:700;">● Completed</span>
+                                <span>In selected period</span>
                             </div>
                         </div>
 
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-icon-box blue">📊</div>
-                                <span class="kpi-label">Food AOV (Avg Order Value)</span>
+                                <span class="kpi-label">Food AOV</span>
                             </div>
                             <div class="kpi-number" id="fin-website-aov">₹0</div>
                             <div class="kpi-footer">
-                                <span class="kpi-trend up">Avg food item total per order</span>
+                                <span class="kpi-trend up">Avg food per order</span>
+                            </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <div class="kpi-icon-box orange">🛵</div>
+                                <span class="kpi-label">Gross Sales & Fees</span>
+                            </div>
+                            <div class="kpi-number" id="fin-website-gross" style="color:#fff;">₹0</div>
+                            <div class="kpi-footer">
+                                <span id="fin-website-del-fee" style="color:#f59e0b; font-weight:700;">Del Fee: ₹0</span>
                             </div>
                         </div>
                     </div>
@@ -1551,8 +1604,8 @@
                     <div class="card-panel">
                         <div class="card-panel-header">
                             <div>
-                                <h3 class="card-panel-title"><span>🛍️</span> Online Orders Revenue Register</h3>
-                                <p class="card-panel-subtitle">Auto-synced breakdown of food sales, delivery fees (paid to rider), and grand totals.</p>
+                                <h3 class="card-panel-title"><span>🛍️</span> Orders Revenue Register</h3>
+                                <p class="card-panel-subtitle">Itemized breakdown of food sales, delivery charges, discounts, and payment status for the selected timeframe.</p>
                             </div>
                         </div>
 
@@ -1564,7 +1617,7 @@
                                         <th>Date / Time</th>
                                         <th>Customer Details</th>
                                         <th>Items Ordered</th>
-                                        <th>Food Revenue (₹)</th>
+                                        <th>Food (₹)</th>
                                         <th>Delivery Fee (₹)</th>
                                         <th>Grand Total (₹)</th>
                                         <th>Status</th>
@@ -1572,10 +1625,10 @@
                                 </thead>
                                 <tbody id="finance-tbody">
                                     <tr>
-                                        <td colspan="7" style="text-align:center; padding:40px; color:var(--text-muted);">
+                                        <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
                                             <div style="font-size:32px; margin-bottom:8px;">🛒</div>
-                                            <div style="font-size:14px; font-weight:700; color:#fff; margin-bottom:4px;">No Website Orders Yet</div>
-                                            <div style="font-size:12px; color:var(--text-dim);">When customers place orders on the live website, their revenue breakdown and order totals will appear here in real-time.</div>
+                                            <div style="font-size:14px; font-weight:700; color:#fff; margin-bottom:4px;">No Orders in Selected Timeframe</div>
+                                            <div style="font-size:12px; color:var(--text-dim);">When customers place orders, their revenue breakdown and order totals will appear here in real-time.</div>
                                         </td>
                                     </tr>
                                 </tbody>

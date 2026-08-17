@@ -865,31 +865,61 @@ window.openOrderQuickModal = function(orderId) {
                 </div>
             `;
         } else if (status === 'accepted' || status === 'confirmed') {
-            actionCard.innerHTML = `
-                <div style="background:rgba(59,130,246,0.1); border:1.5px solid rgba(59,130,246,0.35); border-radius:14px; padding:16px; text-align:center;">
-                    <div style="font-weight:900; font-size:14px; color:#60a5fa; margin-bottom:12px;">⚡ STEP 2: FOOD READY? ASSIGN RIDER</div>
-                    <button type="button" class="btn btn-primary" style="width:100%; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:13px; border-radius:10px; box-shadow:0 4px 15px rgba(59,130,246,0.4);" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
-                        📦 Assign Delivery Partner & Dispatch →
-                    </button>
-                </div>
-            `;
-        } else if (status === 'dispatched') {
-            const riderName = ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Rider';
-            const riderPhone = ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '';
-            actionCard.innerHTML = `
-                <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px; text-align:center;">
-                    <div style="font-weight:900; font-size:14px; color:#34d399; margin-bottom:6px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
-                    ${riderPhone ? `<div style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:10px;"></div>'}
-                    <div style="display:flex; flex-direction:column; gap:8px;">
-                        <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
-                            🎉 Mark Order Delivered (Completed)
-                        </button>
-                        <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:13px; padding:10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
-                            <span>💬 Send "Thank You & Review" WhatsApp Note</span>
+            const isTakeaway = (ord.orderType === 'takeaway');
+            if (isTakeaway) {
+                actionCard.innerHTML = `
+                    <div style="background:rgba(245,158,11,0.1); border:1.5px solid rgba(245,158,11,0.35); border-radius:14px; padding:16px; text-align:center;">
+                        <div style="font-weight:900; font-size:14px; color:#fbbf24; margin-bottom:12px;">⚡ STEP 2: FOOD PACKED & READY FOR PICKUP?</div>
+                        <button type="button" class="btn btn-primary" style="width:100%; background:linear-gradient(135deg, #f59e0b, #d97706); color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px; box-shadow:0 4px 15px rgba(245,158,11,0.4);" onclick="closeModal('order-quick-modal'); window.markTakeawayReady('${ord._id}');">
+                            🛍️ Mark Ready for Pickup & Notify Customer →
                         </button>
                     </div>
-                </div>
-            `;
+                `;
+            } else {
+                actionCard.innerHTML = `
+                    <div style="background:rgba(59,130,246,0.1); border:1.5px solid rgba(59,130,246,0.35); border-radius:14px; padding:16px; text-align:center;">
+                        <div style="font-weight:900; font-size:14px; color:#60a5fa; margin-bottom:12px;">⚡ STEP 2: FOOD READY? ASSIGN RIDER</div>
+                        <button type="button" class="btn btn-primary" style="width:100%; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:13px; border-radius:10px; box-shadow:0 4px 15px rgba(59,130,246,0.4);" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
+                            📦 Assign Delivery Partner & Dispatch →
+                        </button>
+                    </div>
+                `;
+            }
+        } else if (status === 'dispatched') {
+            const isTakeaway = (ord.orderType === 'takeaway');
+            if (isTakeaway) {
+                actionCard.innerHTML = `
+                    <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px; text-align:center;">
+                        <div style="font-weight:900; font-size:14px; color:#34d399; margin-bottom:6px;">⚡ STEP 3: WAITING FOR CUSTOMER PICKUP</div>
+                        <div style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">Customer notified to collect order from Littiwale counter</div>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
+                                ✅ Mark Picked Up & Completed
+                            </button>
+                            <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:13px; padding:10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px;" onclick="sendTakeawayReadyWhatsApp('${ord._id}')">
+                                <span>💬 Re-Send "Ready for Pickup" Alert on WhatsApp</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                const riderName = ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Rider';
+                const riderPhone = ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '';
+                actionCard.innerHTML = `
+                    <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px; text-align:center;">
+                        <div style="font-weight:900; font-size:14px; color:#34d399; margin-bottom:6px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
+                        ${riderPhone ? `<div style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:10px;"></div>'}
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
+                                🎉 Mark Order Delivered (Completed)
+                            </button>
+                            <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:13px; padding:10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
+                                <span>💬 Send "Thank You & Review" WhatsApp Note</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
         } else if (status === 'delivered') {
             actionCard.innerHTML = `
                 <div style="background:rgba(16,185,129,0.08); border:1.5px solid rgba(16,185,129,0.3); border-radius:14px; padding:16px; text-align:center;">
@@ -952,53 +982,34 @@ window.openOrderQuickModal = function(orderId) {
     if (itemsListEl) {
         const items = ord.items || [];
         if (items.length === 0) {
-            itemsListEl.innerHTML = '<div style="color:var(--text-dim); font-size:12px;">No item details recorded</div>';
+            itemsListEl.innerHTML = '<div style="color:var(--text-dim); font-size:12px; text-align:center;">Custom Items</div>';
         } else {
-            itemsListEl.innerHTML = items.map(it => {
-                const optStr = it.selectedOption ? `<span style="color:#94a3b8; font-size:11px;"> (${it.selectedOption})</span>` : '';
-                const itPrice = it.price ? `₹${it.price * (it.quantity || 1)}` : '';
-                return `
-                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#fff; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
-                        <div>
-                            <strong style="color:var(--brand-orange);">${it.quantity}x</strong>
-                            <span style="font-weight:600;"> ${it.name}</span>
-                            ${optStr}
-                        </div>
-                        <div style="font-weight:700; color:#cbd5e1;">${itPrice}</div>
+            itemsListEl.innerHTML = items.map(it => `
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
+                    <div>
+                        <strong style="color:#fff;">${it.quantity}x</strong> 
+                        <span style="color:#cbd5e1; margin-left:4px;">${it.name}</span>
                     </div>
-                `;
-            }).join('');
+                    <strong style="color:var(--brand-gold);">₹${it.subtotal || (it.price * it.quantity)}</strong>
+                </div>
+            `).join('');
         }
     }
 
-    // 5. Total
-    const totalEl = document.getElementById('quick-order-grand-total');
-    if (totalEl) {
-        const grandTotal = ord.finalTotal || ord.subtotal || 0;
-        totalEl.textContent = `₹${grandTotal}`;
-    }
+    // 5. Grand Total in Summary Box
+    const grandTotalEl = document.getElementById('quick-order-grand-total');
+    if (grandTotalEl) grandTotalEl.textContent = `₹${ord.finalTotal || ord.subtotal || 0}`;
 
-    // 6. Secondary Buttons
+    // 6. Secondary Tool Buttons Setup
     const printKotBtn = document.getElementById('quick-print-kot-btn');
     if (printKotBtn) {
-        printKotBtn.onclick = () => {
-            if (typeof window.printSingleKOT === 'function') {
-                window.printSingleKOT(ord._id);
-            } else {
-                window.openA4InvoiceModal(ord._id);
-            }
-        };
+        printKotBtn.onclick = () => window.openThermalKotModal(ord);
     }
-
     const printBillBtn = document.getElementById('quick-print-bill-btn');
     if (printBillBtn) {
-        printBillBtn.onclick = () => {
-            closeModal('order-quick-modal');
-            window.openA4InvoiceModal(ord._id);
-        };
+        printBillBtn.onclick = () => window.openA4InvoiceModal(ord);
     }
 
-    // Open Modal
     openModal('order-quick-modal');
 };
 
@@ -1013,8 +1024,8 @@ window.recalcQuickDelCharge = function(orderId) {
     const delCharge = isTakeaway ? 0 : (Number(document.getElementById('quick-del-charge-input')?.value) || 0);
     const finalTotal = Math.max(0, subtotal - discount + delCharge);
 
-    const grandTotalVal = document.getElementById('quick-grand-total-val');
-    if (grandTotalVal) grandTotalVal.textContent = `₹${finalTotal}`;
+    const grandTotalEl = document.getElementById('quick-grand-total-val');
+    if (grandTotalEl) grandTotalEl.textContent = `₹${finalTotal}`;
 
     const mainTotalEl = document.getElementById('quick-order-grand-total');
     if (mainTotalEl) mainTotalEl.textContent = `₹${finalTotal}`;
@@ -1049,7 +1060,7 @@ window.confirmQuickOrder = async function(orderId) {
         });
 
         if (res.ok) {
-            window.showAdminToast(`✅ Order #${String(order._id).slice(-6).toUpperCase()} Confirmed with Delivery Fee ₹${delCharge}!`, 'success');
+            window.showAdminToast(`✅ Order #${String(order._id).slice(-6).toUpperCase()} Confirmed!`, 'success');
             closeModal('order-quick-modal');
             window.fetchAndRenderOrders();
 
@@ -1066,21 +1077,23 @@ window.confirmQuickOrder = async function(orderId) {
 
             const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
             const locationInfo = isTakeaway 
-                ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
+                ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
                 : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+
+            const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
 
             const msg = `${orderTypeHeader}\n\n` +
                         `Hi *${order.customerName || 'Customer'}*,\n` +
-                        `Thank you! Your order *#${shortId}* has been accepted and is now cooking hot in our kitchen! 🍳🔥\n\n` +
+                        `Thank you! Your order *#${shortId}* has been accepted and is now cooking fresh in our kitchen! 👨‍🍳🔥\n\n` +
                         `${locationInfo}\n\n` +
                         `*📋 Order Items:*\n${itemsList}\n\n` +
                         `*💰 Bill Breakdown:*\n` +
                         `• Food Items Subtotal: ₹${subtotal}\n` +
                         (discount > 0 ? `• Discount: -₹${discount}\n` : '') +
-                        (!isTakeaway ? `• Delivery Fee: ₹${delCharge}\n` : '') +
-                        `*👉 Grand Total Payable: ₹${finalTotal}*\n\n` +
-                        `*🔴 Live Tracking Link:* ${trackingLink}\n\n` +
-                        `We will notify you the moment your food is out for delivery! ❤️`;
+                        (isTakeaway ? `• Delivery Charge: ₹0 (Self Pickup)\n` : `• Delivery Charge: ₹${delCharge}\n`) +
+                        `*👉 Grand Total: ₹${finalTotal} (${paymentNote})*\n\n` +
+                        `*🔴 Live Order Tracking & Bill:* ${trackingLink}\n\n` +
+                        (isTakeaway ? `We look forward to serving you at our counter. See you shortly! ❤️\n*— Team Littiwale Barbil*` : `We will notify you the moment your food is out for delivery! ❤️\n*— Team Littiwale Barbil*`);
 
             if (rawPhone) {
                 const waUrl = `https://wa.me/91${rawPhone}?text=${encodeURIComponent(msg)}`;
@@ -1160,6 +1173,7 @@ function renderOrdersTable(filterQuery = '') {
         const rawPhone = targetPhone.replace(/\D/g, '').slice(-10);
 
         let actionBtnHtml = '';
+        const isTakeaway = (ord.orderType === 'takeaway');
         if (status === 'pending') {
             actionBtnHtml = `
                 <button type="button" class="btn btn-sm btn-primary" style="padding:6px 12px; font-size:11.5px; font-weight:800; background:#25d366; color:#000;" onclick="openOrderConfirmModal('${ord._id}')" title="Confirm Order & Reply via WhatsApp">
@@ -1170,26 +1184,51 @@ function renderOrdersTable(filterQuery = '') {
                 </button>
             `;
         } else if (status === 'accepted' || status === 'confirmed') {
-            actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:700; background:#3b82f6; color:#fff;" onclick="openDispatchModal('${ord._id}')" title="Mark Out for Delivery & Assign Rider">
-                    📦 Dispatch
-                </button>
-                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
-                    👁️
-                </button>
-                <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Cancel Order">
-                    ✕
-                </button>
-            `;
+            if (isTakeaway) {
+                actionBtnHtml = `
+                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#f59e0b; color:#000;" onclick="markTakeawayReady('${ord._id}')" title="Mark Food Ready for Pickup & Send WhatsApp Alert">
+                        🛍️ Ready
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
+                        👁️
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Cancel Order">
+                        ✕
+                    </button>
+                `;
+            } else {
+                actionBtnHtml = `
+                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:700; background:#3b82f6; color:#fff;" onclick="openDispatchModal('${ord._id}')" title="Mark Out for Delivery & Assign Rider">
+                        📦 Dispatch
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
+                        👁️
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Cancel Order">
+                        ✕
+                    </button>
+                `;
+            }
         } else if (status === 'dispatched') {
-            actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);" title="Mark Order Delivered & Open Thank You WhatsApp">
-                    🎉 Deliver
-                </button>
-                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
-                    👁️
-                </button>
-            `;
+            if (isTakeaway) {
+                actionBtnHtml = `
+                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);" title="Mark Order Picked Up & Send Thank You Note">
+                        ✅ Picked Up
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
+                        👁️
+                    </button>
+                `;
+            } else {
+                actionBtnHtml = `
+                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);" title="Mark Order Delivered & Open Thank You WhatsApp">
+                        🎉 Deliver
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
+                        👁️
+                    </button>
+                `;
+            }
         } else if (status === 'delivered') {
             actionBtnHtml = `
                 <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#25d366; color:#000;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')" title="Send Thank You & Review Note on WhatsApp">
@@ -1265,14 +1304,112 @@ window.directUpdateOrderStatus = async function(orderId, newStatus) {
     }
 };
 
+window.currentRevenueTimeframe = 'daily';
+window.customRevenueFromDate = null;
+window.customRevenueToDate = null;
+
+window.setRevenueTimeframe = function(timeframe) {
+    window.currentRevenueTimeframe = timeframe;
+
+    // Update active tab buttons styling
+    const tabs = ['daily', 'weekly', 'monthly', 'yearly', 'all', 'custom'];
+    tabs.forEach(t => {
+        const btn = document.getElementById(`rev-tab-${t}`);
+        if (btn) {
+            if (t === timeframe) {
+                btn.style.background = 'var(--brand-orange)';
+                btn.style.color = '#fff';
+                btn.style.fontWeight = '800';
+            } else {
+                btn.style.background = 'transparent';
+                btn.style.color = '#cbd5e1';
+                btn.style.fontWeight = '700';
+            }
+        }
+    });
+
+    const customDateWrap = document.getElementById('rev-custom-date-container');
+    if (customDateWrap) {
+        customDateWrap.style.display = (timeframe === 'custom') ? 'flex' : 'none';
+    }
+
+    if (timeframe !== 'custom') {
+        renderWebsiteRevenue();
+    }
+};
+
+window.applyCustomRevenueFilter = function() {
+    const fromInput = document.getElementById('rev-custom-from-date');
+    const toInput = document.getElementById('rev-custom-to-date');
+    const fromVal = fromInput ? fromInput.value : '';
+    const toVal = toInput ? toInput.value : '';
+
+    if (!fromVal || !toVal) {
+        window.showAdminToast('Please select both From and To dates', 'warning');
+        return;
+    }
+
+    window.customRevenueFromDate = new Date(fromVal);
+    window.customRevenueFromDate.setHours(0, 0, 0, 0);
+
+    window.customRevenueToDate = new Date(toVal);
+    window.customRevenueToDate.setHours(23, 59, 59, 999);
+
+    if (window.customRevenueFromDate > window.customRevenueToDate) {
+        window.showAdminToast('From Date cannot be after To Date', 'error');
+        return;
+    }
+
+    const badge = document.getElementById('rev-custom-range-badge');
+    if (badge) {
+        badge.textContent = `(${new Date(fromVal).toLocaleDateString([], { month: 'short', day: 'numeric' })} — ${new Date(toVal).toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+    }
+
+    renderWebsiteRevenue();
+};
+
 window.loadFinanceData = function() {
     renderWebsiteRevenue();
 };
 
 function renderWebsiteRevenue() {
-    const orders = window.cachedOrders || [];
+    const allOrders = window.cachedOrders || [];
+    const now = new Date();
+    const timeframe = window.currentRevenueTimeframe || 'daily';
+
+    let activePeriodLabel = 'Today';
+    let filteredOrders = allOrders;
+
+    if (timeframe === 'daily') {
+        const todayStr = now.toDateString();
+        filteredOrders = allOrders.filter(o => o.createdAt && new Date(o.createdAt).toDateString() === todayStr);
+        activePeriodLabel = `Today (${now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })})`;
+    } else if (timeframe === 'weekly') {
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        filteredOrders = allOrders.filter(o => o.createdAt && new Date(o.createdAt) >= sevenDaysAgo);
+        activePeriodLabel = `Last 7 Days (${sevenDaysAgo.toLocaleDateString([], { month: 'short', day: 'numeric' })} — ${now.toLocaleDateString([], { month: 'short', day: 'numeric' })})`;
+    } else if (timeframe === 'monthly') {
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        filteredOrders = allOrders.filter(o => o.createdAt && new Date(o.createdAt) >= thirtyDaysAgo);
+        activePeriodLabel = `This Month (${now.toLocaleDateString([], { month: 'long', year: 'numeric' })})`;
+    } else if (timeframe === 'yearly') {
+        const currentYear = now.getFullYear();
+        filteredOrders = allOrders.filter(o => o.createdAt && new Date(o.createdAt).getFullYear() === currentYear);
+        activePeriodLabel = `Year ${currentYear} (All Months)`;
+    } else if (timeframe === 'all') {
+        filteredOrders = allOrders;
+        activePeriodLabel = `All Time (Lifetime Orders)`;
+    } else if (timeframe === 'custom' && window.customRevenueFromDate && window.customRevenueToDate) {
+        filteredOrders = allOrders.filter(o => {
+            if (!o.createdAt) return false;
+            const oDate = new Date(o.createdAt);
+            return oDate >= window.customRevenueFromDate && oDate <= window.customRevenueToDate;
+        });
+        activePeriodLabel = `Custom: ${window.customRevenueFromDate.toLocaleDateString([], { month: 'short', day: 'numeric' })} — ${window.customRevenueToDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+    }
+
     // Only count DELIVERED orders towards revenue & completed orders count
-    const deliveredOrders = orders.filter(o => o.status === 'delivered');
+    const deliveredOrders = filteredOrders.filter(o => o.status === 'delivered');
     const totalDeliveredOrders = deliveredOrders.length;
     
     let totalFoodRevenue = 0; // Pure Food Item Net Revenue (excl. delivery fee)
@@ -1296,36 +1433,60 @@ function renderWebsiteRevenue() {
 
     const foodAov = totalDeliveredOrders > 0 ? Math.round(totalFoodRevenue / totalDeliveredOrders) : 0;
 
+    // Update Period Labels
+    const periodLabelEl = document.getElementById('rev-active-period-label');
+    if (periodLabelEl) periodLabelEl.textContent = activePeriodLabel;
+
+    const countLabelEl = document.getElementById('rev-filtered-count-label');
+    if (countLabelEl) countLabelEl.textContent = `${totalDeliveredOrders} Delivered Orders (${filteredOrders.length} Total)`;
+
+    // Update KPI Cards
     const elWebRev = document.getElementById('fin-website-revenue');
     if (elWebRev) elWebRev.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
 
     const elWebOrd = document.getElementById('fin-website-orders');
-    if (elWebOrd) elWebOrd.textContent = `${totalDeliveredOrders} delivered orders`;
+    if (elWebOrd) elWebOrd.textContent = `${totalDeliveredOrders}`;
 
     const elWebAov = document.getElementById('fin-website-aov');
     if (elWebAov) elWebAov.textContent = `₹${foodAov}`;
 
+    const elWebGross = document.getElementById('fin-website-gross');
+    if (elWebGross) elWebGross.textContent = `₹${totalGrandSales.toLocaleString('en-IN')}`;
+
+    const elWebDelFee = document.getElementById('fin-website-del-fee');
+    if (elWebDelFee) elWebDelFee.textContent = `Rider Fees: ₹${totalDeliveryFee.toLocaleString('en-IN')}`;
+
+    // Overall Dashboard Total KPI update (shows Today's or Lifetime)
     const elDashRev = document.getElementById('kpi-revenue');
-    if (elDashRev) elDashRev.textContent = `₹${totalFoodRevenue.toLocaleString('en-IN')}`;
+    if (elDashRev) {
+        // Compute today's revenue for top dashboard card
+        const todayDelivered = allOrders.filter(o => o.status === 'delivered' && o.createdAt && new Date(o.createdAt).toDateString() === now.toDateString());
+        let todayFood = 0;
+        todayDelivered.forEach(o => {
+            const net = Math.max(0, Number(o.subtotal || 0) - Number(o.discount || 0)) || (o.finalTotal ? Math.max(0, Number(o.finalTotal) - Number(o.deliveryCharge || 0)) : 0);
+            todayFood += net;
+        });
+        elDashRev.textContent = `₹${todayFood.toLocaleString('en-IN')}`;
+    }
 
     const elDashOrd = document.getElementById('kpi-orders-count');
-    if (elDashOrd) elDashOrd.textContent = `${totalDeliveredOrders} delivered orders`;
+    if (elDashOrd) elDashOrd.textContent = `${allOrders.filter(o => o.status === 'delivered').length} total delivered`;
 
-    // Render Detailed Finance Register Table
+    // Render Detailed Finance Register Table for Filtered Orders
     const finTbody = document.getElementById('finance-tbody');
     if (finTbody) {
-        if (orders.length === 0) {
+        if (filteredOrders.length === 0) {
             finTbody.innerHTML = `
                 <tr>
                     <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
                         <div style="font-size:32px; margin-bottom:8px;">🛒</div>
-                        <div style="font-size:14px; font-weight:700; color:#fff; margin-bottom:4px;">No Website Orders Yet</div>
-                        <div style="font-size:12px; color:var(--text-dim);">When customers place orders, their food revenue and delivery fee breakdown will appear here in real-time.</div>
+                        <div style="font-size:14px; font-weight:700; color:#fff; margin-bottom:4px;">No Orders in ${activePeriodLabel}</div>
+                        <div style="font-size:12px; color:var(--text-dim);">No customer orders were placed in this selected timeframe. Try choosing another timeframe tab.</div>
                     </td>
                 </tr>
             `;
         } else {
-            finTbody.innerHTML = orders.map(ord => {
+            finTbody.innerHTML = filteredOrders.map(ord => {
                 const orderId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
                 const dateStr = ord.createdAt ? new Date(ord.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Today';
                 const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Custom items';
@@ -1334,21 +1495,22 @@ function renderWebsiteRevenue() {
                 const netFood = Math.max(0, itemSubtotal - discount) || (ord.finalTotal ? Math.max(0, Number(ord.finalTotal) - Number(ord.deliveryCharge || 0)) : 0);
                 const delFee = Number(ord.deliveryCharge || 0);
                 const grandTotal = Number(ord.finalTotal || (netFood + delFee));
-                const statusBadge = ord.status === 'delivered' ? 'badge-open' : (ord.status === 'cancelled' ? 'badge-closed' : (ord.status === 'accepted' ? 'badge-active' : 'badge-new'));
+                const status = (ord.status || 'pending').toLowerCase();
+                const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
 
                 return `
-                    <tr>
+                    <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Click to view order details">
                         <td style="font-family:monospace; font-weight:800; color:var(--brand-orange);">#${orderId}</td>
                         <td style="font-size:11.5px; color:var(--text-dim);">${dateStr}</td>
                         <td>
                             <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
-                            <div style="font-size:11px; color:var(--text-muted);">${ord.customerPhone || 'N/A'}</div>
+                            <div style="font-size:11px; color:var(--text-muted);">${ord.customerPhone || 'N/A'} • <span style="color:var(--brand-gold); text-transform:capitalize;">${ord.orderType || 'delivery'}</span></div>
                         </td>
                         <td style="max-width:200px; font-size:12px;" title="${itemsStr}">${itemsStr}</td>
                         <td style="font-weight:800; color:var(--brand-gold);">₹${netFood}</td>
                         <td style="color:var(--brand-orange); font-weight:600;">₹${delFee}</td>
                         <td style="font-weight:900; color:#fff;">₹${grandTotal}</td>
-                        <td><span class="badge ${statusBadge}">${ord.status || 'pending'}</span></td>
+                        <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
                     </tr>
                 `;
             }).join('');
@@ -5043,31 +5205,36 @@ window.confirmOrderAndWhatsApp = async function() {
             closeModal('order-confirm-modal');
             window.fetchAndRenderOrders();
 
-            // Build formatted WhatsApp confirmation message
+            // Build formatted WhatsApp confirmation message in clean English
             const shortId = String(order._id).slice(-6).toUpperCase();
             const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Order Items';
             
-            // Send to customer's WhatsApp phone (or calling phone as fallback)
             const targetPhone = order.whatsappPhone || order.customerPhone || '';
             const rawPhone = String(targetPhone).replace(/\D/g, '');
             const cleanPhone = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
 
             const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
-            const locationInfo = isTakeaway ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+            const locationInfo = isTakeaway 
+                ? `*📍 Pickup Counter:* Littiwale Counter, Near Barbil Court, Rabisons Mall\n*⏱️ Ready for Pickup in:* ${estTime}` 
+                : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
             const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') : 'https://littiwale-barbil.vercel.app';
             const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
+            const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
+
             const msg = `${orderTypeHeader}\n\n` +
                         `Hi *${order.customerName || 'Customer'}*,\n` +
-                        `Your order *#${shortId}* has been accepted and is now being prepared fresh! 👨‍🍳🔥\n\n` +
-                        `*📋 Order Items:*\n${itemsList}\n\n` +
-                        `*Items Total:* ₹${subtotal}\n` +
-                        (isTakeaway ? `*Delivery Fee:* ₹0 (Self Pickup)\n` : `*Delivery Fee:* ₹${delCharge}\n`) +
-                        `*Grand Total Payable:* ₹${finalTotal} (${order.paymentMethod || 'COD'})\n\n` +
+                        `Thank you! Your order *#${shortId}* has been accepted and is now cooking fresh in our kitchen! 👨‍🍳🔥\n\n` +
                         `${locationInfo}\n\n` +
-                        `*🧾 Live Status & Download Bill:* ${trackingLink}\n\n` +
-                        (isTakeaway ? `We look forward to serving you at our kitchen counter. Thank you for choosing *Littiwale*! ❤️` : `Your hot delicious food is on the way. Thank you for ordering from *Littiwale*! ❤️`);
+                        `*📋 Order Items:*\n${itemsList}\n\n` +
+                        `*💰 Bill Breakdown:*\n` +
+                        `• Food Items Subtotal: ₹${subtotal}\n` +
+                        (discount > 0 ? `• Discount: -₹${discount}\n` : '') +
+                        (isTakeaway ? `• Delivery Charge: ₹0 (Self Pickup)\n` : `• Delivery Charge: ₹${delCharge}\n`) +
+                        `*👉 Grand Total: ₹${finalTotal} (${paymentNote})*\n\n` +
+                        `*🔴 Live Order Tracking & Bill:* ${trackingLink}\n\n` +
+                        (isTakeaway ? `We look forward to serving you at our counter. See you shortly! ❤️\n*— Team Littiwale Barbil*` : `We will notify you the moment your food is out for delivery! ❤️\n*— Team Littiwale Barbil*`);
 
             const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`;
             window.open(whatsappUrl, '_blank');
@@ -5369,22 +5536,30 @@ window.sendDeliveryBoyDispatchWhatsApp = function() {
     const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Food Items';
     
     const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
-    const finalTotal = Number(order.finalTotal || order.subtotal || 0);
+    const subtotal = Number(order.subtotal || order.finalTotal || 0);
+    const delCharge = Number(order.deliveryCharge || 0);
+    const discount = Number(order.discount || 0);
+    const finalTotal = Number(order.finalTotal || (subtotal - discount + delCharge));
 
     const paymentInstruction = isPrepaid 
-        ? `👉 *[ ₹0 — ALREADY PAID / RECEIVED AT RESTAURANT ]*`
-        : `👉 *[ COLLECT ₹${finalTotal} CASH FROM CUSTOMER ]*`;
+        ? `👉 *[ ₹0 — ALREADY PAID ONLINE ✅ DO NOT COLLECT CASH ]*`
+        : `👉 *[ COLLECT ₹${finalTotal} CASH FROM CUSTOMER ]* 💵\n(Total includes Food ₹${subtotal} + Delivery ₹${delCharge})`;
 
     const gpsLine = order.gpsLink ? `\n*📍 Google Maps:* ${order.gpsLink}` : '';
 
-    const slip = `📦 *NEW DELIVERY ASSIGNED — LITTIWALE BARBIL*\n\n` +
+    const slip = `📦 *NEW DELIVERY TASK — LITTIWALE BARBIL*\n\n` +
                  `*Order ID:* *#${shortId}*\n` +
                  `*Customer Name:* *${order.customerName || 'Customer'}*\n` +
                  `*Customer Phone:* +91 ${order.customerPhone || 'N/A'}\n` +
                  `*Delivery Address:* ${order.deliveryAddress || 'Barbil'}${order.landmark ? ` (Landmark: ${order.landmark})` : ''}${gpsLine}\n\n` +
                  `*📋 Order Items:*\n${itemsList}\n\n` +
-                 `*💰 PAYMENT TO COLLECT:*\n${paymentInstruction}\n\n` +
-                 `⚠️ *Please deliver steaming hot & safely!* 🚀`;
+                 `*💰 BILL BREAKDOWN:*\n` +
+                 `• Food Items: ₹${subtotal}\n` +
+                 `• Delivery Charge: ₹${delCharge}\n` +
+                 (discount > 0 ? `• Discount: -₹${discount}\n` : '') +
+                 `• Total Order Value: ₹${finalTotal}\n\n` +
+                 `*💳 PAYMENT INSTRUCTION:*\n${paymentInstruction}\n\n` +
+                 `⚠️ *Please deliver steaming hot, safely & verify customer phone before handover!* 🚀`;
 
     const cleanRiderPhone = String(rider.phone).replace(/\D/g, '').slice(-10);
     const waUrl = `https://wa.me/91${cleanRiderPhone}?text=${encodeURIComponent(slip)}`;
@@ -5411,20 +5586,90 @@ window.sendCustomerDispatchWhatsApp = function() {
     const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') : 'https://littiwale-barbil.vercel.app';
     const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
-    const msg = `🛵 *YOUR ORDER IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
+    const msg = `🛵 *YOUR FOOD IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
                 `Hi *${order.customerName || 'Customer'}*,\n` +
-                `Great news! Your order *#${shortId}* has been freshly packed and is out for delivery! 💨\n\n` +
+                `Great news! Your order *#${shortId}* is freshly packed and has left the kitchen! 💨\n\n` +
                 `*🛵 Delivery Partner:* *${rider.name}*\n` +
-                `*📞 Contact Number:* +91 ${rider.phone}\n\n` +
+                `*📞 Rider Contact:* +91 ${rider.phone}\n\n` +
                 `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n` +
                 `*💰 Amount to Pay:* ${paymentStatusText}\n\n` +
                 `*🔴 Live Track Your Order:* ${trackingLink}\n\n` +
-                `For any delivery assistance, please feel free to call our delivery partner directly. Thank you for choosing *Littiwale*! ❤️`;
+                `For any delivery assistance, feel free to call our rider directly. Enjoy your meal! ❤️\n` +
+                `*— Team Littiwale Barbil*`;
 
     if (cleanCustPhone) {
         const waUrl = `https://wa.me/91${cleanCustPhone}?text=${encodeURIComponent(msg)}`;
         window.open(waUrl, '_blank');
         window.showAdminToast(`💬 "Out for Delivery" note opened for Customer!`, 'success');
+    } else {
+        window.showAdminToast('Customer phone number unavailable', 'warning');
+    }
+};
+
+window.markTakeawayReady = async function(orderId) {
+    const orders = window.cachedOrders || [];
+    const order = (orderId ? (orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId))) : null) || window.currentSelectedOrder;
+    if (!order || !order._id) return;
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/orders/${order._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({
+                status: 'dispatched',
+                dispatchedAt: new Date()
+            })
+        });
+        if (res.ok) {
+            window.showAdminToast(`🛍️ Order #${String(order._id).slice(-6).toUpperCase()} marked Ready for Pickup!`, 'success');
+            closeModal('order-confirm-modal');
+            closeModal('order-quick-modal');
+            window.fetchAndRenderOrders();
+            window.sendTakeawayReadyWhatsApp(order._id);
+        } else {
+            window.showAdminToast('Failed to update status. Verify Admin PIN.', 'error');
+        }
+    } catch(e) {
+        console.error('Mark takeaway ready error:', e);
+        window.showAdminToast('Error marking order ready', 'error');
+    }
+};
+
+window.sendTakeawayReadyWhatsApp = function(orderId) {
+    const orders = window.cachedOrders || [];
+    const order = (orderId ? (orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId))) : null) || window.currentSelectedOrder;
+    if (!order || !order._id) return;
+
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const targetPhone = order.whatsappPhone || order.customerPhone || '';
+    const cleanCustPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
+    const custName = order.customerName || 'Customer';
+    const finalTotal = Number(order.finalTotal || order.subtotal || 0);
+    const isPrepaid = order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full');
+    const paymentText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (Pay at Counter 💵)`;
+
+    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
+        ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
+        : 'https://littiwale-barbil.vercel.app';
+    const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
+
+    const msg = `🛍️ *YOUR ORDER IS READY FOR PICKUP! — LITTIWALE BARBIL*\n\n` +
+                `Hi *${custName}*,\n` +
+                `Your order *#${shortId}* has been freshly packed, hot and ready for collection! 🍱🔥\n\n` +
+                `*📍 Pickup Location:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n` +
+                `*💰 Amount to Pay at Counter:* ${paymentText}\n\n` +
+                `*🔴 View Order Slip:* ${trackingLink}\n\n` +
+                `Please visit our cloud kitchen and share your Order ID (*#${shortId}*) to collect your hot meal. Thank you! ❤️\n` +
+                `*— Team Littiwale Barbil*`;
+
+    if (cleanCustPhone) {
+        const waUrl = `https://wa.me/91${cleanCustPhone}?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+        window.showAdminToast(`💬 "Ready for Pickup" alert opened for ${custName}!`, 'success');
     } else {
         window.showAdminToast('Customer phone number unavailable', 'warning');
     }
@@ -5449,12 +5694,12 @@ window.sendCustomerDeliveredWhatsApp = function(orderId) {
 
     const msg = `🎉 *ORDER DELIVERED — THANK YOU FOR CHOOSING LITTIWALE!* ❤️\n\n` +
                 `Dear *${custName}*,\n` +
-                `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been delivered successfully! 🍽️\n\n` +
-                `We hope you enjoy every single bite! 🔥\n\n` +
-                `⭐ *Rate Your Food Experience:*\n` +
-                `If you loved the taste & service, please take 10 seconds to give Littiwale Cloud Kitchen a 5-star Google review:\n` +
+                `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been completed! 🍽️\n\n` +
+                `We hope you enjoyed every authentic bite of our traditional litti! 🔥\n\n` +
+                `⭐ *Rate Your Experience:*\n` +
+                `Loved our food & service? Please take 10 seconds to give Littiwale a 5-star Google review:\n` +
                 `👉 https://g.page/r/CYlrxD6jO24cEAE/review\n\n` +
-                `🍴 *Hungry Again? Order Next Meal Here:*\n` +
+                `🍴 *Order Again:*\n` +
                 `🌐 ${baseUrl}\n\n` +
                 `Thank you once again & see you soon!\n` +
                 `*— Team Littiwale Barbil*`;
@@ -5552,22 +5797,29 @@ window.executeWhatsAppAction = function(actionType) {
     if (actionType === 'confirmed') {
         const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
         const locationInfo = isTakeaway 
-            ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
+            ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
             : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+
+        const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
 
         msg = `${orderTypeHeader}\n\n` +
               `Hi *${custName}*,\n` +
-              `Thank you! Your order *#${shortId}* has been accepted and is now cooking hot in our kitchen! 🍳🔥\n\n` +
+              `Thank you! Your order *#${shortId}* has been accepted and is now cooking fresh in our kitchen! 👨‍🍳🔥\n\n` +
               `${locationInfo}\n\n` +
               `*📋 Order Items:*\n${itemsList}\n\n` +
               `*💰 Bill Breakdown:*\n` +
               `• Food Items Subtotal: ₹${subtotal}\n` +
               (discount > 0 ? `• Discount: -₹${discount}\n` : '') +
-              (!isTakeaway ? `• Delivery Fee: ₹${delCharge}\n` : '') +
-              `*👉 Grand Total Payable: ₹${finalTotal} (${order.paymentMethod || 'COD'})*\n\n` +
+              (isTakeaway ? `• Delivery Charge: ₹0 (Self Pickup)\n` : `• Delivery Charge: ₹${delCharge}\n`) +
+              `*👉 Grand Total Payable: ₹${finalTotal} (${paymentNote})*\n\n` +
               `*🔴 Live Tracking Link:* ${trackingLink}\n\n` +
-              (isTakeaway ? `We look forward to serving you at our kitchen counter. Thank you for choosing *Littiwale*! ❤️` : `We will notify you the moment your food is out for delivery! ❤️`);
+              (isTakeaway ? `We look forward to serving you at our counter. See you shortly! ❤️\n*— Team Littiwale Barbil*` : `We will notify you the moment your food is out for delivery! ❤️\n*— Team Littiwale Barbil*`);
     } else if (actionType === 'dispatch') {
+        if (isTakeaway) {
+            window.sendTakeawayReadyWhatsApp(order._id);
+            closeModal('order-whatsapp-action-modal');
+            return;
+        }
         const riderName = order.deliveryBoy?.name || order.assignedDeliveryBoy?.name || order.deliveryBoyName || 'Littiwale Direct Delivery';
         const rawRiderPhone = order.deliveryBoy?.phone || order.assignedDeliveryBoy?.phone || order.deliveryBoyPhone || '6370680744';
         const riderPhone = String(rawRiderPhone).replace(/\D/g, '').slice(-10) || '6370680744';
@@ -5575,7 +5827,7 @@ window.executeWhatsAppAction = function(actionType) {
         const isPrepaid = order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full');
         const paymentStatusText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (${order.paymentMethod || 'Cash on Delivery'} 💵)`;
 
-        msg = `🛵 *YOUR ORDER IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
+        msg = `🛵 *YOUR FOOD IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
               `Hi *${custName}*,\n` +
               `Great news! Your order *#${shortId}* has been freshly packed and is out for delivery! 💨\n\n` +
               `*🛵 Delivery Contact:* *${riderName}*\n` +
@@ -5583,16 +5835,17 @@ window.executeWhatsAppAction = function(actionType) {
               `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n` +
               `*💰 Amount to Pay:* ${paymentStatusText}\n\n` +
               `*🔴 Live Track Your Order:* ${trackingLink}\n\n` +
-              `For any delivery assistance, please feel free to call our delivery contact directly. Thank you for choosing *Littiwale*! ❤️`;
+              `For any delivery assistance, please feel free to call our delivery contact directly. Thank you for choosing *Littiwale*! ❤️\n` +
+              `*— Team Littiwale Barbil*`;
     } else if (actionType === 'delivered') {
         msg = `🎉 *ORDER DELIVERED — THANK YOU FOR CHOOSING LITTIWALE!* ❤️\n\n` +
               `Dear *${custName}*,\n` +
-              `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been delivered successfully! 🍽️\n\n` +
-              `We hope you enjoy every single bite! 🔥\n\n` +
-              `⭐ *Rate Your Food Experience:*\n` +
-              `If you loved the taste & service, please take 10 seconds to give Littiwale Cloud Kitchen a 5-star Google review:\n` +
+              `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been completed! 🍽️\n\n` +
+              `We hope you enjoyed every authentic bite of our traditional litti! 🔥\n\n` +
+              `⭐ *Rate Your Experience:*\n` +
+              `If you loved the taste & service, please take 10 seconds to give Littiwale a 5-star Google review:\n` +
               `👉 https://g.page/r/CYlrxD6jO24cEAE/review\n\n` +
-              `🍴 *Hungry Again? Order Next Meal Here:*\n` +
+              `🍴 *Order Again:*\n` +
               `🌐 ${baseUrl}\n\n` +
               `Thank you once again & see you soon!\n` +
               `*— Team Littiwale Barbil*`;
@@ -5603,7 +5856,8 @@ window.executeWhatsAppAction = function(actionType) {
               `We regret to inform you that your order *#${shortId}* could not be processed at this time.\n\n` +
               `*Reason:* ${cancelReason}\n\n` +
               `We sincerely apologize for the inconvenience caused. If you have already completed an online payment, our team will initiate your refund promptly.\n\n` +
-              `For any queries or direct assistance, please reply to this WhatsApp message. Thank you for your understanding! 🙏`;
+              `For any queries or direct assistance, please reply to this WhatsApp message. Thank you for your understanding! 🙏\n` +
+              `*— Team Littiwale Barbil*`;
     }
 
     if (msg) {

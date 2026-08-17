@@ -2819,7 +2819,39 @@ td strong {
   .slider-toggle:before {
     height: 12px !important;
     width: 12px !important;
-    bottom: 2px !important;
-    left: 2px !important;
+  /* Full-bleed, touch-friendly modal experience on mobile */
+  .modal {
+    padding: 10px !important;
+    align-items: flex-end !important;
+  }
+  .modal-content {
+    max-width: 100% !important;
+    max-height: 88vh !important;
+    border-radius: 18px 18px 12px 12px !important;
+    margin-bottom: 0 !important;
+  }
+  .modal-header {
+    padding: 14px 16px !important;
+  }
+  .modal-title {
+    font-size: 15px !important;
+  }
+  #order-confirm-modal .modal-content > div:nth-child(2),
+  #order-dispatch-modal .modal-content > div:nth-child(2),
+  #order-quick-modal .modal-content > div:nth-child(2) {
+    padding: 14px 16px !important;
+  }
+  #quick-order-primary-action-card,
+  #ord-modal-action-buttons {
+    width: 100% !important;
+  }
+  #quick-order-primary-action-card button,
+  #ord-modal-action-buttons button {
+    width: 100% !important;
+    min-height: 44px !important;
+    font-size: 13px !important;
+  }
+  #dispatch-custom-rider-fields {
+    grid-template-columns: 1fr !important;
   }
 }
