@@ -302,7 +302,10 @@
                                     <span style="font-size:16px;">🔔</span>
                                     <strong style="font-size:13.5px; color:#fff;">Live Order Alerts</strong>
                                 </div>
-                                <span class="notif-badge" id="notif-unread-count">0 New</span>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span class="notif-badge" id="notif-unread-count">0 New</span>
+                                    <button type="button" onclick="closeOrderNotifications()" style="background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:2px 6px; line-height:1;" title="Close Notifications">✕</button>
+                                </div>
                             </div>
                             <div class="notif-body" id="notif-list-container">
                                 <div class="notif-empty">

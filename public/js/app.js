@@ -754,11 +754,14 @@ window.renderOrderNotifications = function() {
     }
 };
 
+let lastNotifToggleTime = 0;
+
 window.toggleOrderNotificationsDropdown = function(e) {
     if (e) {
         e.preventDefault();
         e.stopPropagation();
     }
+    lastNotifToggleTime = Date.now();
     const drop = document.getElementById('order-notifications-dropdown');
     if (drop) {
         window.renderOrderNotifications();
@@ -781,10 +784,12 @@ window.openAllOrdersSection = function() {
 };
 
 document.addEventListener('click', (e) => {
+    // If toggled within last 350ms, ignore document-level click to prevent immediate re-closing on mobile touch
+    if (Date.now() - lastNotifToggleTime < 350) return;
+
     const drop = document.getElementById('order-notifications-dropdown');
-    const bellBtn = document.getElementById('header-notification-btn') || e.target.closest('.header-icon-btn');
     if (drop && drop.classList.contains('show')) {
-        if (!drop.contains(e.target) && (!bellBtn || !bellBtn.contains(e.target))) {
+        if (!drop.contains(e.target) && !e.target.closest('#header-notification-btn') && !e.target.closest('.header-icon-btn')) {
             drop.classList.remove('show');
         }
     }

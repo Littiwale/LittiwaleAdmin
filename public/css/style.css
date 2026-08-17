@@ -2768,12 +2768,16 @@ td strong {
   /* Fixed mobile notification dropdown within screen frame */
   #order-notifications-dropdown {
     position: fixed !important;
-    top: 60px !important;
+    top: 55px !important;
     left: 10px !important;
     right: 10px !important;
     width: auto !important;
     max-width: calc(100vw - 20px) !important;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95) !important;
+    max-height: 82vh !important;
+    background: #14141c !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.16) !important;
+    box-shadow: 0 25px 70px rgba(0, 0, 0, 0.98) !important;
+    z-index: 9999999 !important;
   }
 
   /* Compact Store Status Toggle for Mobile */
