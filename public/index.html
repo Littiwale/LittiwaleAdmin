@@ -291,9 +291,9 @@
 
                     <!-- Notification Bell & Dynamic Live Orders Dropdown -->
                     <div style="position:relative;">
-                        <button id="header-notification-btn" type="button" class="header-icon-btn" onclick="toggleOrderNotificationsDropdown(event)" title="Live Order Notifications" style="cursor:pointer;">
-                            <span>🔔</span>
-                            <span class="header-icon-badge" id="header-notifications-badge" style="display:none;">0</span>
+                        <button id="header-notification-btn" type="button" class="header-icon-btn" onclick="toggleOrderNotificationsDropdown(event)" title="Live Order Notifications" style="cursor:pointer; position:relative; z-index:100;">
+                            <span style="pointer-events:none;">🔔</span>
+                            <span class="header-icon-badge" id="header-notifications-badge" style="display:none; pointer-events:none;">0</span>
                         </button>
 
                         <div id="order-notifications-dropdown">

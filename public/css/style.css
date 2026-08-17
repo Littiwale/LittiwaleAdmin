@@ -647,12 +647,12 @@ button, input, select, textarea {
    ========================================================================== */
 .top-header {
   height: var(--header-height);
-  background: rgba(16, 18, 23, 0.85);
+  background: rgba(16, 18, 23, 0.95);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border-card);
   position: sticky;
   top: 0;
-  z-index: 90;
+  z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -943,24 +943,25 @@ button, input, select, textarea {
 /* Order Notifications Dropdown Menu */
 #order-notifications-dropdown {
   position: absolute;
-  top: 55px;
+  top: calc(100% + 10px);
   right: 0px;
   width: 390px;
-  max-width: calc(100vw - 24px);
-  background: rgba(18, 18, 22, 0.98);
-  border: 1.5px solid rgba(255, 255, 255, 0.14);
+  max-width: calc(100vw - 20px);
+  background: #14141c !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.16) !important;
   border-radius: 18px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(24px);
-  z-index: 99999;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.95);
+  z-index: 99999999 !important;
   display: none;
   flex-direction: column;
   overflow: hidden;
-  animation: dropNotification 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: dropNotification 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 #order-notifications-dropdown.show {
   display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 @keyframes dropNotification {
@@ -2765,19 +2766,19 @@ td strong {
     min-width: 460px;
   }
 
-  /* Fixed mobile notification dropdown within screen frame */
+  /* Position mobile notification dropdown perfectly aligned beneath bell */
   #order-notifications-dropdown {
-    position: fixed !important;
-    top: 55px !important;
-    left: 10px !important;
-    right: 10px !important;
-    width: auto !important;
+    position: absolute !important;
+    top: calc(100% + 10px) !important;
+    right: -45px !important;
+    left: auto !important;
+    width: min(360px, calc(100vw - 20px)) !important;
     max-width: calc(100vw - 20px) !important;
-    max-height: 82vh !important;
+    max-height: 80vh !important;
     background: #14141c !important;
     border: 1.5px solid rgba(255, 255, 255, 0.16) !important;
     box-shadow: 0 25px 70px rgba(0, 0, 0, 0.98) !important;
-    z-index: 9999999 !important;
+    z-index: 99999999 !important;
   }
 
   /* Compact Store Status Toggle for Mobile */
