@@ -289,35 +289,12 @@
                         </label>
                     </div>
 
-                    <!-- Notification Bell & Dynamic Live Orders Dropdown -->
-                    <div style="position:relative;">
-                        <button id="header-notification-btn" type="button" class="header-icon-btn" onclick="toggleOrderNotificationsDropdown(event)" title="Live Order Notifications" style="cursor:pointer; position:relative; z-index:100;">
+                    <!-- Notification Bell Button -->
+                    <div>
+                        <button id="header-notification-btn" type="button" class="header-icon-btn" onclick="toggleOrderNotificationsDropdown(event)" title="Live Order Notifications" style="cursor:pointer; position:relative;">
                             <span style="pointer-events:none;">🔔</span>
                             <span class="header-icon-badge" id="header-notifications-badge" style="display:none; pointer-events:none;">0</span>
                         </button>
-
-                        <div id="order-notifications-dropdown">
-                            <div class="notif-header">
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <span style="font-size:16px;">🔔</span>
-                                    <strong style="font-size:13.5px; color:#fff;">Live Order Alerts</strong>
-                                </div>
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <span class="notif-badge" id="notif-unread-count">0 New</span>
-                                    <button type="button" onclick="closeOrderNotifications()" style="background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; padding:2px 6px; line-height:1;" title="Close Notifications">✕</button>
-                                </div>
-                            </div>
-                            <div class="notif-body" id="notif-list-container">
-                                <div class="notif-empty">
-                                    <div style="font-size:28px; margin-bottom:6px;">🛍️</div>
-                                    <div style="font-size:13px; font-weight:700; color:#fff;">No New Orders</div>
-                                    <div style="font-size:11.5px; color:var(--text-dim);">Live website orders will alert here in real-time.</div>
-                                </div>
-                            </div>
-                            <div class="notif-footer">
-                                <button class="btn-view-all-orders" onclick="openAllOrdersSection()">View Live Orders Table →</button>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- User Profile Pill -->
@@ -330,6 +307,33 @@
                     </div>
                 </div>
             </header>
+
+            <!-- Backdrop for Order Alerts -->
+            <div id="order-notifications-backdrop" class="notif-backdrop" onclick="closeOrderNotifications()"></div>
+
+            <!-- Notification Live Orders Dropdown / Mobile Sheet (Viewport Fixed) -->
+            <div id="order-notifications-dropdown">
+                <div class="notif-header">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:16px;">🔔</span>
+                        <strong style="font-size:13.5px; color:#fff;">Live Order Alerts</strong>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="notif-badge" id="notif-unread-count">0 New</span>
+                        <button type="button" onclick="closeOrderNotifications()" style="background:transparent; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:2px 8px; line-height:1;" title="Close Notifications">✕</button>
+                    </div>
+                </div>
+                <div class="notif-body" id="notif-list-container">
+                    <div class="notif-empty">
+                        <div style="font-size:28px; margin-bottom:6px;">🛍️</div>
+                        <div style="font-size:13px; font-weight:700; color:#fff;">No New Orders</div>
+                        <div style="font-size:11.5px; color:var(--text-dim);">Live website orders will alert here in real-time.</div>
+                    </div>
+                </div>
+                <div class="notif-footer">
+                    <button class="btn-view-all-orders" onclick="openAllOrdersSection()">View Live Orders Table →</button>
+                </div>
+            </div>
 
             <!-- Scrollable Content Canvas -->
             <main class="content-body">

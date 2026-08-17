@@ -754,46 +754,36 @@ window.renderOrderNotifications = function() {
     }
 };
 
-let lastNotifToggleTime = 0;
-
 window.toggleOrderNotificationsDropdown = function(e) {
     if (e) {
         e.preventDefault();
         e.stopPropagation();
     }
-    lastNotifToggleTime = Date.now();
     const drop = document.getElementById('order-notifications-dropdown');
+    const backdrop = document.getElementById('order-notifications-backdrop');
     if (drop) {
         window.renderOrderNotifications();
         if (drop.classList.contains('show')) {
             drop.classList.remove('show');
+            if (backdrop) backdrop.classList.remove('show');
         } else {
             drop.classList.add('show');
+            if (backdrop) backdrop.classList.add('show');
         }
     }
 };
 
 window.closeOrderNotifications = function() {
     const drop = document.getElementById('order-notifications-dropdown');
+    const backdrop = document.getElementById('order-notifications-backdrop');
     if (drop) drop.classList.remove('show');
+    if (backdrop) backdrop.classList.remove('show');
 };
 
 window.openAllOrdersSection = function() {
     window.closeOrderNotifications();
     window.switchSection('orders-section');
 };
-
-document.addEventListener('click', (e) => {
-    // If toggled within last 350ms, ignore document-level click to prevent immediate re-closing on mobile touch
-    if (Date.now() - lastNotifToggleTime < 350) return;
-
-    const drop = document.getElementById('order-notifications-dropdown');
-    if (drop && drop.classList.contains('show')) {
-        if (!drop.contains(e.target) && !e.target.closest('#header-notification-btn') && !e.target.closest('.header-icon-btn')) {
-            drop.classList.remove('show');
-        }
-    }
-});
 
 // =========================================================================
 // ⚡ QUICK ORDER DETAILS & 1-TAP ACTION MODAL (MOBILE FIRST)
