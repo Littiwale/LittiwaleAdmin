@@ -762,7 +762,11 @@ window.toggleOrderNotificationsDropdown = function(e) {
     const drop = document.getElementById('order-notifications-dropdown');
     if (drop) {
         window.renderOrderNotifications();
-        drop.classList.toggle('show');
+        if (drop.classList.contains('show')) {
+            drop.classList.remove('show');
+        } else {
+            drop.classList.add('show');
+        }
     }
 };
 
@@ -777,8 +781,12 @@ window.openAllOrdersSection = function() {
 };
 
 document.addEventListener('click', (e) => {
-    if (!e.target.closest('#order-notifications-dropdown') && !e.target.closest('.header-icon-btn')) {
-        window.closeOrderNotifications();
+    const drop = document.getElementById('order-notifications-dropdown');
+    const bellBtn = document.getElementById('header-notification-btn') || e.target.closest('.header-icon-btn');
+    if (drop && drop.classList.contains('show')) {
+        if (!drop.contains(e.target) && (!bellBtn || !bellBtn.contains(e.target))) {
+            drop.classList.remove('show');
+        }
     }
 });
 
@@ -1057,10 +1065,9 @@ function renderOrdersTable(filterQuery = '') {
         }
 
         return `
-            <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Tap to view full order details & 1-tap actions">
+            <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Tap to view full order details & actions">
                 <td style="font-family:monospace; font-weight:900; color:var(--brand-orange); cursor:pointer;" onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
-                    <span style="border-bottom:1.5px dotted var(--brand-orange);">#${orderId}</span>
-                    <span style="display:inline-block; font-size:9.5px; background:rgba(249,115,22,0.18); color:var(--brand-orange); padding:2px 5px; border-radius:4px; margin-left:4px; font-weight:800;">⚡ Actions</span>
+                    #${orderId}
                 </td>
                 <td onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
                     <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
