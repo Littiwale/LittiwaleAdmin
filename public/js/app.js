@@ -829,12 +829,44 @@ window.openOrderQuickModal = function(orderId) {
     const actionCard = document.getElementById('quick-order-primary-action-card');
     if (actionCard) {
         if (status === 'pending') {
+            const subtotal = Number(ord.subtotal || ord.finalTotal || 0);
+            const discount = Number(ord.discount || 0);
+            const isTakeaway = (ord.orderType === 'takeaway');
+            const currentDelCharge = isTakeaway ? 0 : Number(ord.deliveryCharge || 0);
+            const currentFinalTotal = Math.max(0, subtotal - discount + currentDelCharge);
+
             actionCard.innerHTML = `
-                <div style="background:rgba(37,211,102,0.1); border:1.5px solid rgba(37,211,102,0.35); border-radius:14px; padding:16px; text-align:center;">
-                    <div style="font-weight:900; font-size:14px; color:#25d366; margin-bottom:12px;">⚡ STEP 1: ACCEPT & PREPARE FOOD</div>
+                <div style="background:rgba(37,211,102,0.08); border:1.5px solid rgba(37,211,102,0.35); border-radius:14px; padding:16px;">
+                    <div style="font-weight:900; font-size:13.5px; color:#25d366; margin-bottom:12px; text-align:center;">⚡ STEP 1: SET DELIVERY CHARGE & ACCEPT ORDER</div>
+                    
+                    <!-- Delivery Fee & Calculation Box -->
+                    <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12.5px;">
+                            <span style="color:#94a3b8;">Items Subtotal:</span>
+                            <strong style="color:#fff;" id="quick-subtotal-val">₹${subtotal}</strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:10px;">
+                            <label style="color:var(--brand-orange); font-weight:800; font-size:13px; margin:0; display:flex; align-items:center; gap:4px;">
+                                <span>🛵 Delivery Charge (₹):</span>
+                                ${isTakeaway ? '<span style="font-size:10px; color:#38bdf8;">(Takeaway: ₹0)</span>' : ''}
+                            </label>
+                            <input type="number" id="quick-del-charge-input" class="form-control" style="width:110px; text-align:right; font-weight:900; font-size:15px; padding:6px 10px; color:#fff; background:#1e1e28; border:1.5px solid var(--brand-orange); border-radius:8px;" value="${currentDelCharge}" min="0" ${isTakeaway ? 'disabled' : ''} oninput="window.recalcQuickDelCharge('${ord._id}')">
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1); font-size:14px;">
+                            <span style="color:#fff; font-weight:800;">Grand Total Payable:</span>
+                            <strong style="color:var(--brand-gold); font-size:18px;" id="quick-grand-total-val">₹${currentFinalTotal}</strong>
+                        </div>
+                    </div>
+
+                    <!-- Prep Time Input -->
+                    <div style="margin-bottom:14px;">
+                        <label style="font-size:11.5px; font-weight:700; color:#94a3b8; margin-bottom:4px; display:block;">⏱️ Estimated Prep / Delivery Time</label>
+                        <input type="text" id="quick-est-time-input" class="form-control" style="padding:8px 12px; font-size:13px; color:#fff; background:#1e1e28; border-radius:8px; border:1px solid rgba(255,255,255,0.1);" value="${isTakeaway ? '15-20 mins' : '25-35 mins'}" placeholder="e.g. 25-35 mins">
+                    </div>
+
                     <div style="display:flex; gap:10px;">
-                        <button type="button" class="btn btn-primary" style="flex:2; background:#25d366; color:#000; font-weight:900; font-size:14px; padding:12px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'accepted'); showToast('Order Accepted! Food is preparing.', 'success');">
-                            ✅ Accept Order
+                        <button type="button" class="btn btn-primary" style="flex:2; background:#25d366; color:#000; font-weight:900; font-size:14px; padding:12px; border-radius:10px; box-shadow:0 4px 15px rgba(37,211,102,0.35);" onclick="window.confirmQuickOrder('${ord._id}')">
+                            ✅ Accept & Confirm Order
                         </button>
                         <button type="button" class="btn btn-outline" style="flex:1; border-color:#ef4444; color:#ef4444; font-weight:800; font-size:13px; padding:12px; border-radius:10px;" onclick="closeModal('order-quick-modal'); cancelOrderPrompt('${ord._id}');">
                             ✕ Reject
@@ -971,6 +1003,98 @@ window.openOrderQuickModal = function(orderId) {
 
     // Open Modal
     openModal('order-quick-modal');
+};
+
+window.recalcQuickDelCharge = function(orderId) {
+    const orders = window.cachedOrders || [];
+    const ord = orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId));
+    if (!ord) return;
+
+    const subtotal = Number(ord.subtotal || ord.finalTotal || 0);
+    const discount = Number(ord.discount || 0);
+    const isTakeaway = (ord.orderType === 'takeaway');
+    const delCharge = isTakeaway ? 0 : (Number(document.getElementById('quick-del-charge-input')?.value) || 0);
+    const finalTotal = Math.max(0, subtotal - discount + delCharge);
+
+    const grandTotalVal = document.getElementById('quick-grand-total-val');
+    if (grandTotalVal) grandTotalVal.textContent = `₹${finalTotal}`;
+
+    const mainTotalEl = document.getElementById('quick-order-grand-total');
+    if (mainTotalEl) mainTotalEl.textContent = `₹${finalTotal}`;
+};
+
+window.confirmQuickOrder = async function(orderId) {
+    const orders = window.cachedOrders || [];
+    const order = orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId));
+    if (!order || !order._id) return;
+
+    const isTakeaway = (order.orderType === 'takeaway');
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    const delCharge = isTakeaway ? 0 : (Number(document.getElementById('quick-del-charge-input')?.value) || 0);
+    const subtotal = Number(order.subtotal || order.finalTotal || 0);
+    const discount = Number(order.discount || 0);
+    const finalTotal = Math.max(0, subtotal - discount + delCharge);
+    const estTime = document.getElementById('quick-est-time-input')?.value || (isTakeaway ? '15-20 mins' : '25-35 mins');
+
+    try {
+        const res = await fetch(`${API_URL}/orders/${order._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({
+                status: 'accepted',
+                deliveryCharge: delCharge,
+                finalTotal: finalTotal
+            })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(`✅ Order #${String(order._id).slice(-6).toUpperCase()} Confirmed with Delivery Fee ₹${delCharge}!`, 'success');
+            closeModal('order-quick-modal');
+            window.fetchAndRenderOrders();
+
+            // Open WhatsApp Confirmation note to customer
+            const targetPhone = order.whatsappPhone || order.customerPhone || '';
+            const rawPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
+            const shortId = String(order._id).slice(-6).toUpperCase();
+            const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Order Items';
+
+            const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
+                ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
+                : 'https://littiwale-barbil.vercel.app';
+            const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
+
+            const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
+            const locationInfo = isTakeaway 
+                ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
+                : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+
+            const msg = `${orderTypeHeader}\n\n` +
+                        `Hi *${order.customerName || 'Customer'}*,\n` +
+                        `Thank you! Your order *#${shortId}* has been accepted and is now cooking hot in our kitchen! 🍳🔥\n\n` +
+                        `${locationInfo}\n\n` +
+                        `*📋 Order Items:*\n${itemsList}\n\n` +
+                        `*💰 Bill Breakdown:*\n` +
+                        `• Food Items Subtotal: ₹${subtotal}\n` +
+                        (discount > 0 ? `• Discount: -₹${discount}\n` : '') +
+                        (!isTakeaway ? `• Delivery Fee: ₹${delCharge}\n` : '') +
+                        `*👉 Grand Total Payable: ₹${finalTotal}*\n\n` +
+                        `*🔴 Live Tracking Link:* ${trackingLink}\n\n` +
+                        `We will notify you the moment your food is out for delivery! ❤️`;
+
+            if (rawPhone) {
+                const waUrl = `https://wa.me/91${rawPhone}?text=${encodeURIComponent(msg)}`;
+                window.open(waUrl, '_blank');
+            }
+        } else {
+            window.showAdminToast('Failed to confirm order. Please check PIN.', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error confirming order', 'error');
+    }
 };
 
 // Start Continuous Background Polling every 3 seconds for zero-refresh live updates
