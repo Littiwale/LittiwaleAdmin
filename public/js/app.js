@@ -5182,9 +5182,54 @@ window.handleSaveNewDeliveryBoy = async function(e) {
     }
 };
 
+// Universal Sleek Modal Confirmation (Replaces native browser confirm())
+window.showAdminConfirm = function(message, opts = {}) {
+    return new Promise(resolve => {
+        const msgEl = document.getElementById('admin-confirm-message');
+        const titleEl = document.getElementById('admin-confirm-title');
+        const iconEl = document.getElementById('admin-confirm-icon');
+        const okBtn = document.getElementById('admin-confirm-btn-ok');
+        const cancelBtn = document.getElementById('admin-confirm-btn-cancel');
+
+        if (msgEl) msgEl.textContent = message || 'Are you sure you want to proceed?';
+        if (titleEl) titleEl.textContent = opts.title || 'Confirm Action';
+        if (iconEl) iconEl.textContent = opts.icon || '⚠️';
+        if (okBtn) {
+            okBtn.textContent = opts.okText || 'Yes, Proceed';
+            okBtn.style.background = opts.okColor || '#ef4444';
+        }
+        if (cancelBtn) cancelBtn.textContent = opts.cancelText || 'Cancel';
+
+        const handleOk = () => {
+            cleanup();
+            resolve(true);
+        };
+        const handleCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+        const cleanup = () => {
+            closeModal('admin-action-confirm-modal');
+            okBtn?.removeEventListener('click', handleOk);
+            cancelBtn?.removeEventListener('click', handleCancel);
+        };
+
+        okBtn?.addEventListener('click', handleOk);
+        cancelBtn?.addEventListener('click', handleCancel);
+        openModal('admin-action-confirm-modal');
+    });
+};
+
 window.deleteDeliveryBoy = async function(id) {
     if (!id) return;
-    if (!confirm('Are you sure you want to remove this delivery boy from fleet?')) return;
+    const confirmed = await window.showAdminConfirm('Are you sure you want to remove this delivery boy from fleet?', {
+        title: 'Remove Delivery Partner',
+        icon: '🛵',
+        okText: 'Yes, Remove Rider',
+        okColor: '#ef4444'
+    });
+    if (!confirmed) return;
+
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
     try {

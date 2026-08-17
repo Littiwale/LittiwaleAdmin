@@ -2444,7 +2444,22 @@
         </div>
     </div>
 
-    <!-- Zomato/Swiggy Style Restaurant Offline / Status Modal -->
+    <!-- ⚠️ Universal Admin Action Confirmation Modal (No native alert/confirm) -->
+    <div id="admin-action-confirm-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:420px; padding:0; overflow:hidden; border-radius:18px; border:1px solid rgba(255,255,255,0.12); background:#14141c; box-shadow:0 25px 70px rgba(0,0,0,0.95); text-align:center;">
+            <div style="padding:28px 24px 22px;">
+                <div style="width:56px; height:56px; border-radius:50%; background:rgba(239,68,68,0.14); border:1.5px solid rgba(239,68,68,0.3); display:flex; align-items:center; justify-content:center; font-size:26px; margin:0 auto 16px;" id="admin-confirm-icon">
+                    ⚠️
+                </div>
+                <h3 style="color:#fff; font-size:1.15rem; font-weight:800; margin:0 0 8px;" id="admin-confirm-title">Confirm Action</h3>
+                <p style="color:#cbd5e1; font-size:13.5px; line-height:1.55; margin:0 0 22px;" id="admin-confirm-message">Are you sure you want to proceed?</p>
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn btn-secondary" style="flex:1; padding:12px; font-size:13px; font-weight:700; border-radius:10px;" id="admin-confirm-btn-cancel">Cancel</button>
+                    <button type="button" class="btn btn-danger" style="flex:1.2; padding:12px; font-size:13.5px; font-weight:800; background:#ef4444; color:#fff; border:none; border-radius:10px; cursor:pointer;" id="admin-confirm-btn-ok">Remove</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <div id="offline-status-modal" class="modal hidden">
         <div class="modal-content" style="max-width:440px; padding:0; border-radius:20px; overflow:hidden; background:#12141a; border:1px solid rgba(255,255,255,0.1); box-shadow:0 25px 60px rgba(0,0,0,0.85);">
             <!-- Modal Header -->
