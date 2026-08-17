@@ -930,8 +930,15 @@ window.openOrderQuickModal = function(orderId) {
     const waBtn = document.getElementById('quick-cust-wa-btn');
     if (waBtn) {
         if (rawPhone) {
-            waBtn.href = `https://wa.me/91${rawPhone}`;
+            waBtn.removeAttribute('href');
+            waBtn.removeAttribute('target');
+            waBtn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                window.openWhatsAppQuickModal(ord._id);
+            };
             waBtn.style.display = 'inline-flex';
+            waBtn.style.cursor = 'pointer';
         } else {
             waBtn.style.display = 'none';
         }
@@ -1222,9 +1229,9 @@ function renderOrdersTable(filterQuery = '') {
                         <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="View & Print Official Bill (A4 PDF)">
                             📄
                         </button>
-                        <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" title="Direct WhatsApp Chat">
+                        <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px; background:rgba(37,211,102,0.12); border-color:rgba(37,211,102,0.3); color:#4ade80;" onclick="window.openWhatsAppQuickModal('${ord._id}')" title="WhatsApp Customer (Direct & Status Templates)">
                             💬
-                        </a>
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:rgba(239,68,68,0.35); color:#f87171;" onclick="window.confirmDeleteOrder('${ord._id}', '#${orderId}')" title="Permanently Delete Test Order">
                             🗑️
                         </button>
@@ -4939,9 +4946,9 @@ window.openOrderConfirmModal = function(orderId) {
                     <span>📦 Mark Out for Delivery (Dispatch)</span>
                 </button>
                 <div style="display:flex; gap:10px;">
-                    <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-secondary" style="flex:1; background:#25d366; color:#000; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;">
+                    <button type="button" class="btn btn-secondary" style="flex:1; background:#25d366; color:#000; font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="openWhatsAppQuickModal('${order._id}')">
                         <span>💬 WhatsApp Customer</span>
-                    </a>
+                    </button>
                     <button type="button" class="btn btn-outline" style="flex:1; border-color:#ef4444; color:#ef4444; font-size:12px; font-weight:700;" onclick="cancelOrderPrompt()">
                         <span>✕ Cancel Order</span>
                     </button>
@@ -4953,9 +4960,9 @@ window.openOrderConfirmModal = function(orderId) {
                     <span>🎉 Mark Order as Delivered</span>
                 </button>
                 <div style="display:flex; gap:10px;">
-                    <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-secondary" style="flex:1; background:#25d366; color:#000; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px; text-decoration:none;">
+                    <button type="button" class="btn btn-secondary" style="flex:1; background:#25d366; color:#000; font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="openWhatsAppQuickModal('${order._id}')">
                         <span>💬 WhatsApp Customer</span>
-                    </a>
+                    </button>
                     <button type="button" class="btn btn-outline" style="flex:1; border-color:#ef4444; color:#ef4444; font-size:12px; font-weight:700;" onclick="cancelOrderPrompt()">
                         <span>✕ Cancel Order</span>
                     </button>
@@ -4966,9 +4973,9 @@ window.openOrderConfirmModal = function(orderId) {
                 <div style="background:rgba(16, 185, 129, 0.1); border:1.5px solid #10b981; border-radius:10px; padding:12px; text-align:center; color:#34d399; font-weight:800; font-size:13.5px;">
                     ✅ Order Successfully Delivered & Completed
                 </div>
-                <a href="https://wa.me/91${rawPhone}" target="_blank" class="btn btn-secondary" style="background:#25d366; color:#000; font-weight:700; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; text-decoration:none;">
-                    <span>💬 WhatsApp Customer</span>
-                </a>
+                <button type="button" class="btn btn-secondary" style="background:#25d366; color:#000; font-weight:800; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; width:100%;" onclick="openWhatsAppQuickModal('${order._id}')">
+                    <span>💬 WhatsApp Customer (Review & Notes)</span>
+                </button>
             `;
         } else {
             buttonsHtml += `
@@ -5336,16 +5343,16 @@ window.openDispatchModal = async function(orderId = null) {
 
 window.getSelectedDispatchRider = function() {
     const selectEl = document.getElementById('dispatch-delivery-boy-select');
-    if (!selectEl) return { name: 'Littiwale Rider', phone: '6370680744' };
+    if (!selectEl) return { name: 'Littiwale Direct Delivery', phone: '6370680744' };
 
     if (selectEl.value === '__custom__') {
-        const customName = document.getElementById('dispatch-custom-rider-name')?.value?.trim() || 'Delivery Partner';
+        const customName = document.getElementById('dispatch-custom-rider-name')?.value?.trim() || 'Littiwale Direct Delivery';
         const customPhone = (document.getElementById('dispatch-custom-rider-phone')?.value || '6370680744').replace(/\D/g, '').slice(-10);
         return { name: customName, phone: customPhone || '6370680744' };
     }
 
     const opt = selectEl.options[selectEl.selectedIndex];
-    const name = opt ? (opt.getAttribute('data-name') || opt.text) : 'Delivery Partner';
+    const name = opt ? (opt.getAttribute('data-name') || opt.text) : 'Littiwale Direct Delivery';
     const phone = opt ? (opt.getAttribute('data-phone') || '6370680744') : '6370680744';
     return { name, phone };
 };
@@ -5458,6 +5465,152 @@ window.sendCustomerDeliveredWhatsApp = function(orderId) {
         window.showAdminToast(`📲 "Thank You & Review" note opened for ${custName}!`, 'success');
     } else {
         window.showAdminToast('Customer phone number unavailable', 'warning');
+    }
+};
+
+// ==========================================================================
+// 💬 UNIVERSAL WHATSAPP ACTION SHEET & TEMPLATE MESSAGING SYSTEM
+// ==========================================================================
+window.currentWhatsAppOrder = null;
+
+window.openWhatsAppQuickModal = function(orderId = null) {
+    let order = null;
+    if (orderId) {
+        order = (window.cachedOrders || []).find(o => String(o._id) === String(orderId) || String(o._id).slice(-6).toUpperCase() === String(orderId).toUpperCase());
+    }
+    if (!order) {
+        order = window.currentSelectedOrder || window.currentDispatchOrder;
+    }
+
+    if (!order || !order._id) {
+        window.showAdminToast('Order details not found', 'error');
+        return;
+    }
+
+    window.currentWhatsAppOrder = order;
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const custName = order.customerName || 'Customer';
+    const targetPhone = order.whatsappPhone || order.customerPhone || '';
+    const cleanPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
+    const status = (order.status || 'pending').toLowerCase();
+
+    // Populate Header Info
+    const titleEl = document.getElementById('wa-modal-order-title');
+    if (titleEl) titleEl.textContent = `Order #${shortId}`;
+
+    const custInfoEl = document.getElementById('wa-modal-cust-info');
+    if (custInfoEl) custInfoEl.textContent = `${custName} • +91 ${cleanPhone || 'N/A'}`;
+
+    const statusBadgeEl = document.getElementById('wa-modal-status-badge');
+    if (statusBadgeEl) {
+        statusBadgeEl.textContent = status.toUpperCase();
+        statusBadgeEl.className = `badge ${status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')))}`;
+    }
+
+    openModal('order-whatsapp-action-modal');
+};
+
+window.executeWhatsAppAction = function(actionType) {
+    const order = window.currentWhatsAppOrder || window.currentSelectedOrder || window.currentDispatchOrder;
+    if (!order || !order._id) {
+        window.showAdminToast('No order selected', 'error');
+        return;
+    }
+
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const custName = order.customerName || 'Customer';
+    const targetPhone = order.whatsappPhone || order.customerPhone || '';
+    const cleanPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
+
+    if (!cleanPhone) {
+        window.showAdminToast('Customer WhatsApp/phone number unavailable', 'warning');
+        return;
+    }
+
+    const isTakeaway = (order.orderType === 'takeaway');
+    const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * (it.quantity || 1))})`).join('\n') || '• Order Items';
+    const subtotal = Number(order.subtotal || order.finalTotal || 0);
+    const delCharge = Number(order.deliveryCharge || 0);
+    const discount = Number(order.discount || 0);
+    const finalTotal = Number(order.finalTotal || order.subtotal || 0);
+    const estTime = order.estimatedTime || (isTakeaway ? '15-20 mins' : '25-35 mins');
+
+    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
+        ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
+        : 'https://littiwale-barbil.vercel.app';
+    const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
+
+    let msg = '';
+
+    if (actionType === 'direct') {
+        window.open(`https://wa.me/91${cleanPhone}`, '_blank');
+        closeModal('order-whatsapp-action-modal');
+        window.showAdminToast(`💬 Direct WhatsApp chat opened for ${custName}!`, 'success');
+        return;
+    }
+
+    if (actionType === 'confirmed') {
+        const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
+        const locationInfo = isTakeaway 
+            ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
+            : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+
+        msg = `${orderTypeHeader}\n\n` +
+              `Hi *${custName}*,\n` +
+              `Thank you! Your order *#${shortId}* has been accepted and is now cooking hot in our kitchen! 🍳🔥\n\n` +
+              `${locationInfo}\n\n` +
+              `*📋 Order Items:*\n${itemsList}\n\n` +
+              `*💰 Bill Breakdown:*\n` +
+              `• Food Items Subtotal: ₹${subtotal}\n` +
+              (discount > 0 ? `• Discount: -₹${discount}\n` : '') +
+              (!isTakeaway ? `• Delivery Fee: ₹${delCharge}\n` : '') +
+              `*👉 Grand Total Payable: ₹${finalTotal} (${order.paymentMethod || 'COD'})*\n\n` +
+              `*🔴 Live Tracking Link:* ${trackingLink}\n\n` +
+              (isTakeaway ? `We look forward to serving you at our kitchen counter. Thank you for choosing *Littiwale*! ❤️` : `We will notify you the moment your food is out for delivery! ❤️`);
+    } else if (actionType === 'dispatch') {
+        const riderName = order.deliveryBoy?.name || order.assignedDeliveryBoy?.name || order.deliveryBoyName || 'Littiwale Direct Delivery';
+        const rawRiderPhone = order.deliveryBoy?.phone || order.assignedDeliveryBoy?.phone || order.deliveryBoyPhone || '6370680744';
+        const riderPhone = String(rawRiderPhone).replace(/\D/g, '').slice(-10) || '6370680744';
+
+        const isPrepaid = order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full');
+        const paymentStatusText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (${order.paymentMethod || 'Cash on Delivery'} 💵)`;
+
+        msg = `🛵 *YOUR ORDER IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
+              `Hi *${custName}*,\n` +
+              `Great news! Your order *#${shortId}* has been freshly packed and is out for delivery! 💨\n\n` +
+              `*🛵 Delivery Contact:* *${riderName}*\n` +
+              `*📞 Phone Number:* +91 ${riderPhone}\n\n` +
+              `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n` +
+              `*💰 Amount to Pay:* ${paymentStatusText}\n\n` +
+              `*🔴 Live Track Your Order:* ${trackingLink}\n\n` +
+              `For any delivery assistance, please feel free to call our delivery contact directly. Thank you for choosing *Littiwale*! ❤️`;
+    } else if (actionType === 'delivered') {
+        msg = `🎉 *ORDER DELIVERED — THANK YOU FOR CHOOSING LITTIWALE!* ❤️\n\n` +
+              `Dear *${custName}*,\n` +
+              `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been delivered successfully! 🍽️\n\n` +
+              `We hope you enjoy every single bite! 🔥\n\n` +
+              `⭐ *Rate Your Food Experience:*\n` +
+              `If you loved the taste & service, please take 10 seconds to give Littiwale Cloud Kitchen a 5-star Google review:\n` +
+              `👉 https://g.page/r/CYlrxD6jO24cEAE/review\n\n` +
+              `🍴 *Hungry Again? Order Next Meal Here:*\n` +
+              `🌐 ${baseUrl}\n\n` +
+              `Thank you once again & see you soon!\n` +
+              `*— Team Littiwale Barbil*`;
+    } else if (actionType === 'cancelled') {
+        const cancelReason = order.cancelReason || 'Kitchen temporarily overloaded / Item out of stock';
+        msg = `*❌ ORDER CANCELLATION UPDATE — LITTIWALE BARBIL*\n\n` +
+              `Dear *${custName}*,\n` +
+              `We regret to inform you that your order *#${shortId}* could not be processed at this time.\n\n` +
+              `*Reason:* ${cancelReason}\n\n` +
+              `We sincerely apologize for the inconvenience caused. If you have already completed an online payment, our team will initiate your refund promptly.\n\n` +
+              `For any queries or direct assistance, please reply to this WhatsApp message. Thank you for your understanding! 🙏`;
+    }
+
+    if (msg) {
+        const waUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+        closeModal('order-whatsapp-action-modal');
+        window.showAdminToast(`📲 WhatsApp message opened for ${custName}!`, 'success');
     }
 };
 

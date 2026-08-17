@@ -2361,6 +2361,95 @@
         </div>
     </div>
 
+    <!-- 💬 WhatsApp Quick Actions & Template Dispatch Modal -->
+    <div id="order-whatsapp-action-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:500px; padding:0; overflow:hidden; border-radius:18px; border:1.5px solid rgba(37,211,102,0.35); background:#12131a; box-shadow:0 25px 70px rgba(0,0,0,0.9);">
+            <div class="modal-header" style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); background:linear-gradient(135deg, rgba(37,211,102,0.15), rgba(16,185,129,0.08)); display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:38px; height:38px; border-radius:10px; background:rgba(37,211,102,0.2); display:flex; align-items:center; justify-content:center; font-size:20px; color:#25d366;">
+                        <i class="fab fa-whatsapp"></i>
+                    </div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h3 class="modal-title" id="wa-modal-order-title" style="color:#fff; font-size:1.15rem; font-weight:900; margin:0;">WhatsApp Customer</h3>
+                            <span id="wa-modal-status-badge" class="badge badge-active" style="font-size:10.5px; padding:2px 7px;">CONFIRMED</span>
+                        </div>
+                        <div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;" id="wa-modal-cust-info">Customer Name • +91 0000000000</div>
+                    </div>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="closeModal('order-whatsapp-action-modal')">✕</button>
+            </div>
+
+            <div style="padding:20px; max-height:78vh; overflow-y:auto;">
+                <div style="font-size:12px; color:#94a3b8; font-weight:700; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">
+                    ⚡ Select WhatsApp Action / Template
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <!-- 1. Direct / Blank WhatsApp Chat -->
+                    <button type="button" class="btn" style="text-align:left; padding:12px 14px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); border-radius:12px; display:flex; align-items:center; justify-content:space-between; transition:all 0.2s;" onclick="window.executeWhatsAppAction('direct')">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-size:22px;">💬</span>
+                            <div>
+                                <div style="font-weight:800; color:#fff; font-size:13.5px;">Direct WhatsApp Chat (Blank)</div>
+                                <div style="font-size:11px; color:#94a3b8;">Open regular chat window with customer</div>
+                            </div>
+                        </div>
+                        <span style="color:#25d366; font-size:14px; font-weight:900;">→</span>
+                    </button>
+
+                    <!-- 2. Order Confirmed & Cooking Template -->
+                    <button type="button" class="btn" style="text-align:left; padding:12px 14px; background:rgba(37,211,102,0.08); border:1px solid rgba(37,211,102,0.25); border-radius:12px; display:flex; align-items:center; justify-content:space-between; transition:all 0.2s;" onclick="window.executeWhatsAppAction('confirmed')">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-size:22px;">✅</span>
+                            <div>
+                                <div style="font-weight:800; color:#4ade80; font-size:13.5px;">1. Order Confirmed & Preparing Note</div>
+                                <div style="font-size:11px; color:#94a3b8;">Items list, grand total, prep time & live tracking URL</div>
+                            </div>
+                        </div>
+                        <span style="color:#4ade80; font-size:14px; font-weight:900;">→</span>
+                    </button>
+
+                    <!-- 3. Out for Delivery / Dispatch Template -->
+                    <button type="button" class="btn" style="text-align:left; padding:12px 14px; background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.25); border-radius:12px; display:flex; align-items:center; justify-content:space-between; transition:all 0.2s;" onclick="window.executeWhatsAppAction('dispatch')">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-size:22px;">🛵</span>
+                            <div>
+                                <div style="font-weight:800; color:#60a5fa; font-size:13.5px;">2. "Out for Delivery" Dispatch Note</div>
+                                <div style="font-size:11px; color:#94a3b8;">Rider / store contact, amount due & live tracking URL</div>
+                            </div>
+                        </div>
+                        <span style="color:#60a5fa; font-size:14px; font-weight:900;">→</span>
+                    </button>
+
+                    <!-- 4. Delivered & 5-Star Review Template -->
+                    <button type="button" class="btn" style="text-align:left; padding:12px 14px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:12px; display:flex; align-items:center; justify-content:space-between; transition:all 0.2s;" onclick="window.executeWhatsAppAction('delivered')">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-size:22px;">🎉</span>
+                            <div>
+                                <div style="font-weight:800; color:#fbbf24; font-size:13.5px;">3. "Thank You & 5★ Google Review" Note</div>
+                                <div style="font-size:11px; color:#94a3b8;">Delivered note + direct 5-star Google review link</div>
+                            </div>
+                        </div>
+                        <span style="color:#fbbf24; font-size:14px; font-weight:900;">→</span>
+                    </button>
+
+                    <!-- 5. Polite Cancellation Notice -->
+                    <button type="button" class="btn" style="text-align:left; padding:12px 14px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:12px; display:flex; align-items:center; justify-content:space-between; transition:all 0.2s;" onclick="window.executeWhatsAppAction('cancelled')">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-size:22px;">❌</span>
+                            <div>
+                                <div style="font-weight:800; color:#f87171; font-size:13.5px;">4. Order Cancellation Notice</div>
+                                <div style="font-size:11px; color:#94a3b8;">Polite regret message with reason & refund notice</div>
+                            </div>
+                        </div>
+                        <span style="color:#f87171; font-size:14px; font-weight:900;">→</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Custom Order Cancellation & Rejection Modal (No native alert/prompt) -->
     <div id="order-reject-modal" class="modal hidden">
         <div class="modal-content" style="max-width:480px; padding:0; overflow:hidden; border-radius:18px; border:1px solid rgba(239,68,68,0.25); background:#141418; box-shadow:0 20px 50px rgba(0,0,0,0.85);">
