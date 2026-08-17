@@ -3,8 +3,17 @@ let authPin = localStorage.getItem('adminPin') || '';
 let authToken = localStorage.getItem('adminToken') || '';
 var adminReelsList = [];
 var adminDealsList = [];
-window.cachedMenuItems = [];
-window.cachedCategories = [];
+
+// Instant Fast Cache Restore (0ms)
+try {
+    const cm = localStorage.getItem('lw_admin_menu_cache');
+    window.cachedMenuItems = cm ? JSON.parse(cm) : [];
+    const cc = localStorage.getItem('lw_admin_cat_cache');
+    window.cachedCategories = cc ? JSON.parse(cc) : [];
+} catch(e) {
+    window.cachedMenuItems = [];
+    window.cachedCategories = [];
+}
 window.cachedAnnouncements = [];
 window.cachedCoupons = [];
 window.cachedStoreSettings = [];
@@ -2068,25 +2077,29 @@ async function loadAppConfig() {
 }
 
 async function fetchData() {
-    await loadAppConfig();
-    await loadCategories();
-    await loadMenu();
-    await loadAnnouncements();
-    await loadCoupons();
-    await loadStoreSettings();
-    if (typeof window.fetchAndRenderOrders === 'function') {
-        try { await window.fetchAndRenderOrders(); } catch(e) {}
+    // 1. Instant 0ms render from cache immediately
+    if (typeof renderDynamicDashboard === 'function') {
+        renderDynamicDashboard();
     }
-    if (typeof window.loadFinanceData === 'function') {
-        try { await window.loadFinanceData(); } catch(e) {}
+
+    // 2. Parallel Fast Async Fetching across all endpoints
+    await Promise.allSettled([
+        loadAppConfig(),
+        loadCategories(),
+        loadMenu(),
+        loadAnnouncements(),
+        loadCoupons(),
+        loadStoreSettings(),
+        (typeof window.fetchAndRenderOrders === 'function') ? window.fetchAndRenderOrders() : Promise.resolve(),
+        (typeof window.loadFinanceData === 'function') ? window.loadFinanceData() : Promise.resolve(),
+        (typeof loadHeroCmsSettings === 'function') ? loadHeroCmsSettings() : Promise.resolve(),
+        (typeof fetchReels === 'function') ? fetchReels() : Promise.resolve()
+    ]);
+
+    // 3. Final fresh render
+    if (typeof renderDynamicDashboard === 'function') {
+        renderDynamicDashboard();
     }
-    if (typeof loadHeroCmsSettings === 'function') {
-        try { await loadHeroCmsSettings(); } catch(e) {}
-    }
-    if (typeof fetchReels === 'function') {
-        try { await fetchReels(); } catch(e) {}
-    }
-    renderDynamicDashboard();
 }
 
 window.renderDynamicDashboard = function() {
@@ -2482,6 +2495,9 @@ async function fetchAndRenderMenu() {
     try {
         const menus = await apiCall('/menu');
         window.cachedMenuItems = menus || [];
+        try {
+            localStorage.setItem('lw_admin_menu_cache', JSON.stringify(menus || []));
+        } catch(e) {}
         
         // Update stats across dashboard and sidebar
         const liveCount = (menus || []).filter(m => m.isAvailable !== false).length;
@@ -2912,6 +2928,9 @@ async function loadCategories() {
     try {
         const items = await apiCall('/categories');
         window.cachedCategories = items;
+        try {
+            localStorage.setItem('lw_admin_cat_cache', JSON.stringify(items || []));
+        } catch(e) {}
         if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
         
         // Populate List in Modal
