@@ -2258,6 +2258,78 @@
         </div>
     </div>
 
+    <!-- ⚡ Quick Order Details & Action Steps Modal (Mobile First) -->
+    <div id="order-quick-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:560px; padding:0; overflow:hidden; border-radius:18px; border:1.5px solid rgba(249,115,22,0.3); background:#12131a; box-shadow:0 25px 70px rgba(0,0,0,0.9);">
+            <div class="modal-header" style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); background:linear-gradient(135deg, rgba(249,115,22,0.15), rgba(234,88,12,0.06)); display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:38px; height:38px; border-radius:10px; background:rgba(249,115,22,0.2); display:flex; align-items:center; justify-content:center; font-size:18px;">
+                        🛍️
+                    </div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h3 class="modal-title" id="quick-order-id-title" style="color:var(--brand-orange); font-size:1.15rem; font-weight:900; margin:0; font-family:monospace;">#XXXXXX</h3>
+                            <span id="quick-order-status-badge" class="badge badge-new" style="font-size:11px; padding:3px 8px;">PENDING</span>
+                        </div>
+                        <div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;" id="quick-order-time-type">00:00 PM • Delivery</div>
+                    </div>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="closeModal('order-quick-modal')">✕</button>
+            </div>
+
+            <div style="padding:20px; max-height:78vh; overflow-y:auto;">
+                <!-- ⚡ Primary Workflow Next Action Step Container -->
+                <div id="quick-order-primary-action-card" style="margin-bottom:18px;">
+                    <!-- Injected dynamically based on current status -->
+                </div>
+
+                <!-- Customer Details Card -->
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                        <div>
+                            <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">Customer</div>
+                            <div style="font-size:15px; font-weight:800; color:#fff;" id="quick-cust-name">Customer Name</div>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <a id="quick-cust-call-btn" href="tel:" class="btn btn-sm btn-secondary" style="background:#2563eb; color:#fff; font-weight:700; padding:6px 12px; font-size:12px; text-decoration:none; border-radius:8px; display:inline-flex; align-items:center; gap:4px;">
+                                📞 Call
+                            </a>
+                            <a id="quick-cust-wa-btn" href="https://wa.me/" target="_blank" class="btn btn-sm btn-secondary" style="background:#16a34a; color:#fff; font-weight:700; padding:6px 12px; font-size:12px; text-decoration:none; border-radius:8px; display:inline-flex; align-items:center; gap:4px;">
+                                💬 WhatsApp
+                            </a>
+                        </div>
+                    </div>
+                    <div style="font-size:12.5px; color:#cbd5e1; line-height:1.4; border-top:1px dashed rgba(255,255,255,0.08); padding-top:8px;">
+                        📍 <strong style="color:#94a3b8;">Address:</strong> <span id="quick-cust-address">-</span>
+                    </div>
+                </div>
+
+                <!-- Order Items Card -->
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:14px; margin-bottom:16px;">
+                    <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; margin-bottom:10px;">Ordered Items</div>
+                    <div id="quick-order-items-list" style="display:flex; flex-direction:column; gap:8px;">
+                        <!-- Items Injected -->
+                    </div>
+                    <!-- Bill Summary -->
+                    <div style="border-top:1px solid rgba(255,255,255,0.08); margin-top:12px; padding-top:10px; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:13px; color:#94a3b8;">Grand Total Amount</span>
+                        <strong style="font-size:18px; color:var(--brand-gold);" id="quick-order-grand-total">₹0</strong>
+                    </div>
+                </div>
+
+                <!-- Auxiliary Secondary Tools (Print KOT, Print Bill, Delete) -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:14px;">
+                    <button type="button" class="btn btn-secondary" style="font-size:12px; font-weight:700; padding:10px;" id="quick-print-kot-btn">
+                        🖨️ Print KOT Slip
+                    </button>
+                    <button type="button" class="btn btn-secondary" style="font-size:12px; font-weight:700; padding:10px;" id="quick-print-bill-btn">
+                        📄 View Official Bill
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ➕ Add Delivery Boy Modal -->
     <div id="add-delivery-boy-modal" class="modal hidden">
         <div class="modal-content" style="max-width:440px; padding:0; overflow:hidden; border-radius:16px; border:1px solid rgba(255,255,255,0.12); background:#14141c; box-shadow:0 25px 60px rgba(0,0,0,0.85);">

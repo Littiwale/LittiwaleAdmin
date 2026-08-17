@@ -713,21 +713,21 @@ window.renderOrderNotifications = function() {
             let statusPill = `<span class="badge badge-new" style="font-size:10px;">Pending</span>`;
             let actionBtn = `
                 <div style="display:flex; gap:6px;">
-                    <button class="btn btn-sm btn-primary" style="padding:4px 9px; font-size:11.5px; background:#25d366; color:#000; font-weight:800;" onclick="closeOrderNotifications(); openOrderConfirmModal('${ord._id}')" title="Confirm Order">✅ Confirm</button>
+                    <button class="btn btn-sm btn-primary" style="padding:4px 9px; font-size:11.5px; background:#25d366; color:#000; font-weight:800;" onclick="closeOrderNotifications(); openOrderQuickModal('${ord._id}')" title="Confirm Order">✅ Actions</button>
                     <button class="btn btn-sm btn-outline" style="padding:4px 8px; font-size:11.5px; border-color:#ef4444; color:#ef4444;" onclick="closeOrderNotifications(); cancelOrderPrompt('${ord._id}')" title="Reject Order">✕</button>
                 </div>
             `;
             
             if (status === 'accepted' || status === 'confirmed') {
                 statusPill = `<span class="badge badge-active" style="font-size:10px;">Kitchen</span>`;
-                actionBtn = `<button class="btn btn-sm btn-info" style="padding:4px 10px; font-size:11.5px; font-weight:700;" onclick="closeOrderNotifications(); openOrderConfirmModal('${ord._id}')">📦 Dispatch</button>`;
+                actionBtn = `<button class="btn btn-sm btn-info" style="padding:4px 10px; font-size:11.5px; font-weight:700;" onclick="closeOrderNotifications(); openOrderQuickModal('${ord._id}')">📦 Dispatch →</button>`;
             } else if (status === 'dispatched') {
                 statusPill = `<span class="badge badge-info" style="font-size:10px;">On Way</span>`;
-                actionBtn = `<button class="btn btn-sm btn-success" style="padding:4px 10px; font-size:11.5px; font-weight:700;" onclick="closeOrderNotifications(); openOrderConfirmModal('${ord._id}')">🎉 Deliver</button>`;
+                actionBtn = `<button class="btn btn-sm btn-success" style="padding:4px 10px; font-size:11.5px; font-weight:700;" onclick="closeOrderNotifications(); openOrderQuickModal('${ord._id}')">🎉 Deliver →</button>`;
             }
 
             return `
-                <div class="notif-item ${status}" style="padding:13px 16px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:7px;">
+                <div class="notif-item ${status}" style="padding:13px 16px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; flex-direction:column; gap:7px; cursor:pointer;" onclick="closeOrderNotifications(); openOrderQuickModal('${ord._id}')">
                     <!-- Top Row: Order ID, Status, Time -->
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div style="display:flex; align-items:center; gap:6px;">
@@ -746,7 +746,7 @@ window.renderOrderNotifications = function() {
                     <!-- Bottom Row: Price & Action -->
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px; padding-top:6px; border-top:1px dashed rgba(255,255,255,0.08);">
                         <span style="font-size:13.5px; font-weight:800; color:var(--brand-orange, #f97316);">₹${total}</span>
-                        ${actionBtn}
+                        <div onclick="event.stopPropagation();">${actionBtn}</div>
                     </div>
                 </div>
             `;
@@ -755,7 +755,10 @@ window.renderOrderNotifications = function() {
 };
 
 window.toggleOrderNotificationsDropdown = function(e) {
-    if (e) e.stopPropagation();
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
     const drop = document.getElementById('order-notifications-dropdown');
     if (drop) {
         window.renderOrderNotifications();
@@ -778,6 +781,176 @@ document.addEventListener('click', (e) => {
         window.closeOrderNotifications();
     }
 });
+
+// =========================================================================
+// ⚡ QUICK ORDER DETAILS & 1-TAP ACTION MODAL (MOBILE FIRST)
+// =========================================================================
+window.openOrderQuickModal = function(orderId) {
+    const orders = window.cachedOrders || [];
+    const ord = orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId));
+    if (!ord) {
+        showToast('Order details not found in cache.', 'error');
+        return;
+    }
+
+    const shortId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+    const status = (ord.status || 'pending').toLowerCase();
+    const formattedTime = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const formattedDate = ord.createdAt ? new Date(ord.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+    const orderType = (ord.orderType || 'Delivery').toUpperCase();
+
+    // 1. Header
+    const idTitle = document.getElementById('quick-order-id-title');
+    if (idTitle) idTitle.textContent = `#${shortId}`;
+
+    const badgeEl = document.getElementById('quick-order-status-badge');
+    if (badgeEl) {
+        badgeEl.textContent = status.toUpperCase();
+        badgeEl.className = `badge ${status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')))}`;
+    }
+
+    const timeTypeEl = document.getElementById('quick-order-time-type');
+    if (timeTypeEl) timeTypeEl.textContent = `${formattedDate} • ${formattedTime} • ${orderType}`;
+
+    // 2. Primary Workflow Action Card
+    const actionCard = document.getElementById('quick-order-primary-action-card');
+    if (actionCard) {
+        if (status === 'pending') {
+            actionCard.innerHTML = `
+                <div style="background:rgba(37,211,102,0.1); border:1.5px solid rgba(37,211,102,0.35); border-radius:14px; padding:16px; text-align:center;">
+                    <div style="font-weight:900; font-size:14px; color:#25d366; margin-bottom:12px;">⚡ STEP 1: ACCEPT & PREPARE FOOD</div>
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" class="btn btn-primary" style="flex:2; background:#25d366; color:#000; font-weight:900; font-size:14px; padding:12px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'accepted'); showToast('Order Accepted! Food is preparing.', 'success');">
+                            ✅ Accept Order
+                        </button>
+                        <button type="button" class="btn btn-outline" style="flex:1; border-color:#ef4444; color:#ef4444; font-weight:800; font-size:13px; padding:12px; border-radius:10px;" onclick="closeModal('order-quick-modal'); cancelOrderPrompt('${ord._id}');">
+                            ✕ Reject
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else if (status === 'accepted' || status === 'confirmed') {
+            actionCard.innerHTML = `
+                <div style="background:rgba(59,130,246,0.1); border:1.5px solid rgba(59,130,246,0.35); border-radius:14px; padding:16px; text-align:center;">
+                    <div style="font-weight:900; font-size:14px; color:#60a5fa; margin-bottom:12px;">⚡ STEP 2: FOOD READY? ASSIGN RIDER</div>
+                    <button type="button" class="btn btn-primary" style="width:100%; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:13px; border-radius:10px; box-shadow:0 4px 15px rgba(59,130,246,0.4);" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
+                        📦 Assign Delivery Partner & Dispatch →
+                    </button>
+                </div>
+            `;
+        } else if (status === 'dispatched') {
+            const riderName = ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Rider';
+            const riderPhone = ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '';
+            actionCard.innerHTML = `
+                <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px; text-align:center;">
+                    <div style="font-weight:900; font-size:14px; color:#34d399; margin-bottom:6px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
+                    ${riderPhone ? `<div style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:10px;"></div>'}
+                    <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); showToast('🎉 Order Successfully Delivered!', 'success');">
+                        🎉 Mark Order Delivered (Completed)
+                    </button>
+                </div>
+            `;
+        } else if (status === 'delivered') {
+            actionCard.innerHTML = `
+                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px; text-align:center; color:#34d399; font-weight:800; font-size:13.5px;">
+                    🎉 Order Completed & Delivered Successfully
+                </div>
+            `;
+        } else {
+            actionCard.innerHTML = `
+                <div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:12px; padding:12px; text-align:center; color:#f87171; font-weight:800; font-size:13.5px;">
+                    ✕ Order Cancelled
+                </div>
+            `;
+        }
+    }
+
+    // 3. Customer Info
+    const custName = ord.customerName || 'Customer';
+    const targetPhone = ord.whatsappPhone || ord.customerPhone || '';
+    const rawPhone = targetPhone.replace(/\D/g, '').slice(-10);
+    const fullAddress = ord.deliveryAddress || ord.address || (ord.orderType === 'dinein' ? 'Dine-In at Restaurant' : 'Takeaway / Self-Pickup');
+
+    const nameEl = document.getElementById('quick-cust-name');
+    if (nameEl) nameEl.textContent = custName;
+
+    const callBtn = document.getElementById('quick-cust-call-btn');
+    if (callBtn) {
+        if (targetPhone) {
+            callBtn.href = `tel:${targetPhone}`;
+            callBtn.style.display = 'inline-flex';
+        } else {
+            callBtn.style.display = 'none';
+        }
+    }
+
+    const waBtn = document.getElementById('quick-cust-wa-btn');
+    if (waBtn) {
+        if (rawPhone) {
+            waBtn.href = `https://wa.me/91${rawPhone}`;
+            waBtn.style.display = 'inline-flex';
+        } else {
+            waBtn.style.display = 'none';
+        }
+    }
+
+    const addrEl = document.getElementById('quick-cust-address');
+    if (addrEl) addrEl.textContent = fullAddress;
+
+    // 4. Items List
+    const itemsListEl = document.getElementById('quick-order-items-list');
+    if (itemsListEl) {
+        const items = ord.items || [];
+        if (items.length === 0) {
+            itemsListEl.innerHTML = '<div style="color:var(--text-dim); font-size:12px;">No item details recorded</div>';
+        } else {
+            itemsListEl.innerHTML = items.map(it => {
+                const optStr = it.selectedOption ? `<span style="color:#94a3b8; font-size:11px;"> (${it.selectedOption})</span>` : '';
+                const itPrice = it.price ? `₹${it.price * (it.quantity || 1)}` : '';
+                return `
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#fff; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <div>
+                            <strong style="color:var(--brand-orange);">${it.quantity}x</strong>
+                            <span style="font-weight:600;"> ${it.name}</span>
+                            ${optStr}
+                        </div>
+                        <div style="font-weight:700; color:#cbd5e1;">${itPrice}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    // 5. Total
+    const totalEl = document.getElementById('quick-order-grand-total');
+    if (totalEl) {
+        const grandTotal = ord.finalTotal || ord.subtotal || 0;
+        totalEl.textContent = `₹${grandTotal}`;
+    }
+
+    // 6. Secondary Buttons
+    const printKotBtn = document.getElementById('quick-print-kot-btn');
+    if (printKotBtn) {
+        printKotBtn.onclick = () => {
+            if (typeof window.printSingleKOT === 'function') {
+                window.printSingleKOT(ord._id);
+            } else {
+                window.openA4InvoiceModal(ord._id);
+            }
+        };
+    }
+
+    const printBillBtn = document.getElementById('quick-print-bill-btn');
+    if (printBillBtn) {
+        printBillBtn.onclick = () => {
+            closeModal('order-quick-modal');
+            window.openA4InvoiceModal(ord._id);
+        };
+    }
+
+    // Open Modal
+    openModal('order-quick-modal');
+};
 
 // Start Continuous Background Polling every 3 seconds for zero-refresh live updates
 if (!window.adminOrdersLivePollInterval) {
@@ -884,20 +1057,23 @@ function renderOrdersTable(filterQuery = '') {
         }
 
         return `
-            <tr>
-                <td style="font-family:monospace; font-weight:800; color:var(--brand-orange);">#${orderId}</td>
-                <td>
+            <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Tap to view full order details & 1-tap actions">
+                <td style="font-family:monospace; font-weight:900; color:var(--brand-orange); cursor:pointer;" onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
+                    <span style="border-bottom:1.5px dotted var(--brand-orange);">#${orderId}</span>
+                    <span style="display:inline-block; font-size:9.5px; background:rgba(249,115,22,0.18); color:var(--brand-orange); padding:2px 5px; border-radius:4px; margin-left:4px; font-weight:800;">⚡ Actions</span>
+                </td>
+                <td onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
                     <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
                     <div style="font-size:11px; color:var(--text-dim);">${formattedDate} • <span style="text-transform:capitalize; color:var(--brand-gold);">${ord.orderType || 'delivery'}</span></div>
                 </td>
-                <td><a href="tel:${ord.customerPhone}" style="color:var(--text-muted); text-decoration:none; font-weight:600;">${ord.customerPhone || 'N/A'}</a></td>
+                <td onclick="event.stopPropagation();"><a href="tel:${ord.customerPhone}" style="color:var(--text-muted); text-decoration:none; font-weight:600;">${ord.customerPhone || 'N/A'}</a></td>
                 <td style="max-width:220px; font-size:12.5px;" title="${itemsStr}">${itemsStr}</td>
                 <td>
                     <div style="font-weight:900; color:var(--brand-gold);">₹${total}</div>
                     <div style="font-size:10.5px; color:var(--text-dim);">Del: ₹${delCharge}</div>
                 </td>
                 <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
-                <td>
+                <td onclick="event.stopPropagation();">
                     <div style="display:flex; gap:6px; align-items:center;">
                         ${actionBtnHtml}
                         <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="View & Print Official Bill (A4 PDF)">

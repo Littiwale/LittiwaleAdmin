@@ -960,7 +960,7 @@ button, input, select, textarea {
 }
 
 #order-notifications-dropdown.show {
-  display: flex;
+  display: flex !important;
 }
 
 @keyframes dropNotification {
