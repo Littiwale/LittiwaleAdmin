@@ -858,15 +858,23 @@ window.openOrderQuickModal = function(orderId) {
                 <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px; text-align:center;">
                     <div style="font-weight:900; font-size:14px; color:#34d399; margin-bottom:6px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
                     ${riderPhone ? `<div style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:10px;"></div>'}
-                    <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); showToast('🎉 Order Successfully Delivered!', 'success');">
-                        🎉 Mark Order Delivered (Completed)
-                    </button>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
+                            🎉 Mark Order Delivered (Completed)
+                        </button>
+                        <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:13px; padding:10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
+                            <span>💬 Send "Thank You & Review" WhatsApp Note</span>
+                        </button>
+                    </div>
                 </div>
             `;
         } else if (status === 'delivered') {
             actionCard.innerHTML = `
-                <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px; text-align:center; color:#34d399; font-weight:800; font-size:13.5px;">
-                    🎉 Order Completed & Delivered Successfully
+                <div style="background:rgba(16,185,129,0.08); border:1.5px solid rgba(16,185,129,0.3); border-radius:14px; padding:16px; text-align:center;">
+                    <div style="color:#34d399; font-weight:800; font-size:14px; margin-bottom:10px;">🎉 Order Completed & Delivered</div>
+                    <button type="button" class="btn btn-primary" style="width:100%; background:#25d366; color:#000; font-weight:900; font-size:13.5px; padding:12px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:8px;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
+                        <span>📲 Send "Thank You & Google Review" WhatsApp Note</span>
+                    </button>
                 </div>
             `;
         } else {
@@ -1054,16 +1062,25 @@ function renderOrdersTable(filterQuery = '') {
             `;
         } else if (status === 'dispatched') {
             actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered')" title="Mark Order Delivered">
+                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);" title="Mark Order Delivered & Open Thank You WhatsApp">
                     🎉 Deliver
                 </button>
-                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
+                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
+                    👁️
+                </button>
+            `;
+        } else if (status === 'delivered') {
+            actionBtnHtml = `
+                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#25d366; color:#000;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')" title="Send Thank You & Review Note on WhatsApp">
+                    📲 Thank You
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
                     👁️
                 </button>
             `;
         } else {
             actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 10px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
+                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 10px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
                     👁️ Details
                 </button>
             `;
@@ -5242,6 +5259,44 @@ window.sendCustomerDispatchWhatsApp = function() {
         const waUrl = `https://wa.me/91${cleanCustPhone}?text=${encodeURIComponent(msg)}`;
         window.open(waUrl, '_blank');
         window.showAdminToast(`💬 "Out for Delivery" note opened for Customer!`, 'success');
+    } else {
+        window.showAdminToast('Customer phone number unavailable', 'warning');
+    }
+};
+
+window.sendCustomerDeliveredWhatsApp = function(orderId) {
+    const orders = window.cachedOrders || [];
+    const order = (orderId ? (orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId))) : null) || window.currentDispatchOrder;
+    if (!order || !order._id) {
+        window.showAdminToast('Order details not found', 'error');
+        return;
+    }
+
+    const shortId = order._id ? String(order._id).slice(-6).toUpperCase() : 'LW-ORD';
+    const targetPhone = order.whatsappPhone || order.customerPhone || '';
+    const cleanCustPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
+    const custName = order.customerName || 'Foodie';
+
+    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
+        ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
+        : 'https://littiwale-barbil.vercel.app';
+
+    const msg = `🎉 *ORDER DELIVERED — THANK YOU FOR CHOOSING LITTIWALE!* ❤️\n\n` +
+                `Dear *${custName}*,\n` +
+                `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been delivered successfully! 🍽️\n\n` +
+                `We hope you enjoy every single bite! 🔥\n\n` +
+                `⭐ *Rate Your Food Experience:*\n` +
+                `If you loved the taste & service, please take 10 seconds to give Littiwale Cloud Kitchen a 5-star Google review:\n` +
+                `👉 https://g.page/r/CYlrxD6jO24cEAE/review\n\n` +
+                `🍴 *Hungry Again? Order Next Meal Here:*\n` +
+                `🌐 ${baseUrl}\n\n` +
+                `Thank you once again & see you soon!\n` +
+                `*— Team Littiwale Barbil*`;
+
+    if (cleanCustPhone) {
+        const waUrl = `https://wa.me/91${cleanCustPhone}?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+        window.showAdminToast(`📲 "Thank You & Review" note opened for ${custName}!`, 'success');
     } else {
         window.showAdminToast('Customer phone number unavailable', 'warning');
     }
