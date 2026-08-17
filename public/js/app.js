@@ -2116,10 +2116,10 @@ window.renderDynamicDashboard = function() {
     const totalCoupons = coupons.length;
 
     const elMenuKpi = document.getElementById('kpi-menu-count');
-    if (elMenuKpi) elMenuKpi.textContent = totalMenu;
+    if (elMenuKpi) elMenuKpi.textContent = (totalMenu === 0 && !window.isMenuFetchDone) ? 'Syncing...' : totalMenu;
 
     const elSideCount = document.getElementById('sidebar-menu-count');
-    if (elSideCount) elSideCount.textContent = totalMenu;
+    if (elSideCount) elSideCount.textContent = (totalMenu === 0 && !window.isMenuFetchDone) ? '...' : totalMenu;
 
     const elCatKpi = document.getElementById('kpi-categories-count');
     if (elCatKpi) elCatKpi.textContent = totalCat;
@@ -2489,15 +2489,17 @@ document.getElementById('menu-image').addEventListener('change', async (e) => {
     }
 });
 
-window.cachedMenuItems = [];
-
 async function fetchAndRenderMenu() {
+    const t0 = Date.now();
     try {
         const menus = await apiCall('/menu');
         window.cachedMenuItems = menus || [];
+        window.isMenuFetchDone = true;
         try {
             localStorage.setItem('lw_admin_menu_cache', JSON.stringify(menus || []));
         } catch(e) {}
+        
+        console.log(`%c⚡ [LITTIWALE ADMIN] Menu loaded in ${Date.now() - t0}ms (${(menus || []).length} items)`, 'color:#10b981; font-weight:bold;');
         
         // Update stats across dashboard and sidebar
         const liveCount = (menus || []).filter(m => m.isAvailable !== false).length;
