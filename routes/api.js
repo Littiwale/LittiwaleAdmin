@@ -187,6 +187,7 @@ router.put('/categories/:id/toggle-stock', checkPin, async (req, res) => {
             { category: category.name },
             { $set: { isAvailable: isAvailable } }
         );
+        if (typeof invalidateMenuCache === 'function') invalidateMenuCache();
 
         res.json(category);
     } catch (err) {
@@ -204,12 +205,27 @@ router.delete('/categories/:id', checkPin, async (req, res) => {
 });
 
 // =======================
-// MENU ROUTES
+// MENU ROUTES (High-Speed Cached)
 // =======================
+let memoryMenuCache = null;
+let memoryMenuCacheTime = 0;
+const MENU_CACHE_TTL = 30000; // 30 seconds memory cache
+
+function invalidateMenuCache() {
+    memoryMenuCache = null;
+    memoryMenuCacheTime = 0;
+}
+
 router.get('/menu', async (req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=600');
+        const now = Date.now();
+        if (memoryMenuCache && (now - memoryMenuCacheTime < MENU_CACHE_TTL)) {
+            return res.json(memoryMenuCache);
+        }
         const menu = await Menu.find().sort({ createdAt: -1 }).lean();
+        memoryMenuCache = menu;
+        memoryMenuCacheTime = now;
         res.json(menu);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -218,7 +234,7 @@ router.get('/menu', async (req, res) => {
 
 router.get('/deals', async (req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
+        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=600');
         const deals = await Menu.find({
             $or: [
                 { isCraziestDeal: true },
@@ -233,6 +249,7 @@ router.get('/deals', async (req, res) => {
 
 router.post('/menu', checkPin, async (req, res) => {
     try {
+        invalidateMenuCache();
         const newItem = new Menu(req.body);
         await newItem.save();
         res.status(201).json(newItem);
@@ -243,6 +260,7 @@ router.post('/menu', checkPin, async (req, res) => {
 
 router.put('/menu/:id', checkPin, async (req, res) => {
     try {
+        invalidateMenuCache();
         const updatedItem = await Menu.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true });
         res.json(updatedItem);
     } catch (err) {
@@ -252,6 +270,7 @@ router.put('/menu/:id', checkPin, async (req, res) => {
 
 router.delete('/menu/:id', checkPin, async (req, res) => {
     try {
+        invalidateMenuCache();
         await Menu.findByIdAndDelete(req.params.id);
         res.json({ message: 'Menu item deleted' });
     } catch (err) {

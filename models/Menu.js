@@ -18,4 +18,8 @@ const menuSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+menuSchema.index({ category: 1, isAvailable: 1 });
+menuSchema.index({ locationAvailability: 1 });
+menuSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model("Menu", menuSchema);
