@@ -84,7 +84,13 @@ const storeSettingSchema = new mongoose.Schema({
     seoKeywords: { type: String, default: "littiwale barbil, best restaurant in barbil, litti chokha barbil, online food delivery barbil, cloud kitchen barbil, thali barbil, veg nonveg food barbil, food delivery near me barbil" },
     seoOgImage: { type: String, default: "images/logo.png" },
     googleVerificationTag: { type: String, default: "" },
-    canonicalUrl: { type: String, default: "https://littiwale.com" },
+    canonicalUrl: { type: String, default: "https://littiwale-barbil.vercel.app" },
+    deliveryBoys: [{
+        id: { type: String },
+        name: { type: String, required: true },
+        phone: { type: String, required: true },
+        isActive: { type: Boolean, default: true }
+    }],
 
     updatedAt: { type: Date, default: Date.now }
 }, { strict: false });

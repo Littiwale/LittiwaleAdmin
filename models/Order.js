@@ -25,6 +25,12 @@ const orderSchema = new mongoose.Schema({
     paymentMode: { type: String, default: 'full' },
     notes: { type: String, default: '' },
     orderSource: { type: String, default: 'website' },
+    deliveryBoy: {
+        name: { type: String, default: '' },
+        phone: { type: String, default: '' }
+    },
+    paymentCollectedByStore: { type: Boolean, default: false },
+    dispatchedAt: { type: Date },
     status: { type: String, enum: ['pending', 'accepted', 'preparing', 'dispatched', 'delivered', 'cancelled'], default: 'pending' },
     createdAt: { type: Date, default: Date.now }
 }, { timestamps: true, strict: false });

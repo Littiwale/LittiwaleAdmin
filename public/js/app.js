@@ -856,7 +856,7 @@ function renderOrdersTable(filterQuery = '') {
             `;
         } else if (status === 'accepted' || status === 'confirmed') {
             actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:700; background:#3b82f6; color:#fff;" onclick="directUpdateOrderStatus('${ord._id}', 'dispatched')" title="Mark Out for Delivery">
+                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:700; background:#3b82f6; color:#fff;" onclick="openDispatchModal('${ord._id}')" title="Mark Out for Delivery & Assign Rider">
                     📦 Dispatch
                 </button>
                 <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
@@ -3030,6 +3030,8 @@ async function loadStoreSettings() {
 
         // Auto-reopen if offlineUntil timer has expired
         autoReopenIfTimePassed();
+
+        if (typeof window.loadDeliveryBoys === 'function') window.loadDeliveryBoys();
     } catch (e) { console.error(e); }
 }
 
@@ -3625,9 +3627,21 @@ window.updateDealPricePreviewBadge = function() {
     const origVal = Number(origInput?.value || 0);
     const priceVal = Number(priceInput?.value || 0);
 
+    const sel1 = document.getElementById('deal-item-1') || document.getElementById('deal-item1-select');
+    const sel2 = document.getElementById('deal-item-2') || document.getElementById('deal-item2-select');
+    const opt1 = sel1 ? sel1.options[sel1.selectedIndex] : null;
+    const opt2 = sel2 ? sel2.options[sel2.selectedIndex] : null;
+    const price1 = Number(opt1 ? (opt1.getAttribute('data-price') || 0) : 0);
+    const price2 = Number(opt2 ? (opt2.getAttribute('data-price') || 0) : 0);
+    const baseFoodCost = price1 + price2;
+
+    const baseEl = document.getElementById('deal-base-locked-price');
+    if (baseEl) baseEl.textContent = `₹${baseFoodCost}`;
+
     const prevPriceEl = document.getElementById('preview-deal-price');
     const prevOrigEl = document.getElementById('preview-orig-price');
     const prevTagEl = document.getElementById('preview-discount-tag');
+    const marginEl = document.getElementById('preview-margin-val');
 
     if (prevPriceEl) prevPriceEl.textContent = `₹${priceVal}`;
     if (prevOrigEl) {
@@ -3648,6 +3662,16 @@ window.updateDealPricePreviewBadge = function() {
             prevTagEl.style.display = 'none';
         }
     }
+    if (marginEl) {
+        const margin = priceVal - baseFoodCost;
+        if (baseFoodCost > 0) {
+            marginEl.textContent = `${margin >= 0 ? '+' : ''}₹${margin}`;
+            marginEl.style.color = margin >= 0 ? '#38bdf8' : '#f87171';
+        } else {
+            marginEl.textContent = `₹0`;
+            marginEl.style.color = '#94a3b8';
+        }
+    }
 };
 
 window.recalculateDealPrices = function(updateInputs = true) {
@@ -3665,29 +3689,29 @@ window.recalculateDealPrices = function(updateInputs = true) {
 
     const baseFoodCost = price1 + price2;
 
-    // Formula: Original Strike-through MRP = Base Cost + ~30% (+₹50-100 extra inflated MRP)
+    const baseEl = document.getElementById('deal-base-locked-price');
+    if (baseEl) baseEl.textContent = `₹${baseFoodCost}`;
+
+    // Suggested Profit Pricing
     const suggestedMRP = baseFoodCost > 0 ? Math.round((baseFoodCost * 1.30) / 10) * 10 : 0;
-    
-    // Formula: Special Deal Price = Base Cost + ~12% rounded attractive price (e.g. ₹240 -> ₹269)
-    const suggestedDealPrice = baseFoodCost > 0 ? Math.round((baseFoodCost * 1.12) / 10) * 10 - 1 : 0;
+    const suggestedDealPrice = baseFoodCost > 0 ? Math.round((baseFoodCost * 1.10) / 10) * 10 : 0;
 
     const breakdownEl = document.getElementById('deal-calc-breakdown');
     const origPriceInput = document.getElementById('deal-orig-price');
     const priceInput = document.getElementById('deal-price');
     
     if (baseFoodCost > 0 && updateInputs) {
-        if (origPriceInput) origPriceInput.value = suggestedMRP;
-        if (priceInput) priceInput.value = suggestedDealPrice;
+        if (origPriceInput && !origPriceInput.value) origPriceInput.value = suggestedMRP;
+        if (priceInput && !priceInput.value) priceInput.value = suggestedDealPrice;
     }
 
     if (breakdownEl) {
         if (price1 > 0 && price2 > 0) {
-            const extraMRP = suggestedMRP - baseFoodCost;
             breakdownEl.innerHTML = `
                 <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); line-height:1.5;">
-                    <div>🍽️ <strong>Dishes:</strong> ${name1} (<span style="color:#fb923c;">₹${price1}</span>) + ${name2} (<span style="color:#fb923c;">₹${price2}</span>) = Base: <strong style="color:#fff;">₹${baseFoodCost}</strong></div>
+                    <div>🍽️ <strong>Items:</strong> ${name1} (<span style="color:#fb923c;">₹${price1}</span>) + ${name2} (<span style="color:#fb923c;">₹${price2}</span>) = Base Value: <strong style="color:#fbbf24;">₹${baseFoodCost}</strong> (Locked)</div>
                     <div style="font-size:10.5px; color:#94a3b8; margin-top:2px;">
-                        📈 <strong>MRP:</strong> ₹${suggestedMRP} (+₹${extraMRP} strike-through) • 🎯 <strong>Deal Price:</strong> ₹${suggestedDealPrice} (Margin added)
+                        💡 Set custom <strong>Strikethrough MRP</strong> (e.g. ₹400) and <strong>Deal Price</strong> (e.g. ₹320) above.
                     </div>
                 </div>
             `;
@@ -4592,7 +4616,7 @@ window.openOrderConfirmModal = function(orderId) {
             `;
         } else if (status === 'accepted' || status === 'confirmed') {
             buttonsHtml += `
-                <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="quickUpdateOrderStatus('dispatched')">
+                <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="openDispatchModal()">
                     <span>📦 Mark Out for Delivery (Dispatch)</span>
                 </button>
                 <div style="display:flex; gap:10px;">
@@ -4705,6 +4729,9 @@ window.confirmOrderAndWhatsApp = async function() {
             const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
             const locationInfo = isTakeaway ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
+            const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') : 'https://littiwale-barbil.vercel.app';
+            const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
+
             const msg = `${orderTypeHeader}\n\n` +
                         `Hi *${order.customerName || 'Customer'}*,\n` +
                         `Your order *#${shortId}* has been accepted and is now being prepared fresh! 👨‍🍳🔥\n\n` +
@@ -4713,7 +4740,7 @@ window.confirmOrderAndWhatsApp = async function() {
                         (isTakeaway ? `*Delivery Fee:* ₹0 (Self Pickup)\n` : `*Delivery Fee:* ₹${delCharge}\n`) +
                         `*Grand Total Payable:* ₹${finalTotal} (${order.paymentMethod || 'COD'})\n\n` +
                         `${locationInfo}\n\n` +
-                        `*🧾 Live Status & Download Bill:* https://littiwale.com/track.html?id=${order._id}\n\n` +
+                        `*🧾 Live Status & Download Bill:* ${trackingLink}\n\n` +
                         (isTakeaway ? `We look forward to serving you at our kitchen counter. Thank you for choosing *Littiwale*! ❤️` : `Your hot delicious food is on the way. Thank you for ordering from *Littiwale*! ❤️`);
 
             const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`;
@@ -4724,6 +4751,353 @@ window.confirmOrderAndWhatsApp = async function() {
     } catch(e) {
         console.error('Confirm order error:', e);
         window.showAdminToast('Error confirming order', 'error');
+    }
+};
+
+// ==========================================================================
+// DELIVERY BOY FLEET MANAGEMENT & ORDER DISPATCH FLOW
+// ==========================================================================
+window.cachedDeliveryBoys = [];
+window.currentDispatchOrder = null;
+
+window.loadDeliveryBoys = async function() {
+    try {
+        const res = await fetch(`${API_URL}/delivery-boys`);
+        if (res.ok) {
+            window.cachedDeliveryBoys = await res.json();
+            window.renderDeliveryBoysList();
+        }
+    } catch(e) {
+        console.warn('Error loading delivery boys:', e);
+    }
+};
+
+window.renderDeliveryBoysList = function() {
+    const container = document.getElementById('delivery-boys-list-container');
+    if (!container) return;
+
+    if (!window.cachedDeliveryBoys || window.cachedDeliveryBoys.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column:1/-1; padding:20px; text-align:center; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:10px; color:#94a3b8; font-size:12.5px;">
+                🛵 No delivery boys added yet. Click "+ Add Delivery Boy" above to add riders to your fleet.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = window.cachedDeliveryBoys.map(boy => `
+        <div style="background:var(--bg-card-inner); border:1px solid var(--border-card); border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:800; color:#fff; font-size:13.5px; display:flex; align-items:center; gap:6px;">
+                    <span>🛵</span> <span>${boy.name}</span>
+                </div>
+                <div style="font-size:11.5px; color:#38bdf8; font-weight:600; margin-top:2px;">
+                    📞 +91 ${boy.phone}
+                </div>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <a href="https://wa.me/91${boy.phone}" target="_blank" class="btn btn-sm" style="padding:5px 8px; font-size:11px; background:#25d366; color:#000; font-weight:700; text-decoration:none; border-radius:6px;" title="Chat with Rider">
+                    💬
+                </a>
+                <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px; font-size:11px; border-color:#ef4444; color:#ef4444; border-radius:6px;" onclick="window.deleteDeliveryBoy('${boy.id}')" title="Remove Rider">
+                    ✕
+                </button>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.openAddDeliveryBoyModal = function() {
+    const nameInput = document.getElementById('new-rider-name');
+    const phoneInput = document.getElementById('new-rider-phone');
+    if (nameInput) nameInput.value = '';
+    if (phoneInput) phoneInput.value = '';
+    openModal('add-delivery-boy-modal');
+};
+
+window.handleSaveNewDeliveryBoy = async function(e) {
+    if (e) e.preventDefault();
+    const name = document.getElementById('new-rider-name')?.value?.trim();
+    const phone = document.getElementById('new-rider-phone')?.value?.trim();
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+
+    if (!name || !phone) {
+        window.showAdminToast('Please enter both Rider Name and Phone number', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/delivery-boys`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ name, phone })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(`🛵 Rider "${name}" added to Fleet!`, 'success');
+            closeModal('add-delivery-boy-modal');
+            await window.loadDeliveryBoys();
+            // Also refresh dispatch dropdown if open
+            if (window.currentDispatchOrder) {
+                window.populateDispatchRidersDropdown();
+            }
+        } else {
+            window.showAdminToast('Failed to add delivery boy', 'error');
+        }
+    } catch(err) {
+        window.showAdminToast('Error adding delivery boy', 'error');
+    }
+};
+
+window.deleteDeliveryBoy = async function(id) {
+    if (!id) return;
+    if (!confirm('Are you sure you want to remove this delivery boy from fleet?')) return;
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+
+    try {
+        const res = await fetch(`${API_URL}/delivery-boys/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            }
+        });
+
+        if (res.ok) {
+            window.showAdminToast('Rider removed from fleet', 'warning');
+            await window.loadDeliveryBoys();
+        } else {
+            window.showAdminToast('Failed to remove rider', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error removing rider', 'error');
+    }
+};
+
+window.populateDispatchRidersDropdown = function() {
+    const selectEl = document.getElementById('dispatch-delivery-boy-select');
+    if (!selectEl) return;
+
+    const boys = window.cachedDeliveryBoys || [];
+    let optionsHtml = '';
+
+    if (boys.length === 0) {
+        optionsHtml = `
+            <option value="default_1" data-name="Littiwale Rider" data-phone="6370680744">🛵 Littiwale Barbil Delivery Partner (+91 6370680744)</option>
+            <option value="__custom__">➕ Enter Other / Third-Party Rider...</option>
+        `;
+    } else {
+        optionsHtml = boys.map((b, idx) => `
+            <option value="${b.id}" data-name="${b.name}" data-phone="${b.phone}" ${idx === 0 ? 'selected' : ''}>
+                🛵 ${b.name} (+91 ${b.phone})
+            </option>
+        `).join('') + `<option value="__custom__">➕ Enter Custom / Third-Party Rider...</option>`;
+    }
+
+    selectEl.innerHTML = optionsHtml;
+    window.onDispatchRiderSelected();
+};
+
+window.onDispatchRiderSelected = function() {
+    const selectEl = document.getElementById('dispatch-delivery-boy-select');
+    const customFields = document.getElementById('dispatch-custom-rider-fields');
+    if (!selectEl || !customFields) return;
+
+    if (selectEl.value === '__custom__') {
+        customFields.style.display = 'grid';
+    } else {
+        customFields.style.display = 'none';
+    }
+};
+
+window.openDispatchModal = async function(orderId = null) {
+    let order = null;
+    if (orderId) {
+        order = (window.cachedOrders || []).find(o => String(o._id) === String(orderId) || String(o._id).slice(-6).toUpperCase() === String(orderId).toUpperCase());
+    } else {
+        order = window.currentSelectedOrder;
+    }
+
+    if (!order || !order._id) {
+        window.showAdminToast('Order not found', 'error');
+        return;
+    }
+
+    window.currentDispatchOrder = order;
+    const shortId = String(order._id).slice(-6).toUpperCase();
+
+    // Populate Modal Details
+    const titleEl = document.getElementById('dispatch-modal-title');
+    if (titleEl) titleEl.textContent = `Dispatch Order #${shortId}`;
+
+    const custNameEl = document.getElementById('dispatch-cust-name');
+    if (custNameEl) custNameEl.textContent = order.customerName || 'Customer';
+
+    const custPhoneEl = document.getElementById('dispatch-cust-phone');
+    if (custPhoneEl) custPhoneEl.textContent = `+91 ${order.customerPhone || 'N/A'}`;
+
+    const custAddrEl = document.getElementById('dispatch-cust-address');
+    if (custAddrEl) custAddrEl.textContent = order.deliveryAddress || (order.orderType === 'takeaway' ? 'Self Pickup at Kitchen' : 'Barbil');
+
+    const totalVal = Number(order.finalTotal || order.subtotal || 0);
+    const totalEl = document.getElementById('dispatch-order-total');
+    if (totalEl) totalEl.textContent = `Total: ₹${totalVal} (${order.paymentMethod || 'COD'})`;
+
+    const collectLabel = document.getElementById('dispatch-collect-cash-label');
+    if (collectLabel) {
+        collectLabel.textContent = `💵 Collect Cash from Customer (₹${totalVal})`;
+    }
+
+    // Default payment choice: if order.paymentMethod === 'UPI' or paymentCollectedByStore, default to prepaid
+    const payCollectRadio = document.getElementById('dispatch-pay-collect');
+    const payPrepaidRadio = document.getElementById('dispatch-pay-prepaid');
+    if (order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full')) {
+        if (payPrepaidRadio) payPrepaidRadio.checked = true;
+    } else {
+        if (payCollectRadio) payCollectRadio.checked = true;
+    }
+
+    // Ensure delivery boys are loaded
+    if (!window.cachedDeliveryBoys || window.cachedDeliveryBoys.length === 0) {
+        await window.loadDeliveryBoys();
+    }
+    window.populateDispatchRidersDropdown();
+
+    openModal('order-dispatch-modal');
+};
+
+window.getSelectedDispatchRider = function() {
+    const selectEl = document.getElementById('dispatch-delivery-boy-select');
+    if (!selectEl) return { name: 'Littiwale Rider', phone: '6370680744' };
+
+    if (selectEl.value === '__custom__') {
+        const customName = document.getElementById('dispatch-custom-rider-name')?.value?.trim() || 'Delivery Partner';
+        const customPhone = (document.getElementById('dispatch-custom-rider-phone')?.value || '6370680744').replace(/\D/g, '').slice(-10);
+        return { name: customName, phone: customPhone || '6370680744' };
+    }
+
+    const opt = selectEl.options[selectEl.selectedIndex];
+    const name = opt ? (opt.getAttribute('data-name') || opt.text) : 'Delivery Partner';
+    const phone = opt ? (opt.getAttribute('data-phone') || '6370680744') : '6370680744';
+    return { name, phone };
+};
+
+window.sendDeliveryBoyDispatchWhatsApp = function() {
+    const order = window.currentDispatchOrder;
+    if (!order || !order._id) {
+        window.showAdminToast('No active order selected', 'error');
+        return;
+    }
+
+    const rider = window.getSelectedDispatchRider();
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Food Items';
+    
+    const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
+    const finalTotal = Number(order.finalTotal || order.subtotal || 0);
+
+    const paymentInstruction = isPrepaid 
+        ? `👉 *[ ₹0 — ALREADY PAID / RECEIVED AT RESTAURANT ]*`
+        : `👉 *[ COLLECT ₹${finalTotal} CASH FROM CUSTOMER ]*`;
+
+    const gpsLine = order.gpsLink ? `\n*📍 Google Maps:* ${order.gpsLink}` : '';
+
+    const slip = `📦 *NEW DELIVERY ASSIGNED — LITTIWALE BARBIL*\n\n` +
+                 `*Order ID:* *#${shortId}*\n` +
+                 `*Customer Name:* *${order.customerName || 'Customer'}*\n` +
+                 `*Customer Phone:* +91 ${order.customerPhone || 'N/A'}\n` +
+                 `*Delivery Address:* ${order.deliveryAddress || 'Barbil'}${order.landmark ? ` (Landmark: ${order.landmark})` : ''}${gpsLine}\n\n` +
+                 `*📋 Order Items:*\n${itemsList}\n\n` +
+                 `*💰 PAYMENT TO COLLECT:*\n${paymentInstruction}\n\n` +
+                 `⚠️ *Please deliver steaming hot & safely!* 🚀`;
+
+    const cleanRiderPhone = String(rider.phone).replace(/\D/g, '').slice(-10);
+    const waUrl = `https://wa.me/91${cleanRiderPhone}?text=${encodeURIComponent(slip)}`;
+    window.open(waUrl, '_blank');
+    window.showAdminToast(`📲 Dispatch slip opened for ${rider.name}!`, 'success');
+};
+
+window.sendCustomerDispatchWhatsApp = function() {
+    const order = window.currentDispatchOrder;
+    if (!order || !order._id) {
+        window.showAdminToast('No active order selected', 'error');
+        return;
+    }
+
+    const rider = window.getSelectedDispatchRider();
+    const shortId = String(order._id).slice(-6).toUpperCase();
+    const targetPhone = order.whatsappPhone || order.customerPhone || '';
+    const cleanCustPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
+
+    const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
+    const finalTotal = Number(order.finalTotal || order.subtotal || 0);
+    const paymentStatusText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (Cash on Delivery 💵)`;
+
+    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') : 'https://littiwale-barbil.vercel.app';
+    const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
+
+    const msg = `🛵 *YOUR ORDER IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
+                `Hi *${order.customerName || 'Customer'}*,\n` +
+                `Great news! Your order *#${shortId}* has been freshly packed and is out for delivery! 💨\n\n` +
+                `*🛵 Delivery Partner:* *${rider.name}*\n` +
+                `*📞 Contact Number:* +91 ${rider.phone}\n\n` +
+                `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n` +
+                `*💰 Amount to Pay:* ${paymentStatusText}\n\n` +
+                `*🔴 Live Track Your Order:* ${trackingLink}\n\n` +
+                `For any delivery assistance, please feel free to call our delivery partner directly. Thank you for choosing *Littiwale*! ❤️`;
+
+    if (cleanCustPhone) {
+        const waUrl = `https://wa.me/91${cleanCustPhone}?text=${encodeURIComponent(msg)}`;
+        window.open(waUrl, '_blank');
+        window.showAdminToast(`💬 "Out for Delivery" note opened for Customer!`, 'success');
+    } else {
+        window.showAdminToast('Customer phone number unavailable', 'warning');
+    }
+};
+
+window.executeDispatchOrder = async function() {
+    const order = window.currentDispatchOrder;
+    if (!order || !order._id) return;
+
+    const rider = window.getSelectedDispatchRider();
+    const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+
+    try {
+        const res = await fetch(`${API_URL}/orders/${order._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({
+                status: 'dispatched',
+                deliveryBoy: {
+                    name: rider.name,
+                    phone: rider.phone
+                },
+                paymentCollectedByStore: isPrepaid,
+                dispatchedAt: new Date()
+            })
+        });
+
+        if (res.ok) {
+            const shortId = String(order._id).slice(-6).toUpperCase();
+            window.showAdminToast(`🚀 Order #${shortId} Dispatched with ${rider.name}!`, 'success');
+            closeModal('order-dispatch-modal');
+            closeModal('order-confirm-modal');
+            window.fetchAndRenderOrders();
+        } else {
+            window.showAdminToast('Failed to dispatch order. Please verify Admin PIN.', 'error');
+        }
+    } catch(e) {
+        console.error('Dispatch error:', e);
+        window.showAdminToast('Error marking order dispatched', 'error');
     }
 };
 

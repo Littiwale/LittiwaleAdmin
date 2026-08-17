@@ -670,15 +670,70 @@ router.put('/orders/:id/status', checkPin, async (req, res) => {
 
 router.put('/orders/:id', checkPin, async (req, res) => {
     try {
-        const { status, deliveryCharge, finalTotal, notes } = req.body;
+        const { status, deliveryCharge, finalTotal, notes, deliveryBoy, paymentCollectedByStore, dispatchedAt, cancelReason } = req.body;
         const updateData = {};
         if (status) updateData.status = status;
         if (deliveryCharge !== undefined) updateData.deliveryCharge = Number(deliveryCharge);
         if (finalTotal !== undefined) updateData.finalTotal = Number(finalTotal);
         if (notes !== undefined) updateData.notes = notes;
+        if (deliveryBoy !== undefined) updateData.deliveryBoy = deliveryBoy;
+        if (paymentCollectedByStore !== undefined) updateData.paymentCollectedByStore = Boolean(paymentCollectedByStore);
+        if (dispatchedAt !== undefined) updateData.dispatchedAt = dispatchedAt;
+        if (cancelReason !== undefined) updateData.cancelReason = cancelReason;
 
         const updated = await Order.findByIdAndUpdate(req.params.id, { $set: updateData }, { new: true });
         res.json(updated);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+// =======================
+// DELIVERY BOYS MANAGEMENT
+// =======================
+router.get('/delivery-boys', async (req, res) => {
+    try {
+        const setting = await StoreSetting.findOne();
+        const list = (setting && setting.deliveryBoys) ? setting.deliveryBoys : [
+            { id: 'db_1', name: 'Rider Raju', phone: '6370680744', isActive: true },
+            { id: 'db_2', name: 'Rider Amit', phone: '9170081234', isActive: true }
+        ];
+        res.json(list);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/delivery-boys', checkPin, async (req, res) => {
+    try {
+        const { name, phone } = req.body;
+        if (!name || !phone) {
+            return res.status(400).json({ error: 'Name and Phone number are required' });
+        }
+        const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+        const newBoy = {
+            id: 'db_' + Date.now(),
+            name: name.trim(),
+            phone: cleanPhone,
+            isActive: true
+        };
+
+        await StoreSetting.updateMany({}, {
+            $push: { deliveryBoys: newBoy }
+        });
+        res.json({ success: true, deliveryBoy: newBoy });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+
+router.delete('/delivery-boys/:id', checkPin, async (req, res) => {
+    try {
+        const targetId = req.params.id;
+        await StoreSetting.updateMany({}, {
+            $pull: { deliveryBoys: { id: targetId } }
+        });
+        res.json({ success: true, message: 'Delivery boy removed' });
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
