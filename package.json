@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/Littiwale/LittiwaleAdmin#readme",
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "bcryptjs": "^3.0.3",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
@@ -26,6 +27,7 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.4",
+    "pg": "^8.23.0",
     "sharp": "^0.35.3",
     "xlsx": "^0.18.5"
   }

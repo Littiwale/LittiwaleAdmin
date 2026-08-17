@@ -655,8 +655,8 @@
                         <div class="card-panel">
                             <div class="card-panel-header">
                                 <div>
-                                    <h3 class="card-panel-title"><span>🔥</span> Featured Menu Highlights</h3>
-                                    <p class="card-panel-subtitle">Signature dishes and bestsellers from your database</p>
+                                    <h3 class="card-panel-title"><span>🔥</span> Most Ordered Dishes (Bestsellers)</h3>
+                                    <p class="card-panel-subtitle">Live sales velocity & top items ordered by customers</p>
                                 </div>
                             </div>
 
@@ -671,27 +671,36 @@
 
                     </div>
 
-                    <!-- Dashboard Middle Row 3: Website Hero Slides & Operating Hours Table -->
+                    <!-- Dashboard Middle Row 3: Top Loyal Customers (By Phone Frequency) & Weekly Schedule -->
                     <div class="dashboard-grid-row equal">
                         
-                        <!-- Website Hero Slides Management Widget (From DB) -->
+                        <!-- 👑 Top Loyal Customers Widget (Aggregated from Orders DB by Phone) -->
                         <div class="card-panel">
                             <div class="card-panel-header">
                                 <div>
-                                    <h3 class="card-panel-title"><span>✨</span> Website Hero & Banners</h3>
-                                    <p class="card-panel-subtitle">Live homepage hero presentation from database</p>
+                                    <h3 class="card-panel-title"><span>👑</span> Top Loyal Customers</h3>
+                                    <p class="card-panel-subtitle">Frequent buyers & highest spenders grouped by phone number</p>
                                 </div>
-                                <button class="btn btn-sm btn-primary" onclick="switchToCmsTab('hero-tab')">
-                                    Edit Hero CMS
+                                <button class="btn btn-sm btn-secondary" onclick="switchSection('orders-section')">
+                                    All Orders →
                                 </button>
                             </div>
 
-                            <div class="hero-slides-preview-list" id="dashboard-hero-slides">
-                                <!-- Injected from DB by app.js -->
-                            </div>
-
-                            <div style="font-size:11px; color:var(--text-dim); text-align:center; margin-top:12px;">
-                                <span>✥ Changes sync live across customer website</span>
+                            <div class="table-container" style="max-height:280px; overflow-y:auto;">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Rank</th>
+                                            <th>Customer</th>
+                                            <th>Orders</th>
+                                            <th>Total Spend</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="dashboard-top-customers-tbody">
+                                        <!-- Injected dynamically from Orders DB by app.js -->
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
 
@@ -707,7 +716,7 @@
                                 </button>
                             </div>
 
-                            <div class="table-container" style="max-height:240px; overflow-y:auto;">
+                            <div class="table-container" style="max-height:280px; overflow-y:auto;">
                                 <table>
                                     <thead>
                                         <tr>
@@ -744,29 +753,29 @@
                         </div>
                     </div>
 
-                    <!-- Dashboard Bottom Row: Recent Catalog Additions & Real Activity -->
+                    <!-- Dashboard Bottom Row: Recent Live Website Orders & Real System Activity -->
                     <div class="dashboard-grid-row equal">
                         
-                        <!-- Recent Dishes Added/Updated in Database -->
+                        <!-- Recent Live Website Orders Table -->
                         <div class="card-panel">
                             <div class="card-panel-header">
                                 <div>
-                                    <h3 class="card-panel-title"><span>🍽️</span> Recent Menu Catalog Items</h3>
-                                    <p class="card-panel-subtitle">Latest items configured in your restaurant menu</p>
+                                    <h3 class="card-panel-title"><span>🛍️</span> Recent Live Website Orders</h3>
+                                    <p class="card-panel-subtitle">Latest orders placed by customers on website</p>
                                 </div>
-                                <button class="btn btn-sm btn-secondary" onclick="switchSection('menu-section')">
-                                    View All Dishes
+                                <button class="btn btn-sm btn-secondary" onclick="switchSection('orders-section')">
+                                    View All Orders
                                 </button>
                             </div>
 
-                            <div class="table-container">
+                            <div class="table-container" style="max-height:300px; overflow-y:auto;">
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th>Dish Name</th>
-                                            <th>Category</th>
-                                            <th>Price</th>
-                                            <th>Type</th>
+                                            <th>Order #</th>
+                                            <th>Customer</th>
+                                            <th>Items</th>
+                                            <th>Total</th>
                                             <th>Status</th>
                                             <th>Action</th>
                                         </tr>
@@ -941,13 +950,27 @@
                                         <textarea id="hero-desc" class="form-control" rows="2" placeholder="Desi street food and tandoori specials delivered hot and fresh straight to your doorstep in Barbil."></textarea>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Hero Image (Large Banner)</label>
-                                        <input type="file" id="hero-image-file" accept="image/*" style="display:none;" onchange="handleHeroImageChange(event)">
-                                        <div id="hero-image-preview"></div>
+                                        <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                                            <span>🔥 Website Brand Logo</span>
+                                            <span style="font-size:11px; color:var(--brand-gold);">Header & App Icon</span>
+                                        </label>
+                                        <input type="file" id="logo-image-file" accept="image/*" style="display:none;" onchange="handleLogoImageChange(event)">
+                                        <div id="logo-image-preview" onclick="document.getElementById('logo-image-file').click()" style="cursor:pointer; border:1px dashed rgba(255,255,255,0.2); border-radius:10px; padding:10px; background:#0b0d11; text-align:center; min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
+                                            <img id="logo-preview-img" src="/api/assets/general/logo.png" style="max-height:75px; max-width:100%; object-fit:contain; border-radius:50%;" onerror="this.src='images/logo.png'">
+                                            <span style="font-size:11px; color:#94a3b8;">Click to change Brand Logo</span>
+                                        </div>
                                     </div>
+
                                     <div class="form-group">
-                                        <label class="form-label">WhatsApp Order Button Phone</label>
-                                        <input type="text" id="hero-whatsapp" class="form-control" placeholder="e.g. 917008123456">
+                                        <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                                            <span>✨ Hero Plate Banner (Taste of Desi Swag)</span>
+                                            <span style="font-size:11px; color:var(--brand-gold);">Circle Plate Graphic</span>
+                                        </label>
+                                        <input type="file" id="hero-image-file" accept="image/*" style="display:none;" onchange="handleHeroImageChange(event)">
+                                        <div id="hero-image-preview" onclick="document.getElementById('hero-image-file').click()" style="cursor:pointer; border:1px dashed rgba(255,255,255,0.2); border-radius:10px; padding:10px; background:#0b0d11; text-align:center; min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
+                                            <img id="hero-preview-img" src="/api/assets/general/hero-banner.png" style="max-height:75px; max-width:100%; object-fit:contain; border-radius:50%;" onerror="this.src='images/hero-banner.png'">
+                                            <span style="font-size:11px; color:#94a3b8;">Click to change Hero Showcase Plate</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -979,9 +1002,15 @@
                                         <textarea id="about-p2" class="form-control" rows="3" placeholder="Every single dish is prepared daily using cold-pressed mustard oil, pure desi ghee, and roasted sattu..."></textarea>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">About Kitchen / Ambience Photo</label>
+                                        <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                                            <span>📸 About Kitchen / Ambience Photo</span>
+                                            <span style="font-size:11px; color:var(--brand-gold);">Story Card Photo</span>
+                                        </label>
                                         <input type="file" id="about-image-file" accept="image/*" style="display:none;" onchange="handleAboutImageChange(event)">
-                                        <div id="about-image-preview"></div>
+                                        <div id="about-image-preview" onclick="document.getElementById('about-image-file').click()" style="cursor:pointer; border:1px dashed rgba(255,255,255,0.2); border-radius:10px; padding:10px; background:#0b0d11; text-align:center; min-height:100px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;">
+                                            <img id="about-preview-img" src="/api/assets/general/about-img.webp" style="max-height:75px; max-width:100%; object-fit:contain; border-radius:8px;" onerror="this.src='images/about-img.webp'">
+                                            <span style="font-size:11px; color:#94a3b8;">Click to change About Us Photo</span>
+                                        </div>
                                     </div>
                                     <div class="form-group">
                                         <label class="form-label">Experience Callout (e.g. 5+ Years of Desi Swag)</label>
@@ -1358,9 +1387,13 @@
                      TAB 7: PROMOTIONS & COUPONS
                      ========================================================================== -->
                 <section id="coupons-section" class="tab-section">
-                    <div style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:16px;">
-                        <button class="btn btn-primary" onclick="openModal('coupon-modal')">
-                            + Add New Coupon
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+                        <div>
+                            <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#fff;">🏷️ Promotional Discount Coupons</h3>
+                            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Create percentage (% off up to cap) or flat discount coupons for your customers</div>
+                        </div>
+                        <button class="btn btn-primary" onclick="window.openNewCouponModal()" style="display:flex; align-items:center; gap:8px; font-weight:800;">
+                            <span>➕</span> Add New Coupon
                         </button>
                     </div>
 
@@ -1370,10 +1403,10 @@
                                 <thead>
                                     <tr>
                                         <th>Coupon Code</th>
-                                        <th>Discount Type</th>
-                                        <th>Discount Value</th>
-                                        <th>Min Order (₹)</th>
-                                        <th>Active</th>
+                                        <th>Discount Offer</th>
+                                        <th>Min Order</th>
+                                        <th>Customer Description</th>
+                                        <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -2193,6 +2226,11 @@
                         <span style="font-weight:700; color:#fff;" id="ord-modal-subtotal">₹0</span>
                     </div>
 
+                    <div id="ord-modal-discount-row" style="display:none; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:13px; color:#22c55e;">
+                        <span id="ord-modal-discount-label">🏷️ Coupon Discount:</span>
+                        <strong id="ord-modal-discount-val">-₹0</strong>
+                    </div>
+
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:12px;">
                         <label for="ord-modal-del-charge" style="color:var(--brand-orange); font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px;">
                             <span>🛵 Delivery Charge (₹):</span>
@@ -2362,6 +2400,10 @@
                     <div style="font-size:12.5px; color:#cbd5e1; line-height:1.4; border-top:1px dashed rgba(255,255,255,0.08); padding-top:8px;">
                         📍 <strong style="color:#94a3b8;">Address:</strong> <span id="quick-cust-address">-</span>
                     </div>
+                    <!-- Customer Special Instructions / Notes -->
+                    <div id="quick-order-notes-wrap" style="display:none; margin-top:10px; padding:10px 12px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; font-size:12.5px; color:#fde68a; line-height:1.4;">
+                        📝 <strong style="color:#fbbf24;">Special Instructions:</strong> <span id="quick-order-notes-text"></span>
+                    </div>
                 </div>
 
                 <!-- Order Items Card -->
@@ -2370,10 +2412,24 @@
                     <div id="quick-order-items-list" style="display:flex; flex-direction:column; gap:8px;">
                         <!-- Items Injected -->
                     </div>
-                    <!-- Bill Summary -->
-                    <div style="border-top:1px solid rgba(255,255,255,0.08); margin-top:12px; padding-top:10px; display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:13px; color:#94a3b8;">Grand Total Amount</span>
-                        <strong style="font-size:18px; color:var(--brand-gold);" id="quick-order-grand-total">₹0</strong>
+                    <!-- Bill Summary Breakdown -->
+                    <div style="border-top:1px solid rgba(255,255,255,0.08); margin-top:12px; padding-top:10px; display:flex; flex-direction:column; gap:6px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; color:#94a3b8;">
+                            <span>Items Subtotal:</span>
+                            <strong style="color:#fff;" id="quick-summary-subtotal">₹0</strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; color:#94a3b8;">
+                            <span>Delivery Fee:</span>
+                            <strong style="color:var(--brand-orange);" id="quick-summary-del-fee">+₹0</strong>
+                        </div>
+                        <div id="quick-summary-discount-row" style="display:none; justify-content:space-between; align-items:center; font-size:12.5px; color:#22c55e;">
+                            <span>Coupon Discount:</span>
+                            <strong id="quick-summary-discount">-₹0</strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed rgba(255,255,255,0.1); padding-top:8px; margin-top:4px;">
+                            <span style="font-size:13.5px; color:#fff; font-weight:800;">Grand Total Amount:</span>
+                            <strong style="font-size:18px; color:var(--brand-gold);" id="quick-order-grand-total">₹0</strong>
+                        </div>
                     </div>
                 </div>
 
@@ -2387,6 +2443,90 @@
                     </button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 🏷️ Add / Edit Promo Coupon Modal -->
+    <div id="coupon-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:480px; padding:0; overflow:hidden; border-radius:18px; border:1px solid rgba(255,255,255,0.12); background:#14141c; box-shadow:0 25px 60px rgba(0,0,0,0.85);">
+            <div class="modal-header" style="padding:18px 22px; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.03); display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; border-radius:10px; background:rgba(240,78,35,0.15); display:flex; align-items:center; justify-content:center; font-size:18px;">
+                        🏷️
+                    </div>
+                    <div>
+                        <h3 class="modal-title" id="coupon-modal-title" style="color:#fff; font-size:1.15rem; font-weight:800; margin:0;">Create Promo Coupon</h3>
+                        <div style="font-size:11.5px; color:var(--text-dim); margin-top:2px;">Configure percentage or flat discount promos</div>
+                    </div>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="closeModal('coupon-modal')">✕</button>
+            </div>
+            
+            <form id="coupon-form" onsubmit="handleSaveCoupon(event)" style="padding:22px;">
+                <input type="hidden" id="coupon-id" value="">
+
+                <!-- Coupon Code -->
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label class="form-label" style="font-size:12px; font-weight:700; color:#fff;">Coupon Code *</label>
+                    <input type="text" id="coupon-code" class="form-control" placeholder="e.g. TOXIC30 or LITTI50" required style="font-weight:800; letter-spacing:1px; text-transform:uppercase; font-family:monospace; font-size:14px;" oninput="this.value = this.value.toUpperCase(); updateCouponDescriptionPreview();">
+                </div>
+
+                <!-- Discount Type Switcher -->
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label class="form-label" style="font-size:12px; font-weight:700; color:#fff;">Discount Type *</label>
+                    <div style="display:flex; gap:10px;">
+                        <label style="flex:1; background:rgba(255,255,255,0.05); border:1.5px solid var(--brand-orange); border-radius:10px; padding:10px; cursor:pointer; text-align:center; transition:all 0.2s;" id="label-type-percentage">
+                            <input type="radio" name="couponTypeRadio" value="percentage" checked onchange="switchCouponType('percentage')" style="margin-right:6px; accent-color:var(--brand-orange);">
+                            <strong style="font-size:13px; color:#fff;">% Percentage</strong>
+                        </label>
+                        <label style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:10px; cursor:pointer; text-align:center; transition:all 0.2s;" id="label-type-flat">
+                            <input type="radio" name="couponTypeRadio" value="flat" onchange="switchCouponType('flat')" style="margin-right:6px; accent-color:var(--brand-orange);">
+                            <strong style="font-size:13px; color:#fff;">₹ Flat Amount</strong>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Discount Value & Min Order Grid -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label" id="coupon-value-label" style="font-size:12px; font-weight:700; color:#fff;">Discount (% Off) *</label>
+                        <input type="number" id="coupon-value" class="form-control" placeholder="e.g. 30" min="1" required style="font-weight:800; font-size:14px;" oninput="updateCouponDescriptionPreview()">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label class="form-label" style="font-size:12px; font-weight:700; color:#fff;">Min Order Amount (₹) *</label>
+                        <input type="number" id="coupon-min-order" class="form-control" placeholder="e.g. 400" min="0" value="0" required style="font-weight:800; font-size:14px;" oninput="updateCouponDescriptionPreview()">
+                    </div>
+                </div>
+
+                <!-- Max Discount Cap (Only for Percentage) -->
+                <div id="coupon-max-discount-wrap" class="form-group" style="margin-bottom:16px;">
+                    <label class="form-label" style="font-size:12px; font-weight:700; color:#fff;">
+                        Max Discount Cap (₹)
+                        <span style="color:var(--text-dim); font-weight:normal; font-size:11px;">(0 for no limit)</span>
+                    </label>
+                    <input type="number" id="coupon-max-discount" class="form-control" placeholder="e.g. 50" min="0" value="50" style="font-weight:800; font-size:14px;" oninput="updateCouponDescriptionPreview()">
+                    <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">For 30% on ₹450 (which is ₹135), customer gets ₹50 maximum if capped at ₹50.</div>
+                </div>
+
+                <!-- Description / Customer View -->
+                <div class="form-group" style="margin-bottom:18px;">
+                    <label class="form-label" style="font-size:12px; font-weight:700; color:#fff;">Customer Description / Banner Text</label>
+                    <input type="text" id="coupon-description" class="form-control" placeholder="e.g. Get upto 30% OFF on orders above ₹400" style="font-size:13px;">
+                </div>
+
+                <!-- Live Status Checkbox -->
+                <div style="background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.25); border-radius:10px; padding:12px 14px; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+                    <input type="checkbox" id="coupon-active" checked style="width:18px; height:18px; accent-color:#22c55e; cursor:pointer;">
+                    <label for="coupon-active" style="font-size:13px; color:#fff; cursor:pointer; font-weight:700;">
+                        🟢 Active & Live on Customer Website
+                    </label>
+                </div>
+
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn btn-secondary" style="flex:1; padding:11px; font-weight:700;" onclick="closeModal('coupon-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="coupon-submit-btn" style="flex:1.2; padding:11px; font-weight:800; background:var(--brand-orange); color:#fff;">Save Coupon</button>
+                </div>
+            </form>
         </div>
     </div>
 

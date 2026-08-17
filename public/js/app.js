@@ -205,6 +205,25 @@ const logoutBtn = document.getElementById('logout-btn');
 const navItems = document.querySelectorAll('.nav-item');
 const tabSections = document.querySelectorAll('.tab-section');
 
+function getInitialActiveSection() {
+    // 1. Check URL Hash
+    const hash = (window.location.hash || '').replace(/^#/, '').trim();
+    if (hash) {
+        if (hash.startsWith('media-')) {
+            const cmsTab = hash.replace('media-', '');
+            sessionStorage.setItem('lw_admin_active_cms_tab', cmsTab);
+            return 'media-section';
+        }
+        const candidateId = hash.endsWith('-section') ? hash : `${hash}-section`;
+        if (document.getElementById(candidateId)) return candidateId;
+    }
+    // 2. Check Session Storage
+    const saved = sessionStorage.getItem('lw_admin_active_section');
+    if (saved && document.getElementById(saved)) return saved;
+
+    return 'dashboard-section';
+}
+
 // Initialize App
 function init() {
     // Sync header profile name
@@ -221,6 +240,12 @@ function init() {
 
     if (authToken || authPin) {
         showDashboard();
+        const startSec = getInitialActiveSection();
+        window.switchSection(startSec);
+        const savedCmsTab = sessionStorage.getItem('lw_admin_active_cms_tab');
+        if (startSec === 'media-section' && savedCmsTab && typeof window.switchCmsSubTab === 'function') {
+            window.switchCmsSubTab(savedCmsTab);
+        }
         fetchData();
     } else {
         showLogin();
@@ -836,21 +861,33 @@ window.openOrderQuickModal = function(orderId) {
 
             actionCard.innerHTML = `
                 <div style="background:rgba(37,211,102,0.08); border:1.5px solid rgba(37,211,102,0.35); border-radius:14px; padding:16px;">
-                    <div style="font-weight:900; font-size:13.5px; color:#25d366; margin-bottom:12px; text-align:center;">⚡ STEP 1: SET DELIVERY CHARGE & ACCEPT ORDER</div>
+                    <div style="font-weight:900; font-size:13.5px; color:#25d366; margin-bottom:12px; text-align:center;">
+                        ⚡ STEP 1: ${isTakeaway ? 'REVIEW & ACCEPT TAKEAWAY ORDER' : 'SET DELIVERY CHARGE & ACCEPT ORDER'}
+                    </div>
                     
-                    <!-- Delivery Fee & Calculation Box -->
+                    <!-- Pricing Calculation Box -->
                     <div style="background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; margin-bottom:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12.5px;">
                             <span style="color:#94a3b8;">Items Subtotal:</span>
                             <strong style="color:#fff;" id="quick-subtotal-val">₹${subtotal}</strong>
                         </div>
+
+                        ${isTakeaway ? `
+                        <!-- Takeaway: No delivery charge row, show pickup badge instead -->
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12.5px;">
+                            <span style="color:#94a3b8;">Order Type:</span>
+                            <span style="background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.35); color:#38bdf8; font-weight:800; font-size:11px; padding:3px 10px; border-radius:20px;">🛍️ TAKEAWAY — No Delivery Fee</span>
+                        </div>
+                        ` : `
+                        <!-- Delivery: Show editable delivery charge -->
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:10px;">
                             <label style="color:var(--brand-orange); font-weight:800; font-size:13px; margin:0; display:flex; align-items:center; gap:4px;">
                                 <span>🛵 Delivery Charge (₹):</span>
-                                ${isTakeaway ? '<span style="font-size:10px; color:#38bdf8;">(Takeaway: ₹0)</span>' : ''}
                             </label>
-                            <input type="number" id="quick-del-charge-input" class="form-control" style="width:110px; text-align:right; font-weight:900; font-size:15px; padding:6px 10px; color:#fff; background:#1e1e28; border:1.5px solid var(--brand-orange); border-radius:8px;" value="${currentDelCharge}" min="0" ${isTakeaway ? 'disabled' : ''} oninput="window.recalcQuickDelCharge('${ord._id}')">
+                            <input type="number" id="quick-del-charge-input" class="form-control" style="width:110px; text-align:right; font-weight:900; font-size:15px; padding:6px 10px; color:#fff; background:#1e1e28; border:1.5px solid var(--brand-orange); border-radius:8px;" value="${currentDelCharge}" min="0" oninput="window.recalcQuickDelCharge('${ord._id}')">
                         </div>
+                        `}
+
                         <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1); font-size:14px;">
                             <span style="color:#fff; font-weight:800;">Grand Total Payable:</span>
                             <strong style="color:var(--brand-gold); font-size:18px;" id="quick-grand-total-val">₹${currentFinalTotal}</strong>
@@ -859,7 +896,7 @@ window.openOrderQuickModal = function(orderId) {
 
                     <!-- Prep Time Input -->
                     <div style="margin-bottom:14px;">
-                        <label style="font-size:11.5px; font-weight:700; color:#94a3b8; margin-bottom:4px; display:block;">⏱️ Estimated Prep / Delivery Time</label>
+                        <label style="font-size:11.5px; font-weight:700; color:#94a3b8; margin-bottom:4px; display:block;">⏱️ Estimated ${isTakeaway ? 'Prep / Pickup' : 'Prep / Delivery'} Time</label>
                         <input type="text" id="quick-est-time-input" class="form-control" style="padding:8px 12px; font-size:13px; color:#fff; background:#1e1e28; border-radius:8px; border:1px solid rgba(255,255,255,0.1);" value="${isTakeaway ? '15-20 mins' : '25-35 mins'}" placeholder="e.g. 25-35 mins">
                     </div>
 
@@ -986,6 +1023,20 @@ window.openOrderQuickModal = function(orderId) {
     const addrEl = document.getElementById('quick-cust-address');
     if (addrEl) addrEl.textContent = fullAddress;
 
+    // Special Instructions / Customer Notes
+    const notesText = (ord.notes || ord.deliveryNotes || ord.restaurantNote || '').trim();
+    const notesWrap = document.getElementById('quick-order-notes-wrap');
+    const notesEl = document.getElementById('quick-order-notes-text');
+    if (notesWrap && notesEl) {
+        if (notesText) {
+            notesWrap.style.display = 'block';
+            notesEl.textContent = notesText;
+        } else {
+            notesWrap.style.display = 'none';
+            notesEl.textContent = '';
+        }
+    }
+
     // 4. Items List
     const itemsListEl = document.getElementById('quick-order-items-list');
     if (itemsListEl) {
@@ -1005,9 +1056,33 @@ window.openOrderQuickModal = function(orderId) {
         }
     }
 
-    // 5. Grand Total in Summary Box
+    // 5. Bill Summary Breakdown (Subtotal + Delivery Fee + Discount = Grand Total)
+    const summarySubtotalEl = document.getElementById('quick-summary-subtotal');
+    const summaryDelFeeEl = document.getElementById('quick-summary-del-fee');
+    const summaryDiscountEl = document.getElementById('quick-summary-discount');
+    const summaryDiscountRow = document.getElementById('quick-summary-discount-row');
     const grandTotalEl = document.getElementById('quick-order-grand-total');
-    if (grandTotalEl) grandTotalEl.textContent = `₹${ord.finalTotal || ord.subtotal || 0}`;
+
+    const ordSubtotal = Number(ord.subtotal || 0);
+    const ordDelFee = Number(ord.deliveryCharge || 0);
+    const ordDiscount = Number(ord.discount || 0);
+    const ordGrandTotal = Number(ord.finalTotal || ord.total || ordSubtotal + ordDelFee - ordDiscount);
+
+    if (summarySubtotalEl) summarySubtotalEl.textContent = `₹${ordSubtotal}`;
+    if (summaryDelFeeEl) {
+        const isTakeawayOrder = (ord.orderType === 'takeaway');
+        summaryDelFeeEl.textContent = isTakeawayOrder ? '₹0 (Takeaway)' : (ordDelFee > 0 ? `+₹${ordDelFee}` : '₹0 (Free)');
+        summaryDelFeeEl.style.color = isTakeawayOrder ? '#38bdf8' : (ordDelFee > 0 ? 'var(--brand-orange)' : '#22c55e');
+    }
+    if (summaryDiscountRow && summaryDiscountEl) {
+        if (ordDiscount > 0) {
+            summaryDiscountRow.style.display = 'flex';
+            summaryDiscountEl.textContent = `-₹${ordDiscount}`;
+        } else {
+            summaryDiscountRow.style.display = 'none';
+        }
+    }
+    if (grandTotalEl) grandTotalEl.textContent = `₹${ordGrandTotal}`;
 
     // 6. Secondary Tool Buttons Setup
     const printKotBtn = document.getElementById('quick-print-kot-btn');
@@ -1033,9 +1108,16 @@ window.recalcQuickDelCharge = function(orderId) {
     const delCharge = isTakeaway ? 0 : (Number(document.getElementById('quick-del-charge-input')?.value) || 0);
     const finalTotal = Math.max(0, subtotal - discount + delCharge);
 
+    // Update the top action card total
     const grandTotalEl = document.getElementById('quick-grand-total-val');
     if (grandTotalEl) grandTotalEl.textContent = `₹${finalTotal}`;
 
+    // Also update the bottom summary breakdown
+    const summaryDelFeeEl = document.getElementById('quick-summary-del-fee');
+    if (summaryDelFeeEl) {
+        summaryDelFeeEl.textContent = isTakeaway ? '₹0 (Takeaway)' : (delCharge > 0 ? `+₹${delCharge}` : '₹0 (Free)');
+        summaryDelFeeEl.style.color = delCharge > 0 ? 'var(--brand-orange)' : '#22c55e';
+    }
     const mainTotalEl = document.getElementById('quick-order-grand-total');
     if (mainTotalEl) mainTotalEl.textContent = `₹${finalTotal}`;
 };
@@ -1180,80 +1262,13 @@ function renderOrdersTable(filterQuery = '') {
         const formattedDate = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
         const targetPhone = ord.whatsappPhone || ord.customerPhone || '';
         const rawPhone = targetPhone.replace(/\D/g, '').slice(-10);
-
-        let actionBtnHtml = '';
         const isTakeaway = (ord.orderType === 'takeaway');
-        if (status === 'pending') {
-            actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 12px; font-size:11.5px; font-weight:800; background:#25d366; color:#000;" onclick="openOrderConfirmModal('${ord._id}')" title="Confirm Order & Reply via WhatsApp">
-                    ✅ Confirm
-                </button>
-                <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Reject / Cancel Order">
-                    ✕ Reject
-                </button>
-            `;
-        } else if (status === 'accepted' || status === 'confirmed') {
-            if (isTakeaway) {
-                actionBtnHtml = `
-                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#f59e0b; color:#000;" onclick="markTakeawayReady('${ord._id}')" title="Mark Food Ready for Pickup & Send WhatsApp Alert">
-                        🛍️ Ready
-                    </button>
-                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
-                        👁️
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Cancel Order">
-                        ✕
-                    </button>
-                `;
-            } else {
-                actionBtnHtml = `
-                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:700; background:#3b82f6; color:#fff;" onclick="openDispatchModal('${ord._id}')" title="Mark Out for Delivery & Assign Rider">
-                        📦 Dispatch
-                    </button>
-                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="openOrderConfirmModal('${ord._id}')" title="View Order Details">
-                        👁️
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:#ef4444; color:#ef4444;" onclick="cancelOrderPrompt('${ord._id}')" title="Cancel Order">
-                        ✕
-                    </button>
-                `;
-            }
-        } else if (status === 'dispatched') {
-            if (isTakeaway) {
-                actionBtnHtml = `
-                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);" title="Mark Order Picked Up & Send Thank You Note">
-                        ✅ Picked Up
-                    </button>
-                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
-                        👁️
-                    </button>
-                `;
-            } else {
-                actionBtnHtml = `
-                    <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#10b981; color:#000;" onclick="directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);" title="Mark Order Delivered & Open Thank You WhatsApp">
-                        🎉 Deliver
-                    </button>
-                    <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
-                        👁️
-                    </button>
-                `;
-            }
-        } else if (status === 'delivered') {
-            actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-primary" style="padding:6px 10px; font-size:11px; font-weight:800; background:#25d366; color:#000;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')" title="Send Thank You & Review Note on WhatsApp">
-                    📲 Thank You
-                </button>
-                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
-                    👁️
-                </button>
-            `;
-        } else {
-            actionBtnHtml = `
-                <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 10px; font-size:11px;" onclick="window.openOrderQuickModal('${ord._id}')" title="View Order Details">
-                    👁️ Details
-                </button>
-            `;
-        }
+
+        let actionBtnHtml = `
+            <button type="button" class="btn btn-sm btn-primary" style="padding:6px 12px; font-size:11.5px; font-weight:800; background:var(--brand-orange); color:#000; display:inline-flex; align-items:center; gap:5px;" onclick="window.openOrderQuickModal('${ord._id}')" title="Open Order Details & Manage Status">
+                <span>👁️ Manage</span>
+            </button>
+        `;
 
         return `
             <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Tap to view full order details & actions">
@@ -1268,7 +1283,7 @@ function renderOrdersTable(filterQuery = '') {
                 <td style="max-width:220px; font-size:12.5px;" title="${itemsStr}">${itemsStr}</td>
                 <td>
                     <div style="font-weight:900; color:var(--brand-gold);">₹${total}</div>
-                    <div style="font-size:10.5px; color:var(--text-dim);">Del: ₹${delCharge}</div>
+                    <div style="font-size:10.5px; color:var(--text-dim);">${isTakeaway ? 'Takeaway' : 'Del: ₹' + delCharge}</div>
                 </td>
                 <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
                 <td onclick="event.stopPropagation();">
@@ -1650,6 +1665,13 @@ window.navigateAdminBack = function() {
 window.switchSection = function(targetId) {
     if (!targetId) targetId = 'dashboard-section';
 
+    // Persist current active section across page refreshes
+    try {
+        sessionStorage.setItem('lw_admin_active_section', targetId);
+        const cleanHash = targetId.replace('-section', '');
+        history.replaceState(null, null, '#' + cleanHash);
+    } catch(e) {}
+
     // Toggle Back button visibility (Visible on all sections except home Dashboard)
     const backBtn = document.getElementById('content-back-btn') || document.getElementById('header-back-btn');
     if (backBtn) {
@@ -1715,8 +1737,10 @@ window.switchSection = function(targetId) {
         window.updateContextualSearchPlaceholder(targetId);
     }
 
-    // Scroll to top of page
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll to top of page and main content view
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const mainContentEl = document.querySelector('.main-content') || document.querySelector('.dashboard-main') || document.getElementById('dashboard-screen');
+    if (mainContentEl) mainContentEl.scrollTop = 0;
 
     // Close sidebar on mobile after navigating
     if (typeof window.closeSidebarMobile === 'function') {
@@ -1744,6 +1768,11 @@ window.toggleRestaurantGlobalStatus = async function() {
 };
 
 window.switchToCmsTab = function(subTabId, scrollTarget = null) {
+    try {
+        sessionStorage.setItem('lw_admin_active_cms_tab', subTabId);
+        history.replaceState(null, null, '#media-' + subTabId);
+    } catch(e) {}
+
     window.switchSection('media-section');
     if (typeof window.switchCmsSubTab === 'function') {
         window.switchCmsSubTab(subTabId);
@@ -2209,65 +2238,165 @@ window.renderDynamicDashboard = function() {
     const donutCatCountEl = document.getElementById('donut-categories-count');
     if (donutCatCountEl) donutCatCountEl.textContent = `${totalCat} Categories`;
 
-    // 4. Featured Menu Highlights (Top 5 real dishes with images from DB)
+    // 4. Most Ordered Bestselling Dishes (Calculated from Real Orders DB)
     const popularContainer = document.getElementById('dashboard-popular-items');
     if (popularContainer) {
-        if (menus.length === 0) {
-            popularContainer.innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align:center;">No dishes available in database.</div>`;
-        } else {
-            const top5 = menus.slice(0, 5);
-            popularContainer.innerHTML = top5.map((item, idx) => `
-                <div class="popular-item-row" onclick="editMenu('${item._id}')" style="cursor:pointer;" title="Click to edit dish">
-                    <div class="popular-item-left">
-                        <span class="rank-badge ${idx === 0 ? 'top-1' : idx === 1 ? 'top-2' : idx === 2 ? 'top-3' : ''}">${idx + 1}</span>
-                        <img src="${item.image || 'images/logo.png'}" alt="${item.name}" class="popular-item-img" onerror="this.src='images/logo.png'">
-                        <div>
-                            <span class="popular-item-name" style="display:block;">${item.dietaryPreference === 'non-veg' ? '🔴' : '🟢'} ${item.name}</span>
-                            <span style="font-size:11px; color:var(--text-dim);">${item.category || 'General'}</span>
-                        </div>
-                    </div>
-                    <span class="popular-item-orders" style="color:var(--brand-gold); font-weight:800;">₹${item.price}</span>
-                </div>
-            `).join('');
-        }
-    }
-
-    // 5. Website Hero Slides (From DB Hero settings & Announcements)
-    const heroSlidesContainer = document.getElementById('dashboard-hero-slides');
-    if (heroSlidesContainer) {
-        const slides = [];
-        if (settings) {
-            slides.push({
-                title: settings.heroTitle || 'Taste of Desi Swag',
-                subtitle: settings.heroTagline || 'Authentic Flavours. Desi Swag.',
-                thumb: settings.heroImage || 'images/hero-banner.webp',
-                badge: 'Primary Hero'
-            });
-        }
-        announcements.forEach((ann, i) => {
-            slides.push({
-                title: ann.title || `Announcement Banner #${i+1}`,
-                subtitle: ann.isActive ? 'Active Website Banner' : 'Hidden Banner',
-                thumb: ann.image || 'images/hero-banner.webp',
-                badge: ann.isActive ? 'Active Banner' : 'Inactive'
+        // Aggregate quantities sold per dish from cached orders
+        const itemSalesMap = {};
+        (window.cachedOrders || []).forEach(ord => {
+            (ord.items || []).forEach(it => {
+                const name = (it.name || '').trim();
+                if (!name) return;
+                const qty = Number(it.quantity || 1);
+                const price = Number(it.price || (it.subtotal ? it.subtotal / qty : 0));
+                if (!itemSalesMap[name]) {
+                    itemSalesMap[name] = {
+                        name: name,
+                        qtySold: 0,
+                        totalRevenue: 0,
+                        price: price,
+                        category: '',
+                        image: '',
+                        dietaryPreference: 'veg'
+                    };
+                }
+                itemSalesMap[name].qtySold += qty;
+                itemSalesMap[name].totalRevenue += (Number(it.subtotal) || (price * qty));
             });
         });
 
-        if (slides.length === 0) {
-            heroSlidesContainer.innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align:center;">No slides configured.</div>`;
+        // Enrich with catalog metadata
+        menus.forEach(m => {
+            const mName = (m.name || '').trim();
+            if (itemSalesMap[mName]) {
+                itemSalesMap[mName].image = m.image || '';
+                itemSalesMap[mName].category = m.category || '';
+                itemSalesMap[mName].dietaryPreference = m.dietaryPreference || 'veg';
+                itemSalesMap[mName]._id = m._id;
+                if (!itemSalesMap[mName].price) itemSalesMap[mName].price = m.price;
+            }
+        });
+
+        const sortedSales = Object.values(itemSalesMap).sort((a, b) => b.qtySold - a.qtySold || b.totalRevenue - a.totalRevenue);
+
+        let displayItems = [];
+        let isRealSales = false;
+
+        if (sortedSales.length > 0) {
+            displayItems = sortedSales.slice(0, 5);
+            isRealSales = true;
+        } else if (menus.length > 0) {
+            displayItems = menus.slice(0, 5).map(m => ({
+                name: m.name,
+                qtySold: 0,
+                price: m.price,
+                category: m.category || 'Specialty',
+                image: m.image,
+                dietaryPreference: m.dietaryPreference || 'veg',
+                _id: m._id
+            }));
+        }
+
+        if (displayItems.length === 0) {
+            popularContainer.innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align:center;">No dishes available in database.</div>`;
         } else {
-            heroSlidesContainer.innerHTML = slides.map((s, idx) => `
-                <div class="hero-slide-preview-row">
-                    <span style="font-weight:800; color:var(--text-dim); font-size:12px;">${idx + 1}</span>
-                    <img src="${s.thumb}" class="hero-slide-thumb" alt="${s.title}" onerror="this.src='images/logo.png'">
-                    <div class="hero-slide-details">
-                        <div class="hero-slide-title">${s.title}</div>
-                        <div class="hero-slide-subtitle">${s.subtitle}</div>
+            popularContainer.innerHTML = displayItems.map((item, idx) => {
+                const rankClass = idx === 0 ? 'top-1' : (idx === 1 ? 'top-2' : (idx === 2 ? 'top-3' : ''));
+                const salesBadge = isRealSales 
+                    ? `<span class="badge" style="background:rgba(240,78,35,0.14); color:var(--brand-orange); font-size:10px; font-weight:800; border:1px solid rgba(240,78,35,0.3);">🔥 ${item.qtySold} Sold</span>`
+                    : `<span class="badge" style="background:rgba(255,255,255,0.06); color:var(--text-muted); font-size:10px;">Catalog</span>`;
+
+                return `
+                    <div class="popular-item-row" onclick="${item._id ? `editMenu('${item._id}')` : ''}" style="cursor:pointer;" title="View & edit dish details">
+                        <div class="popular-item-left">
+                            <span class="rank-badge ${rankClass}">${idx + 1}</span>
+                            <img src="${item.image || 'images/logo.png'}" alt="${item.name}" class="popular-item-img" onerror="this.src='images/logo.png'">
+                            <div>
+                                <span class="popular-item-name" style="display:flex; align-items:center; gap:6px;">
+                                    <span>${item.dietaryPreference === 'non-veg' ? '🔴' : '🟢'}</span>
+                                    <strong style="color:#fff;">${item.name}</strong>
+                                    ${salesBadge}
+                                </span>
+                                <span style="font-size:11px; color:var(--text-dim);">${item.category || 'Food'}</span>
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="popular-item-orders" style="color:var(--brand-gold); font-weight:900;">₹${item.price}</div>
+                            ${isRealSales ? `<div style="font-size:10.5px; color:#22c55e; font-weight:700;">₹${item.totalRevenue} Total</div>` : ''}
+                        </div>
                     </div>
-                    <span class="badge ${s.badge === 'Inactive' ? 'cancelled' : 'active'}">${s.badge}</span>
-                    <button class="btn-sm btn-secondary" onclick="switchToCmsTab('hero-tab')">✏️</button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
+        }
+    }
+
+    // 5. Top Loyal Customers Widget (Aggregated from Orders DB by Phone)
+    const topCustTbody = document.getElementById('dashboard-top-customers-tbody');
+    if (topCustTbody) {
+        const customerMap = {};
+        (window.cachedOrders || []).forEach(ord => {
+            const rawPhone = (ord.customerPhone || ord.whatsappPhone || '').replace(/\D/g, '').slice(-10);
+            if (!rawPhone) return;
+            if (!customerMap[rawPhone]) {
+                customerMap[rawPhone] = {
+                    phone: rawPhone,
+                    displayPhone: ord.customerPhone || ord.whatsappPhone || rawPhone,
+                    name: ord.customerName || 'Customer',
+                    orderCount: 0,
+                    totalSpend: 0,
+                    lastItems: '',
+                    latestOrderId: ord._id || ''
+                };
+            }
+            customerMap[rawPhone].orderCount += 1;
+            const orderTotal = Number(ord.finalTotal || ord.total || ord.subtotal || 0);
+            customerMap[rawPhone].totalSpend += orderTotal;
+            if (ord.customerName && (!customerMap[rawPhone].name || customerMap[rawPhone].name === 'Customer')) {
+                customerMap[rawPhone].name = ord.customerName;
+            }
+            if (ord.items && ord.items.length > 0 && !customerMap[rawPhone].lastItems) {
+                customerMap[rawPhone].lastItems = ord.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+            }
+        });
+
+        const sortedCustomers = Object.values(customerMap)
+            .sort((a, b) => b.orderCount - a.orderCount || b.totalSpend - a.totalSpend);
+
+        if (sortedCustomers.length === 0) {
+            topCustTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:24px;">No customer order history yet</td></tr>`;
+        } else {
+            topCustTbody.innerHTML = sortedCustomers.slice(0, 7).map((c, idx) => {
+                const rankBadge = idx === 0 ? '🥇 1' : (idx === 1 ? '🥈 2' : (idx === 2 ? '🥉 3' : `#${idx + 1}`));
+                const rankColor = idx === 0 ? 'var(--brand-gold)' : (idx === 1 ? '#e2e8f0' : (idx === 2 ? '#f59e0b' : 'var(--text-dim)'));
+                return `
+                    <tr>
+                        <td style="font-weight:900; color:${rankColor}; font-size:12px;">${rankBadge}</td>
+                        <td>
+                            <div style="font-weight:800; color:#fff; font-size:13px;">${c.name}</div>
+                            <div style="font-size:11px; color:var(--text-dim); font-family:monospace;">+91 ${c.displayPhone}</div>
+                            ${c.lastItems ? `<div style="font-size:11px; color:var(--brand-gold); max-width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;" title="Recent Items: ${c.lastItems}">🛍️ ${c.lastItems}</div>` : ''}
+                        </td>
+                        <td>
+                            <span class="badge" style="background:rgba(240,78,35,0.12); color:var(--brand-orange); border:1px solid rgba(240,78,35,0.25); font-weight:800;">
+                                🔥 ${c.orderCount} ${c.orderCount === 1 ? 'Order' : 'Orders'}
+                            </span>
+                        </td>
+                        <td style="color:var(--brand-gold); font-weight:800; font-size:13px;">
+                            ₹${c.totalSpend.toLocaleString('en-IN')}
+                        </td>
+                        <td>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <a href="tel:${c.phone}" class="btn btn-sm btn-secondary" style="padding:4px 8px; font-size:11px; text-decoration:none;" title="Call Customer">
+                                    📞
+                                </a>
+                                <a href="https://wa.me/91${c.phone}" target="_blank" class="btn btn-sm btn-secondary" style="padding:4px 8px; font-size:11px; background:rgba(37,211,102,0.12); border-color:rgba(37,211,102,0.3); color:#4ade80; text-decoration:none;" title="WhatsApp Customer">
+                                    💬
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
     }
 
@@ -2310,23 +2439,39 @@ window.renderDynamicDashboard = function() {
         }
     }
 
-    // 8. Recent Menu Catalog Items Table (Real items from DB)
+    // 8. Recent Live Website Orders Table (Real orders from DB)
     const recentOrdersTbody = document.getElementById('dashboard-recent-orders-tbody');
     if (recentOrdersTbody) {
-        if (menus.length === 0) {
-            recentOrdersTbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:20px;">No menu items in database</td></tr>`;
+        const orders = window.cachedOrders || [];
+        if (orders.length === 0) {
+            recentOrdersTbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:24px;">No live website orders received yet</td></tr>`;
         } else {
-            const recent = menus.slice(0, 6);
-            recentOrdersTbody.innerHTML = recent.map(item => `
-                <tr>
-                    <td><strong>${item.name}</strong></td>
-                    <td><span style="color:var(--text-secondary);">${item.category || 'General'}</span></td>
-                    <td style="color:var(--brand-gold); font-weight:800;">₹${item.price}</td>
-                    <td>${item.dietaryPreference === 'non-veg' ? '🔴 Non-Veg' : '🟢 Veg'}</td>
-                    <td><span class="badge ${item.isAvailable !== false ? 'active' : 'cancelled'}">${item.isAvailable !== false ? 'In Stock' : 'Out of Stock'}</span></td>
-                    <td><button class="btn-sm btn-secondary" onclick="editMenu('${item._id}')">✏️ Edit</button></td>
-                </tr>
-            `).join('');
+            const recent = orders.slice(0, 5);
+            recentOrdersTbody.innerHTML = recent.map(ord => {
+                const shortId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+                const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Items';
+                const total = ord.finalTotal || ord.subtotal || 0;
+                const status = (ord.status || 'pending').toLowerCase();
+                const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
+
+                return `
+                    <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Click to view & manage order">
+                        <td style="font-family:monospace; font-weight:900; color:var(--brand-orange);">#${shortId}</td>
+                        <td>
+                            <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
+                            <div style="font-size:11px; color:var(--text-dim);">${ord.customerPhone || ''}</div>
+                        </td>
+                        <td style="max-width:180px; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${itemsStr}">${itemsStr}</td>
+                        <td style="font-weight:900; color:var(--brand-gold);">₹${total}</td>
+                        <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
+                        <td onclick="event.stopPropagation();">
+                            <button type="button" class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px; font-weight:700; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')">
+                                👁️ Manage
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
     }
 
@@ -2601,11 +2746,11 @@ function renderMenuGrid(searchQuery = '') {
 
     // Render each category
     for (const category of sortedCategories) {
-            const items = grouped[category];
+            const items = (grouped[category] || []).sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
             const section = document.createElement('div');
             
             const catObj = (window.cachedCategories || []).find(c => c.name === category);
-            const orderStr = catObj ? `<span style="font-size:12px; font-weight:800; color:#9ca3af; background:#12141b; padding:4px 8px; border-radius:6px; border:1px solid #252830;">#${catObj.displayOrder}</span>` : '';
+            const orderStr = (catObj && catObj.displayOrder !== undefined && catObj.displayOrder !== null) ? `<span style="font-size:12px; font-weight:800; color:#9ca3af; background:#12141b; padding:4px 8px; border-radius:6px; border:1px solid #252830;">#${catObj.displayOrder}</span>` : '';
 
             // Category Header
             const header = document.createElement('div');
@@ -3143,7 +3288,7 @@ window.renderAnnouncements = function(filterQuery = '') {
         row.style.borderRadius = '12px';
         row.style.border = '1px solid #2e3140';
 
-        const isActive = item.isActive !== false;
+        const isActive = item.isAvailable !== false && item.isActive !== false;
         let expiryText = 'NO EXPIRY';
         if (item.expiry) {
             expiryText = new Date(item.expiry).toLocaleDateString('en-GB');
@@ -3163,8 +3308,8 @@ window.renderAnnouncements = function(filterQuery = '') {
                 </div>
             </div>
             <div style="display:flex; gap:8px;">
-                <button onclick="toggleAnnouncement('${item._id}', ${isActive})" style="padding:8px 16px; background:rgba(255,255,255,0.05); border:1px solid #2e3140; color:#e5e7eb; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.05)'">${isActive ? 'HIDE' : 'SHOW'}</button>
-                <button onclick="deleteAnnouncement('${item._id}')" style="padding:8px 16px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='rgba(239,68,68,0.1)'">DELETE</button>
+                <button onclick="window.toggleAnnouncement('${item._id || item.id}', ${isActive})" style="padding:8px 16px; background:${isActive ? 'rgba(255,255,255,0.05)' : 'rgba(34,197,94,0.15)'}; border:1px solid ${isActive ? '#2e3140' : '#22c55e'}; color:${isActive ? '#e5e7eb' : '#4ade80'}; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;">${isActive ? 'HIDE' : 'SHOW'}</button>
+                <button onclick="window.deleteAnnouncement('${item._id || item.id}')" style="padding:8px 16px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:#ef4444; border-radius:8px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; cursor:pointer; transition:all 0.15s;">DELETE</button>
             </div>
         `;
         container.appendChild(row);
@@ -3187,7 +3332,7 @@ document.getElementById('announcement-inline-form')?.addEventListener('submit', 
     const expiry = document.getElementById('announcement-expiry').value;
 
     if (!title && !currentAnnouncementImage) {
-        showToast('Please provide a title or image for the announcement', 'error');
+        window.showAdminToast('Please provide a title or image for the announcement', 'error');
         return;
     }
 
@@ -3196,12 +3341,13 @@ document.getElementById('announcement-inline-form')?.addEventListener('submit', 
         link,
         image: currentAnnouncementImage,
         expiry: expiry || null,
+        isAvailable: true,
         isActive: true
     };
 
     try {
         await apiCall('/announcements', 'POST', payload);
-        showToast('Announcement published successfully!', 'success');
+        window.showAdminToast('Announcement published successfully!', 'success');
         
         // Reset form
         document.getElementById('announcement-title').value = '';
@@ -3214,57 +3360,228 @@ document.getElementById('announcement-inline-form')?.addEventListener('submit', 
         loadAnnouncements();
     } catch (err) {
         console.error(err);
-        showToast('Failed to save announcement', 'error');
+        window.showAdminToast('Failed to save announcement', 'error');
     }
 });
 
-async function toggleAnnouncement(id, currentStatus) {
+window.toggleAnnouncement = async function(id, currentStatus) {
     try {
-        await apiCall(`/announcements/${id}`, 'PUT', { isActive: !currentStatus });
-        loadAnnouncements();
-        showToast(`Announcement ${!currentStatus ? 'activated' : 'hidden'}`, 'success');
+        const newStatus = !currentStatus;
+        await apiCall(`/announcements/${id}`, 'PUT', { isAvailable: newStatus, isActive: newStatus });
+        await loadAnnouncements();
+        window.showAdminToast(`Announcement ${newStatus ? 'is now LIVE' : 'is now HIDDEN'}`, newStatus ? 'success' : 'info');
     } catch (err) {
         console.error(err);
-        showToast('Failed to update announcement', 'error');
+        window.showAdminToast('Failed to update announcement status', 'error');
     }
-}
+};
 
-async function deleteAnnouncement(id) {
+window.deleteAnnouncement = async function(id) {
     if (await showConfirm('Delete Announcement', 'Are you sure you want to permanently delete this announcement?')) {
         await apiCall(`/announcements/${id}`, 'DELETE');
-        loadAnnouncements();
-        showToast('Announcement deleted', 'success');
+        await loadAnnouncements();
+        window.showAdminToast('Announcement deleted', 'success');
     }
-}
+};
 
 // =======================
-// COUPONS LOGIC
+// COUPONS LOGIC (Percentage & Flat Multi-type System)
 // =======================
+window.switchCouponType = function(type) {
+    const isPercentage = (type === 'percentage');
+    const labelPct = document.getElementById('label-type-percentage');
+    const labelFlat = document.getElementById('label-type-flat');
+    const valLabel = document.getElementById('coupon-value-label');
+    const maxWrap = document.getElementById('coupon-max-discount-wrap');
+    const valInput = document.getElementById('coupon-value');
+
+    if (labelPct && labelFlat) {
+        if (isPercentage) {
+            labelPct.style.borderColor = 'var(--brand-orange)';
+            labelFlat.style.borderColor = 'rgba(255,255,255,0.1)';
+        } else {
+            labelFlat.style.borderColor = 'var(--brand-orange)';
+            labelPct.style.borderColor = 'rgba(255,255,255,0.1)';
+        }
+    }
+
+    if (valLabel) valLabel.textContent = isPercentage ? 'Discount (% Off) *' : 'Flat Discount Amount (₹) *';
+    if (valInput) valInput.placeholder = isPercentage ? 'e.g. 30' : 'e.g. 50';
+    if (maxWrap) maxWrap.style.display = isPercentage ? 'block' : 'none';
+
+    window.updateCouponDescriptionPreview();
+};
+
+window.updateCouponDescriptionPreview = function() {
+    const radios = document.getElementsByName('couponTypeRadio');
+    let type = 'percentage';
+    radios.forEach(r => { if (r.checked) type = r.value; });
+
+    const val = Number(document.getElementById('coupon-value')?.value || 0);
+    const minOrd = Number(document.getElementById('coupon-min-order')?.value || 0);
+    const descInput = document.getElementById('coupon-description');
+
+    if (descInput && !descInput.dataset.manuallyEdited) {
+        if (type === 'percentage') {
+            descInput.value = val > 0 ? `Get upto ${val}% OFF on orders above ₹${minOrd}` : '';
+        } else {
+            descInput.value = val > 0 ? `Flat ₹${val} OFF on orders above ₹${minOrd}` : '';
+        }
+    }
+};
+
+window.openNewCouponModal = function() {
+    const form = document.getElementById('coupon-form');
+    if (form) form.reset();
+    document.getElementById('coupon-id').value = '';
+    document.getElementById('coupon-modal-title').textContent = 'Create Promo Coupon';
+    
+    const descInput = document.getElementById('coupon-description');
+    if (descInput) delete descInput.dataset.manuallyEdited;
+
+    const rPct = document.querySelector('input[name="couponTypeRadio"][value="percentage"]');
+    if (rPct) rPct.checked = true;
+    window.switchCouponType('percentage');
+
+    openModal('coupon-modal');
+};
+
+window.editCoupon = function(id) {
+    const items = window.cachedCoupons || [];
+    const item = items.find(i => String(i._id) === String(id) || String(i.id) === String(id));
+    if (!item) return;
+
+    document.getElementById('coupon-modal-title').textContent = 'Edit Promo Coupon';
+    document.getElementById('coupon-id').value = item._id || item.id;
+    document.getElementById('coupon-code').value = item.code || '';
+    
+    const isPct = (item.discountType || 'percentage').toLowerCase() === 'percentage';
+    const rType = document.querySelector(`input[name="couponTypeRadio"][value="${isPct ? 'percentage' : 'flat'}"]`);
+    if (rType) rType.checked = true;
+    window.switchCouponType(isPct ? 'percentage' : 'flat');
+
+    document.getElementById('coupon-value').value = item.discount || item.discountValue || 0;
+    document.getElementById('coupon-min-order').value = item.minOrder || item.minOrderValue || 0;
+    document.getElementById('coupon-max-discount').value = item.maxDiscount || item.maxDiscountAmount || 0;
+    
+    const descInput = document.getElementById('coupon-description');
+    if (descInput) {
+        descInput.value = item.description || '';
+        descInput.dataset.manuallyEdited = 'true';
+    }
+
+    const chkActive = document.getElementById('coupon-active');
+    if (chkActive) chkActive.checked = (item.isActive !== false && item.isAvailable !== false);
+
+    openModal('coupon-modal');
+};
+
+window.handleSaveCoupon = async function(e) {
+    if (e) e.preventDefault();
+
+    const id = document.getElementById('coupon-id').value;
+    const radios = document.getElementsByName('couponTypeRadio');
+    let discountType = 'percentage';
+    radios.forEach(r => { if (r.checked) discountType = r.value; });
+
+    const code = (document.getElementById('coupon-code').value || '').trim().toUpperCase();
+    const discount = Number(document.getElementById('coupon-value').value || 0);
+    const minOrder = Number(document.getElementById('coupon-min-order').value || 0);
+    const maxDiscount = discountType === 'percentage' ? Number(document.getElementById('coupon-max-discount').value || 0) : 0;
+    const description = (document.getElementById('coupon-description').value || '').trim() || (discountType === 'percentage' ? `Get upto ${discount}% OFF on orders above ₹${minOrder}` : `Flat ₹${discount} OFF on orders above ₹${minOrder}`);
+    const isActive = document.getElementById('coupon-active').checked;
+
+    if (!code) {
+        window.showAdminToast('Please enter a coupon code', 'error');
+        return;
+    }
+    if (discount <= 0) {
+        window.showAdminToast('Please enter a valid discount amount', 'error');
+        return;
+    }
+
+    const payload = {
+        code,
+        discountType,
+        discount,
+        minOrder,
+        maxDiscount,
+        description,
+        isActive
+    };
+
+    try {
+        if (id) {
+            await apiCall(`/coupons/${id}`, 'PUT', payload);
+            window.showAdminToast(`Coupon "${code}" updated successfully!`, 'success');
+        } else {
+            await apiCall('/coupons', 'POST', payload);
+            window.showAdminToast(`Coupon "${code}" created successfully!`, 'success');
+        }
+        
+        closeModal('coupon-modal');
+        await loadCoupons();
+    } catch(err) {
+        console.error(err);
+        window.showAdminToast('Failed to save coupon', 'error');
+    }
+};
+
 window.renderCoupons = function(filterQuery = '') {
     const tbody = document.getElementById('coupons-tbody');
     if (!tbody) return;
     let items = window.cachedCoupons || [];
     const q = (filterQuery || '').toLowerCase().trim();
     if (q) {
-        items = items.filter(c => (c.code && c.code.toLowerCase().includes(q)) || (c.discountType && c.discountType.toLowerCase().includes(q)));
+        items = items.filter(c => (c.code && c.code.toLowerCase().includes(q)) || (c.description && c.description.toLowerCase().includes(q)));
     }
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-muted);">No coupons found${q ? ` matching "${q}"` : ''}.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">No coupons found${q ? ` matching "${q}"` : ''}.</td></tr>`;
         return;
     }
-    tbody.innerHTML = items.map(item => `
-        <tr>
-            <td><strong>${item.code}</strong></td>
-            <td>${item.discountType === 'percentage' ? '%' : 'Fixed'}</td>
-            <td>${item.discountValue}</td>
-            <td>₹${item.minOrderValue}</td>
-            <td><span class="badge ${item.isActive ? 'active' : 'inactive'}">${item.isActive ? 'Yes' : 'No'}</span></td>
-            <td>
-                <button class="btn-sm btn-edit" onclick="editCoupon('${item._id}')">Edit</button>
-                <button class="btn-sm btn-delete" onclick="deleteCoupon('${item._id}')">Del</button>
-            </td>
-        </tr>
-    `).join('');
+
+    tbody.innerHTML = items.map(item => {
+        const isPct = (item.discountType || 'percentage').toLowerCase() === 'percentage';
+        const isActive = (item.isActive !== false && item.isAvailable !== false);
+        const discVal = Number(item.discount || item.discountValue || 0);
+        const minOrd = Number(item.minOrder || item.minOrderValue || 0);
+        const maxCap = Number(item.maxDiscount || item.maxDiscountAmount || 0);
+
+        const typeBadge = isPct 
+            ? `<span class="badge" style="background:rgba(240,78,35,0.12); color:var(--brand-orange); border:1px solid rgba(240,78,35,0.3); font-weight:800;">% ${discVal}% OFF${maxCap > 0 ? ` (Max ₹${maxCap})` : ''}</span>`
+            : `<span class="badge" style="background:rgba(34,197,94,0.12); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-weight:800;">₹ Flat ₹${discVal} OFF</span>`;
+
+        const desc = item.description || (isPct ? `Get upto ${discVal}% OFF on orders above ₹${minOrd}` : `Flat ₹${discVal} OFF on orders above ₹${minOrd}`);
+
+        return `
+            <tr>
+                <td style="font-family:monospace; font-weight:900; color:var(--brand-gold); font-size:14px; letter-spacing:0.5px;">
+                    ${item.code}
+                </td>
+                <td>${typeBadge}</td>
+                <td style="font-weight:700; color:#fff;">₹${minOrd}</td>
+                <td style="font-size:12.5px; color:#cbd5e1; max-width:250px;">${desc}</td>
+                <td>
+                    <span class="badge ${isActive ? 'badge-active' : 'badge-closed'}">
+                        ${isActive ? 'Live' : 'Hidden'}
+                    </span>
+                </td>
+                <td>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button type="button" class="btn btn-sm btn-secondary" style="padding:5px 10px; font-size:11.5px;" onclick="window.editCoupon('${item._id || item.id}')" title="Edit Coupon">
+                            ✏️ Edit
+                        </button>
+                        <button type="button" class="btn btn-sm btn-secondary" style="padding:5px 10px; font-size:11px; background:${isActive ? 'rgba(255,255,255,0.05)' : 'rgba(34,197,94,0.12)'}; color:${isActive ? '#e2e8f0' : '#4ade80'};" onclick="window.toggleCoupon('${item._id || item.id}', ${isActive})">
+                            ${isActive ? 'Hide' : 'Show'}
+                        </button>
+                        <button type="button" class="btn btn-sm btn-danger" style="padding:5px 8px; font-size:11px;" onclick="window.deleteCoupon('${item._id || item.id}')" title="Delete Coupon">
+                            🗑️
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
 };
 
 async function loadCoupons() {
@@ -3276,49 +3593,25 @@ async function loadCoupons() {
     } catch (e) { console.error(e); }
 }
 
-document.getElementById('coupon-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('coupon-id').value;
-    const body = {
-        code: document.getElementById('coupon-code').value.toUpperCase(),
-        discountType: document.getElementById('coupon-type').value,
-        discountValue: document.getElementById('coupon-value').value,
-        minOrderValue: document.getElementById('coupon-min-order').value || 0,
-        isActive: document.getElementById('coupon-active').checked,
-    };
-
-    if (id) {
-        await apiCall(`/coupons/${id}`, 'PUT', body);
-    } else {
-        await apiCall('/coupons', 'POST', body);
+window.toggleCoupon = async function(id, currentStatus) {
+    try {
+        const newStatus = !currentStatus;
+        await apiCall(`/coupons/${id}`, 'PUT', { isActive: newStatus, isAvailable: newStatus });
+        await loadCoupons();
+        window.showAdminToast(`Coupon ${newStatus ? 'is now LIVE' : 'is now HIDDEN'}`, newStatus ? 'success' : 'info');
+    } catch (err) {
+        console.error(err);
+        window.showAdminToast('Failed to update coupon status', 'error');
     }
-    
-    closeModal('coupon-modal');
-    loadCoupons();
-});
+};
 
-async function editCoupon(id) {
-    const items = await apiCall('/coupons');
-    const item = items.find(i => i._id === id);
-    if (!item) return;
-
-    document.getElementById('coupon-modal-title').textContent = 'Edit Coupon';
-    document.getElementById('coupon-id').value = item._id;
-    document.getElementById('coupon-code').value = item.code;
-    document.getElementById('coupon-type').value = item.discountType;
-    document.getElementById('coupon-value').value = item.discountValue;
-    document.getElementById('coupon-min-order').value = item.minOrderValue;
-    document.getElementById('coupon-active').checked = item.isActive;
-    
-    openModal('coupon-modal');
-}
-
-async function deleteCoupon(id) {
+window.deleteCoupon = async function(id) {
     if (await showConfirm('Delete Coupon', 'Are you sure you want to delete this coupon?')) {
         await apiCall(`/coupons/${id}`, 'DELETE');
-        loadCoupons();
+        await loadCoupons();
+        window.showAdminToast('Coupon deleted', 'success');
     }
-}
+};
 
 // =======================
 // STORE SETTINGS & SCHEDULE LOGIC
@@ -3437,6 +3730,7 @@ document.getElementById('schedule-form').addEventListener('submit', async (e) =>
 async function loadStoreSettings() {
     try {
         const settings = await apiCall('/settings');
+        if (!Array.isArray(settings)) return;
         cachedStoreSettings = settings;
         
         let anyOnline = false;
@@ -4618,144 +4912,127 @@ window.renderImagePreviewCard = function(containerId, imageUrl, uploadInputId, r
     }
 };
 
+let currentLogoImageBase64 = '';
 let currentHeroImageBase64 = '';
 let currentAboutImageBase64 = '';
 
-window.handleHeroImageChange = async function(event) {
-    const file = event.target.files[0];
+window.handleLogoImageChange = async function(e) {
+    const file = e.target.files[0];
     if (!file) return;
     try {
-        const webp = await compressImage(file, 1200, 0.85);
-        currentHeroImageBase64 = webp;
-        window.renderImagePreviewCard('hero-image-preview', webp, 'hero-image-file', 'removeHeroImage', 'hero_banner.webp');
-        window.showAdminToast('Hero banner image updated! Click Save to apply.', 'info');
-    } catch(e) {
-        console.error('Error compressing hero image:', e);
+        currentLogoImageBase64 = await window.compressImageToWebP(file, 400, 0.9);
+        const img = document.getElementById('logo-preview-img');
+        if (img) img.src = currentLogoImageBase64;
+    } catch(err) {
+        console.error('Error compressing logo:', err);
     }
 };
 
-window.removeHeroImage = function() {
-    currentHeroImageBase64 = '';
-    const fileInput = document.getElementById('hero-image-file');
-    if (fileInput) fileInput.value = '';
-    window.renderImagePreviewCard('hero-image-preview', '', 'hero-image-file', 'removeHeroImage', 'hero_banner.webp');
-    window.showAdminToast('Hero image removed. Click Save to apply.', 'warning');
-};
-
-window.handleAboutImageChange = async function(event) {
-    const file = event.target.files[0];
+window.handleHeroImageChange = async function(e) {
+    const file = e.target.files[0];
     if (!file) return;
     try {
-        const webp = await compressImage(file, 1000, 0.85);
-        currentAboutImageBase64 = webp;
-        window.renderImagePreviewCard('about-image-preview', webp, 'about-image-file', 'removeAboutImage', 'about_photo.webp');
-        window.showAdminToast('About Us photo updated! Click Save to apply.', 'info');
-    } catch(e) {
-        console.error('Error compressing about image:', e);
+        currentHeroImageBase64 = await window.compressImageToWebP(file, 1000, 0.85);
+        const img = document.getElementById('hero-preview-img');
+        if (img) img.src = currentHeroImageBase64;
+    } catch(err) {
+        console.error('Error compressing hero image:', err);
     }
 };
 
-window.removeAboutImage = function() {
-    currentAboutImageBase64 = '';
-    const fileInput = document.getElementById('about-image-file');
-    if (fileInput) fileInput.value = '';
-    window.renderImagePreviewCard('about-image-preview', '', 'about-image-file', 'removeAboutImage', 'about_photo.webp');
-    window.showAdminToast('About photo removed. Click Save to apply.', 'warning');
+window.handleAboutImageChange = async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+        currentAboutImageBase64 = await window.compressImageToWebP(file, 1000, 0.85);
+        const img = document.getElementById('about-image-preview');
+        if (img) img.innerHTML = `<img src="${currentAboutImageBase64}" style="max-height:80px; max-width:100%; object-fit:contain;">`;
+    } catch(err) {
+        console.error('Error compressing about image:', err);
+    }
 };
 
 window.loadHeroCmsSettings = async function() {
     try {
         const res = await fetch(`${API_URL}/settings`);
-        const settings = await res.json();
-        if (settings && settings.length > 0) {
-            const s = settings[0];
-            const setVal = (ids, val) => {
-                if (val === undefined || val === null) return;
-                ids.forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.value = val;
-                });
-            };
+        if (!res.ok) return;
+        const docs = await res.json();
+        const doc = (Array.isArray(docs) ? (docs.find(d => d.storeId === 'cloud') || docs[0]) : docs) || {};
 
-            // Hero fields
-            setVal(['hero-tagline', 'cms-hero-tagline'], s.heroTagline || "Good Food, Good Mood ♡");
-            setVal(['hero-title', 'cms-hero-title'], s.heroTitle || "Delicious Food Made with Love ♡");
-            setVal(['hero-desc', 'cms-hero-desc'], s.heroDesc || "Experience the perfect blend of authentic taste, premium quality, and happiness in every single bite.");
-            setVal(['hero-badge', 'hero-badge-text', 'cms-hero-badge-text'], s.heroBadgeText || "Taste of Desi Swag • Barbil");
-            setVal(['hero-whatsapp', 'hero-btn2-link', 'cms-hero-btn2-link'], s.heroBtn2Link || "https://wa.me/916370680744");
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val !== undefined && val !== null) el.value = val;
+        };
 
-            currentHeroImageBase64 = s.heroImage || '';
-            window.renderImagePreviewCard('hero-image-preview', s.heroImage || '', 'hero-image-file', 'removeHeroImage', 'hero_banner.webp');
+        setVal('hero-badge', doc.heroBadgeText !== undefined ? doc.heroBadgeText : (doc.heroTagline || '#1 Food'));
+        setVal('hero-title', doc.heroTitle !== undefined ? doc.heroTitle : 'Delicious Food Made with Love ♡');
+        setVal('hero-desc', doc.heroDesc !== undefined ? doc.heroDesc : '');
+        setVal('about-badge', doc.aboutTagline !== undefined ? doc.aboutTagline : 'About Us');
+        setVal('about-heading', doc.aboutHeading !== undefined ? doc.aboutHeading : 'We Serve Happiness');
+        setVal('about-p1', doc.aboutStoryText !== undefined ? doc.aboutStoryText : '');
+        setVal('about-p2', doc.aboutStorySubtitle !== undefined ? doc.aboutStorySubtitle : '');
+        setVal('about-experience', doc.statText !== undefined ? doc.statText : '');
 
-            // About Us fields
-            setVal(['about-badge', 'about-tagline', 'cms-about-tagline'], s.aboutTagline || "OUR AUTHENTIC STORY");
-            setVal(['about-heading', 'cms-about-heading'], s.aboutHeading || "Born from Passion, Perfected with Pure Ghee");
-            setVal(['about-p1', 'about-story-text', 'cms-about-story-text'], s.aboutStoryText || "Our journey began with a simple craving for genuine, slow-cooked Bihari Litti Chokha...");
-            setVal(['about-p2', 'about-story-subtitle', 'cms-about-story-subtitle'], s.aboutStorySubtitle || "Every single dish is prepared daily using cold-pressed mustard oil, pure desi ghee, and roasted sattu...");
-            setVal(['about-experience', 'stat-text', 'cms-stat-text'], s.statText || "100% Authentic Coal Roasted");
+        // Perks
+        setVal('perk1-title', doc.perk1Title !== undefined ? doc.perk1Title : '100% Coal Roasted');
+        setVal('perk1-desc', doc.perk1Text !== undefined ? doc.perk1Text : '');
+        setVal('perk2-title', doc.perk2Title || 'Pure Desi Ghee');
+        setVal('perk2-desc', doc.perk2Text || 'Dipped in pure aromatic desi ghee for unforgettable indulgence.');
+        setVal('perk3-title', doc.perk3Title || 'Super Fast Delivery');
+        setVal('perk3-desc', doc.perk3Text || 'Dispatched steaming hot straight from our Barbil kitchen.');
+        setVal('perk4-title', doc.perk4Title || 'Hygiene First');
+        setVal('perk4-desc', doc.perk4Text || 'Prepared with strict FSSAI certified sanitary standards.');
 
-            currentAboutImageBase64 = s.aboutImage || '';
-            window.renderImagePreviewCard('about-image-preview', s.aboutImage || '', 'about-image-file', 'removeAboutImage', 'about_photo.webp');
+        // Dabba Meal Subscription
+        setVal('dabba-veg-title', doc.dabbaVegTitle || 'Desi Veg Dabba');
+        setVal('dabba-veg-sub', doc.dabbaVegSubtitle || 'Pure vegetarian. Best value for daily regulars.');
+        setVal('dabba-veg-weekly-old', doc.dabbaVegWeeklyOldPrice || '₹1,500');
+        setVal('dabba-veg-weekly-new', doc.dabbaVegWeeklyNewPrice || '₹1,200');
+        setVal('dabba-veg-monthly-old', doc.dabbaVegMonthlyOldPrice || '₹6,000');
+        setVal('dabba-veg-monthly-new', doc.dabbaVegMonthlyNewPrice || '₹5,500');
 
-            // Perks fields
-            setVal(['perk1-title', 'cms-perk1-title'], s.perk1Title || "100% Coal Roasted");
-            setVal(['perk1-desc', 'perk1-text', 'cms-perk1-text'], s.perk1Text || "Cooked over authentic clay charcoal for deep smoky taste.");
-            setVal(['perk2-title', 'cms-perk2-title'], s.perk2Title || "Pure Desi Ghee");
-            setVal(['perk2-desc', 'perk2-text', 'cms-perk2-text'], s.perk2Text || "Dipped in pure aromatic desi ghee for unforgettable indulgence.");
-            setVal(['perk3-title', 'cms-perk3-title'], s.perk3Title || "Super Fast Delivery");
-            setVal(['perk3-desc', 'perk3-text', 'cms-perk3-text'], s.perk3Text || "Dispatched steaming hot straight from our Barbil kitchen.");
-            setVal(['perk4-title', 'cms-perk4-title'], s.perk4Title || "Hygiene First");
-            setVal(['perk4-desc', 'perk4-text', 'cms-perk4-text'], s.perk4Text || "Prepared with strict FSSAI certified sanitary standards.");
+        setVal('dabba-nonveg-title', doc.dabbaNonvegTitle || 'Desi Feast Dabba');
+        setVal('dabba-nonveg-sub', doc.dabbaNonvegSubtitle || '4 days veg + 3 days non-veg (Wed, Fri, Sun).');
+        setVal('dabba-nonveg-weekly-old', doc.dabbaNonvegWeeklyOldPrice || '₹2,000');
+        setVal('dabba-nonveg-weekly-new', doc.dabbaNonvegWeeklyNewPrice || '₹1,500');
+        setVal('dabba-nonveg-monthly-old', doc.dabbaNonvegMonthlyOldPrice || '₹7,500');
+        setVal('dabba-nonveg-monthly-new', doc.dabbaNonvegMonthlyNewPrice || '₹6,500');
 
-            // Dabba Subscription fields
-            setVal(['dabba-veg-title'], s.dabbaVegTitle || "Desi Veg Dabba");
-            setVal(['dabba-veg-sub'], s.dabbaVegSubtitle || "Pure vegetarian. Best value for daily regulars.");
-            setVal(['dabba-veg-weekly-old'], s.dabbaVegWeeklyOldPrice || "₹1,500");
-            setVal(['dabba-veg-weekly-new'], s.dabbaVegWeeklyNewPrice || "₹1,200");
-            setVal(['dabba-veg-monthly-old'], s.dabbaVegMonthlyOldPrice || "₹6,000");
-            setVal(['dabba-veg-monthly-new'], s.dabbaVegMonthlyNewPrice || "₹5,500");
-
-            setVal(['dabba-nonveg-title'], s.dabbaNonvegTitle || "Desi Feast Dabba");
-            setVal(['dabba-nonveg-sub'], s.dabbaNonvegSubtitle || "4 days veg + 3 days non-veg (Wed, Fri, Sun).");
-            setVal(['dabba-nonveg-weekly-old'], s.dabbaNonvegWeeklyOldPrice || "₹2,000");
-            setVal(['dabba-nonveg-weekly-new'], s.dabbaNonvegWeeklyNewPrice || "₹1,500");
-            setVal(['dabba-nonveg-monthly-old'], s.dabbaNonvegMonthlyOldPrice || "₹7,500");
-            setVal(['dabba-nonveg-monthly-new'], s.dabbaNonvegMonthlyNewPrice || "₹6,500");
+        if (doc.logoImage && document.getElementById('logo-preview-img')) {
+            document.getElementById('logo-preview-img').src = doc.logoImage;
         }
-    } catch(e) {}
+        if (doc.heroImage && document.getElementById('hero-preview-img')) {
+            document.getElementById('hero-preview-img').src = doc.heroImage;
+        }
+        if (doc.aboutImage && document.getElementById('about-preview-img')) {
+            document.getElementById('about-preview-img').src = doc.aboutImage;
+        }
+    } catch(e) {
+        console.warn('Error loading hero cms settings:', e);
+    }
 };
 
 window.saveHeroCms = async function(event) {
     if (event && event.preventDefault) event.preventDefault();
-    
-    const getVal = (...ids) => {
-        for (const id of ids) {
-            const el = document.getElementById(id);
-            if (el && el.value) return el.value;
-        }
-        return '';
-    };
+    const getVal = (id) => document.getElementById(id)?.value || '';
 
     const payload = {
-        heroBadgeText: getVal('hero-badge', 'cms-hero-badge-text'),
-        heroTitle: getVal('hero-title', 'cms-hero-title'),
-        heroDesc: getVal('hero-desc', 'cms-hero-desc'),
-        heroBtn2Link: getVal('hero-whatsapp', 'cms-hero-btn2-link'),
-        heroImage: currentHeroImageBase64 || 'images/logo.png',
-        aboutTagline: getVal('about-badge', 'cms-about-tagline'),
-        aboutHeading: getVal('about-heading', 'cms-about-heading'),
-        aboutStoryText: getVal('about-p1', 'cms-about-story-text'),
-        aboutStorySubtitle: getVal('about-p2', 'cms-about-story-subtitle'),
-        statText: getVal('about-experience', 'cms-stat-text'),
-        aboutImage: currentAboutImageBase64 || 'images/menu-litti.jpg',
-        perk1Title: getVal('perk1-title', 'cms-perk1-title'),
-        perk1Text: getVal('perk1-desc', 'perk1-text'),
-        perk2Title: getVal('perk2-title', 'cms-perk2-title'),
-        perk2Text: getVal('perk2-desc', 'perk2-text'),
-        perk3Title: getVal('perk3-title', 'cms-perk3-title'),
-        perk3Text: getVal('perk3-desc', 'perk3-text'),
-        perk4Title: getVal('perk4-title', 'cms-perk4-title'),
-        perk4Text: getVal('perk4-desc', 'perk4-text'),
+        heroBadgeText: getVal('hero-badge'),
+        heroTitle: getVal('hero-title'),
+        heroDesc: getVal('hero-desc'),
+        aboutTagline: getVal('about-badge'),
+        aboutHeading: getVal('about-heading'),
+        aboutStoryText: getVal('about-p1'),
+        aboutStorySubtitle: getVal('about-p2'),
+        statText: getVal('about-experience'),
+        perk1Title: getVal('perk1-title'),
+        perk1Text: getVal('perk1-desc'),
+        perk2Title: getVal('perk2-title'),
+        perk2Text: getVal('perk2-desc'),
+        perk3Title: getVal('perk3-title'),
+        perk3Text: getVal('perk3-desc'),
+        perk4Title: getVal('perk4-title'),
+        perk4Text: getVal('perk4-desc'),
         dabbaVegTitle: getVal('dabba-veg-title'),
         dabbaVegSubtitle: getVal('dabba-veg-sub'),
         dabbaVegWeeklyOldPrice: getVal('dabba-veg-weekly-old'),
@@ -4770,6 +5047,10 @@ window.saveHeroCms = async function(event) {
         dabbaNonvegMonthlyNewPrice: getVal('dabba-nonveg-monthly-new')
     };
 
+    if (currentLogoImageBase64) payload.logoImage = currentLogoImageBase64;
+    if (currentHeroImageBase64) payload.heroImage = currentHeroImageBase64;
+    if (currentAboutImageBase64) payload.aboutImage = currentAboutImageBase64;
+
     try {
         const res = await fetch(`${API_URL}/settings/cloud`, {
             method: 'PUT',
@@ -4782,44 +5063,58 @@ window.saveHeroCms = async function(event) {
         });
 
         if (res.ok) {
-            window.showAdminToast('Website CMS Content & Images saved successfully!', 'success');
-            if (typeof loadStoreSettings === 'function') loadStoreSettings();
+            window.showAdminToast('Website CMS Content, Dabba Plans & Images saved successfully!', 'success');
+            currentLogoImageBase64 = '';
+            currentHeroImageBase64 = '';
+            currentAboutImageBase64 = '';
+            loadHeroCmsSettings();
         } else {
-            window.showAdminToast('Failed to save settings. Please check PIN.', 'error');
+            window.showAdminToast('Failed to save Hero CMS settings.', 'error');
         }
     } catch(e) {
-        window.showAdminToast('Error saving settings', 'error');
+        window.showAdminToast('Error saving Hero CMS settings', 'error');
     }
 };
 
 // ==========================================================================
-// MEDIA ASSET LIBRARY (24 Core Assets)
+// MEDIA ASSET LIBRARY (Live Supabase Assets)
 // ==========================================================================
 window.allMediaAssets = [
-    { name: "Brand Logo (Official)", path: "images/logo.png", category: "gallery", desc: "Main brand badge & header icon" },
-    { name: "Hero Showcase Banner", path: "images/hero-banner.png", category: "banner", desc: "Customer hero graphic plate" },
-    { name: "Hero Dark Background", path: "images/hero-bg.jpg", category: "banner", desc: "Atmospheric hero backdrop" },
-    { name: "Litti Chokha Dish", path: "images/menu-litti.jpg", category: "menu", desc: "Signature wood-fired litti plate" },
-    { name: "Special Biryani Handi", path: "images/menu-biryani.jpg", category: "menu", desc: "Aromatic Hyderabadi biryani" },
-    { name: "Special Indian Thali", path: "images/menu-thali.jpg", category: "menu", desc: "Grand North & South Indian thali" },
-    { name: "Wood-Fired Pizza", path: "images/menu-pizza.jpg", category: "menu", desc: "Loaded cheesy pizza special" },
-    { name: "About Story Showcase", path: "images/about-img.jpg", category: "gallery", desc: "Authentic cloud kitchen story" },
-    { name: "Announcement Banner 1", path: "images/current-offer1.png", category: "banner", desc: "LPG Operational notice banner" },
-    { name: "Announcement Banner 2", path: "images/current-offer2.png", category: "banner", desc: "Pure Veg & Non-Veg meal plans" },
-    { name: "Announcement Banner 3", path: "images/current-offer3.png", category: "banner", desc: "Special festival combo offer" },
-    { name: "Announcement Banner 4", path: "images/current-offer4.png", category: "banner", desc: "Bulk & party order discount" },
-    { name: "Announcement Banner 5", path: "images/current-offer5.png", category: "banner", desc: "Weekend special food festival" },
-    { name: "Instagram Reel Cover 1", path: "images/reel1.png", category: "social", desc: "Customer tasting review reel" },
-    { name: "Instagram Reel Cover 2", path: "images/reel2.png", category: "social", desc: "Kitchen making of litti chokha" },
-    { name: "Instagram Reel Cover 3", path: "images/reel3.png", category: "social", desc: "Barbil foodies meetup reel" },
-    { name: "Instagram Reel Cover 4", path: "images/reel4.png", category: "social", desc: "Packaging & cloud dispatch reel" },
-    { name: "Instagram Reel Cover 5", path: "images/reel5.png", category: "social", desc: "Happy customer smiles reel" },
-    { name: "Instagram Reel Cover 6", path: "images/reel6.png", category: "social", desc: "Weekend family feast reel" },
-    { name: "Dining Gallery 1", path: "images/gallery-1.jpg", category: "gallery", desc: "Fresh hot served dishes" },
-    { name: "Dining Gallery 2", path: "images/gallery-2.jpg", category: "gallery", desc: "Spiced condiments & chutney" },
-    { name: "Dining Gallery 3", path: "images/gallery-3.jpg", category: "gallery", desc: "Clay oven roasting showcase" },
-    { name: "Dining Gallery 4", path: "images/gallery-4.jpg", category: "gallery", desc: "Cloud kitchen packing station" },
-    { name: "UPI QR Payment Code", path: "images/upi-qr.jpeg", category: "gallery", desc: "Direct payment QR code" }
+    // Brand & General
+    { name: "Brand Logo (Official)", path: "/api/assets/general/logo.png", category: "gallery", desc: "Main brand badge & header icon" },
+    { name: "Hero Showcase Banner", path: "/api/assets/general/hero-banner.png", category: "banner", desc: "Customer hero graphic plate" },
+    { name: "Hero Dark Background", path: "/api/assets/general/hero-bg.jpg", category: "banner", desc: "Atmospheric hero backdrop" },
+    { name: "About Story Showcase", path: "/api/assets/general/about-img.webp", category: "gallery", desc: "Authentic cloud kitchen story" },
+    { name: "UPI QR Payment Code", path: "/api/assets/general/upi-qr.jpeg", category: "gallery", desc: "Direct payment QR code" },
+    { name: "Favicon Badge", path: "/api/assets/general/favicon.png", category: "gallery", desc: "Browser tab icon" },
+
+    // Announcements
+    { name: "Grand Outlet Opening Banner", path: "/api/assets/announcements/banners/special-offer-5.webp", category: "banner", desc: "100% Pure Veg Outlet Banner" },
+    { name: "Special Offer Banner 1", path: "/api/assets/announcements/banners/special-offer-1.webp", category: "banner", desc: "Special offer promotional banner" },
+    { name: "Special Offer Banner 2", path: "/api/assets/announcements/banners/special-offer-2.webp", category: "banner", desc: "Combo meals promotional banner" },
+
+    // Social Presence Reels
+    { name: "Instagram Reel Cover 1", path: "/api/assets/reels/thumbnails/reel1.png", category: "social", desc: "Customer tasting review reel" },
+    { name: "Instagram Reel Cover 2", path: "/api/assets/reels/thumbnails/reel2.png", category: "social", desc: "Kitchen making of litti chokha" },
+    { name: "Instagram Reel Cover 3", path: "/api/assets/reels/thumbnails/reel3.png", category: "social", desc: "Barbil foodies meetup reel" },
+    { name: "Instagram Reel Cover 4", path: "/api/assets/reels/thumbnails/reel4.png", category: "social", desc: "Packaging & cloud dispatch reel" },
+    { name: "Instagram Reel Cover 5", path: "/api/assets/reels/thumbnails/reel5.png", category: "social", desc: "Happy customer smiles reel" },
+    { name: "Instagram Reel Cover 6", path: "/api/assets/reels/thumbnails/reel6.png", category: "social", desc: "Weekend family feast reel" },
+
+    // Star Specials & Dishes
+    { name: "Authentic Bihari Litti Chokha", path: "/api/assets/menu/star-special/authentic-bihari-litti-chokha.webp", category: "menu", desc: "Signature wood-fired litti plate" },
+    { name: "A1 Swag Combo Veg", path: "/api/assets/menu/star-special/a1-swag-combo-veg.webp", category: "menu", desc: "Special veg combo plate" },
+    { name: "A1 Swag Combo Non-Veg", path: "/api/assets/menu/star-special/a1-swag-combo-non-veg.webp", category: "menu", desc: "Special non-veg combo plate" },
+    { name: "Desi Delight Chick-a-Litti", path: "/api/assets/menu/star-special/desi-delight-chick-a-litti.webp", category: "menu", desc: "Chicken curry with wood-fired litti" },
+    { name: "Thecha Chowmein", path: "/api/assets/menu/star-special/masterchef-special-thecha-chowmein-full.webp", category: "menu", desc: "Spicy thecha tossed chowmein" },
+    { name: "Mumbai Street Vada Pav", path: "/api/assets/menu/star-special/mumbai-street-vada-pav.webp", category: "menu", desc: "Authentic Mumbai style vada pav" },
+
+    // Dining Gallery
+    { name: "Dining Gallery 1", path: "/api/assets/general/gallery-1.jpg", category: "gallery", desc: "Fresh hot served dishes" },
+    { name: "Dining Gallery 2", path: "/api/assets/general/gallery-2.webp", category: "gallery", desc: "Spiced condiments & chutney" },
+    { name: "Dining Gallery 3", path: "/api/assets/general/gallery-3.jpg", category: "gallery", desc: "Clay oven roasting showcase" },
+    { name: "Dining Gallery 4", path: "/api/assets/general/gallery-4.jpg", category: "gallery", desc: "Cloud kitchen packing station" },
+    { name: "Dining Gallery 5", path: "/api/assets/general/gallery-5.webp", category: "gallery", desc: "Crispy snack delights" }
 ];
 
 window.currentMediaFilter = 'all';
@@ -6167,6 +6462,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (stripBtn) stripBtn.addEventListener('click', triggerAdminPwaInstall);
     const sidebarBtn = document.getElementById('pwa-install-btn');
     if (sidebarBtn) sidebarBtn.addEventListener('click', triggerAdminPwaInstall);
+
+    if (typeof window.loadHeroCmsSettings === 'function') {
+        window.loadHeroCmsSettings();
+    }
 });
 
 window.addEventListener('appinstalled', () => {

@@ -1,6 +1,5 @@
 require("dotenv").config();
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 const compression = require("compression");
 const path = require("path");
@@ -13,45 +12,18 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-const { seedAdminUser } = require("./utils/seedAdmin");
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/littiwale-admin";
-
-let isSeeded = false;
-const connectDB = async (req, res, next) => {
-    if (mongoose.connection.readyState >= 1) {
-        if (!isSeeded) {
-            isSeeded = true;
-            seedAdminUser().catch(console.error);
-        }
-        return next();
-    }
-    try {
-        await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000
-        });
-        if (!isSeeded) {
-            isSeeded = true;
-            seedAdminUser().catch(console.error);
-        }
-        next();
-    } catch (err) {
-        console.error("MongoDB Connection Error:", err);
-        return res.status(500).json({ error: "Database connection failed: " + err.message });
-    }
-};
-
 app.use(express.static(path.join(__dirname, "public")));
 
 const apiRoutes = require("./routes/api");
-app.use("/api", connectDB, apiRoutes);
+app.use("/api", apiRoutes);
 
 app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", message: "Littiwale Admin API is running" });
+    res.json({ status: "ok", message: "Littiwale Pure Supabase API is running", timestamp: new Date().toISOString() });
 });
 
 if (process.env.NODE_ENV !== "production") {
     app.listen(PORT, () => {
-        console.log("Server running on http://localhost:" + PORT);
+        console.log("⚡ [LITTIWALE] Pure Supabase Server running on http://localhost:" + PORT);
     });
 }
 

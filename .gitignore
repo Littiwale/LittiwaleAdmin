@@ -1,7 +1,10 @@
 node_modules/
 .env
+.env.*
 .DS_Store
+backup_mongodb/
 
-# Ignore one-off root scripts
+# Ignore one-off migration and setup scripts
 /*.js
 !/server.js
+
