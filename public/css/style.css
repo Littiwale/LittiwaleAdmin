@@ -3,9 +3,14 @@
    Brand: Littiwale — Taste of Desi Swag
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Poppins:wght@500;600;700;800&display=swap');
 
 :root {
+  /* Luxury Typography System (Matching Main Website Brand) */
+  --font-heading: 'Outfit', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Space Grotesk', 'SFMono-Regular', Consolas, monospace;
+
   /* Surface Color Palette — Deep Charcoal / Near-Black */
   --bg-canvas: #090a0d;
   --bg-body: #0d0f14;
@@ -88,7 +93,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-body);
 }
 
 html, body {
@@ -97,10 +102,25 @@ html, body {
   background-color: var(--bg-canvas);
   color: var(--text-main);
   overflow-x: hidden;
+  font-family: var(--font-body);
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6,
+.brand-text,
+.page-title,
+.stat-value,
+.modal-header h3,
+.card-title,
+.auth-title {
+  font-family: var(--font-heading) !important;
+  letter-spacing: -0.02em;
+  font-weight: 700;
 }
 
 /* Custom Scrollbar */
@@ -1940,7 +1960,10 @@ button, input, select, textarea {
   transition: all var(--transition-speed);
   border: none;
   outline: none;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .btn-primary {
@@ -2819,19 +2842,22 @@ td strong {
   .slider-toggle:before {
     height: 12px !important;
     width: 12px !important;
+  }
+
   /* Full-bleed, touch-friendly modal experience on mobile */
   .modal {
-    padding: 10px !important;
+    padding: 8px !important;
     align-items: flex-end !important;
   }
   .modal-content {
     max-width: 100% !important;
-    max-height: 88vh !important;
-    border-radius: 18px 18px 12px 12px !important;
+    max-height: 92vh !important;
+    border-radius: 20px 20px 0 0 !important;
     margin-bottom: 0 !important;
+    width: 100% !important;
   }
   .modal-header {
-    padding: 14px 16px !important;
+    padding: 12px 16px !important;
   }
   .modal-title {
     font-size: 15px !important;
@@ -2839,7 +2865,7 @@ td strong {
   #order-confirm-modal .modal-content > div:nth-child(2),
   #order-dispatch-modal .modal-content > div:nth-child(2),
   #order-quick-modal .modal-content > div:nth-child(2) {
-    padding: 14px 16px !important;
+    padding: 12px 14px !important;
   }
   #quick-order-primary-action-card,
   #ord-modal-action-buttons {
@@ -2855,3 +2881,416 @@ td strong {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* ==========================================================================
+   🚨 Top Pulsing Live Orders Alert Banner
+   ========================================================================== */
+.pending-orders-alarm-bar {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
+  padding: 10px 16px;
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.5);
+  animation: pulseAlarmBar 1.2s infinite alternate;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+@keyframes pulseAlarmBar {
+  0% { background-color: #dc2626; box-shadow: 0 0 10px rgba(220,38,38,0.4); }
+  100% { background-color: #991b1b; box-shadow: 0 0 25px rgba(239,68,68,0.9); }
+}
+
+.order-type-switch-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.order-type-switch-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+}
+
+.order-type-switch-btn.active-delivery {
+  background: rgba(59, 130, 246, 0.25);
+  border: 1px solid #3b82f6;
+  color: #60a5fa;
+}
+
+.order-type-switch-btn.active-takeaway {
+  background: rgba(245, 158, 11, 0.25);
+  border: 1px solid #f59e0b;
+  color: #fbbf24;
+}
+
+/* ==========================================================================
+   ORDERS MANAGEMENT: CARD SYSTEM & PAGINATION
+   ========================================================================== */
+.order-filter-pill {
+  padding: 6px 14px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-card);
+  border-radius: 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.order-filter-pill:hover {
+  background: var(--bg-surface-active);
+  color: #fff;
+  border-color: rgba(240, 78, 35, 0.4);
+}
+
+.order-filter-pill.active {
+  background: var(--brand-orange);
+  color: #000;
+  border-color: var(--brand-orange);
+  font-weight: 800;
+  box-shadow: 0 4px 14px var(--brand-orange-glow);
+}
+
+/* Desktop vs Mobile Toggle */
+.desktop-orders-table-wrapper {
+  display: block;
+}
+
+.mobile-orders-cards-container {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .desktop-orders-table-wrapper {
+    display: none !important;
+  }
+  .mobile-orders-cards-container {
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* Mobile Order Card */
+.mobile-order-card {
+  background: #141720;
+  border: 1px solid #202430;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, border-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-order-card:active {
+  transform: scale(0.99);
+}
+
+.mobile-order-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mobile-order-id {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--brand-orange);
+  letter-spacing: 0.5px;
+}
+
+.mobile-order-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.mobile-order-cust-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.mobile-order-cust-type {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.mobile-order-phone-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-phone-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-phone-btn.call {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.mobile-phone-btn.wa {
+  background: rgba(37, 211, 102, 0.15);
+  color: #4ade80;
+  border-color: rgba(37, 211, 102, 0.3);
+}
+
+.mobile-order-items-box {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.mobile-order-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mobile-order-total-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-order-total-amount {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--brand-gold);
+}
+
+.mobile-order-total-type {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.mobile-order-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Pagination Pills */
+.page-nav-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-card);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-nav-btn:hover:not(:disabled) {
+  background: var(--bg-surface-active);
+  border-color: var(--brand-orange);
+}
+
+.page-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-number-pill {
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-card);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.page-number-pill:hover {
+  color: #fff;
+  border-color: rgba(240, 78, 35, 0.4);
+}
+
+.page-number-pill.active {
+  background: var(--brand-orange);
+  color: #000;
+  font-weight: 800;
+  border-color: var(--brand-orange);
+  box-shadow: 0 2px 10px var(--brand-orange-glow);
+}
+
+/* ==========================================================================
+   DASHBOARD MOBILE CARDS & RESPONSIVE GRID ENHANCEMENTS
+   ========================================================================== */
+.desktop-top-customers-table-wrapper,
+.desktop-recent-orders-table-wrapper {
+  display: block;
+}
+
+.mobile-loyal-customers-cards,
+.mobile-recent-orders-cards {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid-row,
+  .dashboard-grid-row.equal {
+    grid-template-columns: 1fr !important;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .desktop-top-customers-table-wrapper,
+  .desktop-recent-orders-table-wrapper {
+    display: none !important;
+  }
+
+  .mobile-loyal-customers-cards,
+  .mobile-recent-orders-cards {
+    display: flex !important;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .banners-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Mobile Loyal Customer Card */
+.mobile-loyal-customer-card {
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-loyal-cust-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-loyal-cust-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Mobile Dashboard Recent Order Card */
+.mobile-dashboard-order-card {
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border-card);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.mobile-dashboard-order-card:active {
+  transform: scale(0.99);
+}
+
+.mobile-dashboard-order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-dashboard-order-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Bestselling items clean responsive fix */
+.popular-item-row {
+  min-width: 0;
+  gap: 10px;
+}
+
+.popular-item-left {
+  min-width: 0;
+  flex: 1;
+}
+
+.popular-item-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+@media (max-width: 480px) {
+  .popular-item-name {
+    max-width: 120px;
+  }
+}
+
+

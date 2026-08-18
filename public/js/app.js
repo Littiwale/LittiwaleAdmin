@@ -642,23 +642,95 @@ function showConfirm(title, message, okText = 'Yes', isDanger = true) {
 window.cachedOrders = [];
 window.knownOrderIds = new Set();
 let isInitialOrdersLoaded = false;
+let alarmIntervalId = null;
+let isAlarmMuted = false;
 
-function playNewOrderChime() {
-    try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(659.25, ctx.currentTime); // E5
-        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.2); // A5
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.35);
-    } catch(e) {}
+// Request Web Notifications permission upon interaction
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+    }
 }
+document.addEventListener('click', requestNotificationPermission, { once: true });
+document.addEventListener('touchstart', requestNotificationPermission, { once: true });
+
+function playLoudAlarmPulse() {
+    if (isAlarmMuted) return;
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        if (ctx.state === 'suspended') {
+            ctx.resume();
+        }
+
+        // Two-tone loud restaurant order chime
+        const now = ctx.currentTime;
+        
+        // Tone 1 (High chime)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(659.25, now); // E5
+        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+        gain1.gain.setValueAtTime(0.5, now);
+        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.3);
+
+        // Tone 2 (Alert ring)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, now + 0.25);
+        osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.5); // D6
+        gain2.gain.setValueAtTime(0.6, now + 0.25);
+        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.25);
+        osc2.stop(now + 0.65);
+
+        // Mobile Device Vibration
+        if ('vibrate' in navigator) {
+            navigator.vibrate([400, 150, 400, 150, 600]);
+        }
+    } catch(e) {
+        console.warn('Audio play error:', e);
+    }
+}
+
+function startOrderAlarmLoop() {
+    if (!alarmIntervalId) {
+        playLoudAlarmPulse();
+        alarmIntervalId = setInterval(playLoudAlarmPulse, 3200);
+    }
+}
+
+function stopOrderAlarmLoop() {
+    if (alarmIntervalId) {
+        clearInterval(alarmIntervalId);
+        alarmIntervalId = null;
+    }
+}
+
+window.muteAlarmChime = function() {
+    isAlarmMuted = true;
+    stopOrderAlarmLoop();
+    window.showAdminToast('🔇 Order sound muted for this session', 'info');
+};
+
+window.openFirstPendingOrderModal = function() {
+    const orders = window.cachedOrders || [];
+    const firstPending = orders.find(o => o.status === 'pending');
+    if (firstPending) {
+        window.openQuickOrderModal(firstPending._id || firstPending.id);
+    } else if (orders.length > 0) {
+        window.openQuickOrderModal(orders[0]._id || orders[0].id);
+    }
+};
 
 window.fetchAndRenderOrders = async function() {
     try {
@@ -671,11 +743,22 @@ window.fetchAndRenderOrders = async function() {
             if (isInitialOrdersLoaded) {
                 const newOrders = orderList.filter(o => o._id && !window.knownOrderIds.has(String(o._id)));
                 if (newOrders.length > 0) {
-                    playNewOrderChime();
+                    isAlarmMuted = false;
                     const latest = newOrders[0];
                     const shortId = latest._id ? String(latest._id).slice(-6).toUpperCase() : 'LW';
                     if (typeof window.showAdminToast === 'function') {
                         window.showAdminToast(`🔔 New Order #${shortId} Received from ${latest.customerName || 'Customer'}!`, 'success');
+                    }
+
+                    // Native Web Push / Notification
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        try {
+                            new Notification(`🔔 New Order #${shortId} Received!`, {
+                                body: `${latest.customerName || 'Customer'} • ₹${latest.finalTotal || latest.total} • ${latest.orderType === 'takeaway' ? 'Takeaway' : 'Delivery'}`,
+                                icon: '/images/logo.png',
+                                badge: '/images/logo.png'
+                            });
+                        } catch(e) {}
                     }
                 }
             }
@@ -701,6 +784,22 @@ window.renderOrderNotifications = function() {
     // Active orders only: pending, accepted, dispatched. Delivered & cancelled automatically disappear!
     const activeOrders = orders.filter(o => o.status !== 'delivered' && o.status !== 'cancelled');
     const pendingOrders = activeOrders.filter(o => o.status === 'pending');
+
+    // 🚨 Manage Top Alarm Bar and Sound Loop based on pending orders
+    const alarmBar = document.getElementById('pending-orders-alarm-bar');
+    const alarmBarText = document.getElementById('alarm-bar-text');
+    if (pendingOrders.length > 0) {
+        if (alarmBar) {
+            alarmBar.style.display = 'flex';
+            if (alarmBarText) {
+                alarmBarText.textContent = `🚨 ${pendingOrders.length} NEW PENDING ORDER${pendingOrders.length > 1 ? 'S' : ''} WAITING!`;
+            }
+        }
+        startOrderAlarmLoop();
+    } else {
+        if (alarmBar) alarmBar.style.display = 'none';
+        stopOrderAlarmLoop();
+    }
 
     const badgeEl = document.getElementById('header-notifications-badge');
     const countBadgeEl = document.getElementById('notif-unread-count') || document.getElementById('notif-active-count-badge');
@@ -830,10 +929,13 @@ window.openOrderQuickModal = function(orderId) {
         return;
     }
 
+    window.currentQuickOrderId = ord._id || ord.id;
+
     const shortId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
     const status = (ord.status || 'pending').toLowerCase();
     const formattedTime = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
     const formattedDate = ord.createdAt ? new Date(ord.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+    const isTakeaway = (ord.orderType === 'takeaway');
     const orderType = (ord.orderType || 'Delivery').toUpperCase();
 
     // 1. Header
@@ -848,6 +950,27 @@ window.openOrderQuickModal = function(orderId) {
 
     const timeTypeEl = document.getElementById('quick-order-time-type');
     if (timeTypeEl) timeTypeEl.textContent = `${formattedDate} • ${formattedTime} • ${orderType}`;
+
+    // 1.1 Order Type Quick Switcher Buttons Active State & Dispatch Lock
+    const isDispatchedOrDone = (status === 'dispatched' || status === 'delivered' || status === 'cancelled');
+    const hintEl = document.getElementById('quick-order-type-hint');
+    if (hintEl) {
+        hintEl.textContent = isDispatchedOrDone ? '🔒 Locked (Rider Assigned / Out for Delivery)' : '⚡ Instant Bill Recalculation';
+        hintEl.style.color = isDispatchedOrDone ? '#f59e0b' : '#38bdf8';
+    }
+
+    const delBtn = document.getElementById('toggle-type-delivery-btn');
+    const takeBtn = document.getElementById('toggle-type-takeaway-btn');
+    if (delBtn) {
+        delBtn.className = 'order-type-switch-btn' + (!isTakeaway ? ' active-delivery' : '');
+        delBtn.style.opacity = isDispatchedOrDone ? '0.6' : '1';
+        delBtn.style.cursor = isDispatchedOrDone ? 'not-allowed' : 'pointer';
+    }
+    if (takeBtn) {
+        takeBtn.className = 'order-type-switch-btn' + (isTakeaway ? ' active-takeaway' : '');
+        takeBtn.style.opacity = isDispatchedOrDone ? '0.6' : '1';
+        takeBtn.style.cursor = isDispatchedOrDone ? 'not-allowed' : 'pointer';
+    }
 
     // 2. Primary Workflow Action Card
     const actionCard = document.getElementById('quick-order-primary-action-card');
@@ -935,15 +1058,15 @@ window.openOrderQuickModal = function(orderId) {
             const isTakeaway = (ord.orderType === 'takeaway');
             if (isTakeaway) {
                 actionCard.innerHTML = `
-                    <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px; text-align:center;">
-                        <div style="font-weight:900; font-size:14px; color:#34d399; margin-bottom:6px;">⚡ STEP 3: WAITING FOR CUSTOMER PICKUP</div>
-                        <div style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">Customer notified to collect order from Littiwale counter</div>
+                    <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:14px 12px; text-align:center; box-sizing:border-box; overflow:hidden;">
+                        <div style="font-weight:900; font-size:13px; color:#34d399; margin-bottom:4px;">⚡ STEP 3: WAITING FOR PICKUP</div>
+                        <div style="font-size:11.5px; color:#cbd5e1; margin-bottom:10px;">Customer notified to collect order from Littiwale counter</div>
                         <div style="display:flex; flex-direction:column; gap:8px;">
-                            <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
+                            <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:13.5px; padding:12px 10px; border-radius:10px; white-space:normal; line-height:1.2;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
                                 ✅ Mark Picked Up & Completed
                             </button>
-                            <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:13px; padding:10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px;" onclick="sendTakeawayReadyWhatsApp('${ord._id}')">
-                                <span>💬 Re-Send "Ready for Pickup" Alert on WhatsApp</span>
+                            <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:12.5px; padding:9px 10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:normal; line-height:1.2;" onclick="sendTakeawayReadyWhatsApp('${ord._id}')">
+                                <span>💬 Re-Send WhatsApp Pickup Alert</span>
                             </button>
                         </div>
                     </div>
@@ -952,15 +1075,15 @@ window.openOrderQuickModal = function(orderId) {
                 const riderName = ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Rider';
                 const riderPhone = ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '';
                 actionCard.innerHTML = `
-                    <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:16px; text-align:center;">
-                        <div style="font-weight:900; font-size:14px; color:#34d399; margin-bottom:6px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
-                        ${riderPhone ? `<div style="font-size:12px; color:#cbd5e1; margin-bottom:12px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:10px;"></div>'}
+                    <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:14px 12px; text-align:center; box-sizing:border-box; overflow:hidden;">
+                        <div style="font-weight:900; font-size:13px; color:#34d399; margin-bottom:4px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
+                        ${riderPhone ? `<div style="font-size:11.5px; color:#cbd5e1; margin-bottom:10px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:8px;"></div>'}
                         <div style="display:flex; flex-direction:column; gap:8px;">
-                            <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
+                            <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:13.5px; padding:12px 10px; border-radius:10px; white-space:normal; line-height:1.2;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
                                 🎉 Mark Order Delivered (Completed)
                             </button>
-                            <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:13px; padding:10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
-                                <span>💬 Send "Thank You & Review" WhatsApp Note</span>
+                            <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(37,211,102,0.15); border:1px solid #25d366; color:#4ade80; font-weight:800; font-size:12.5px; padding:9px 10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:normal; line-height:1.2;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
+                                <span>💬 Send WhatsApp Thank You Note</span>
                             </button>
                         </div>
                     </div>
@@ -968,10 +1091,10 @@ window.openOrderQuickModal = function(orderId) {
             }
         } else if (status === 'delivered') {
             actionCard.innerHTML = `
-                <div style="background:rgba(16,185,129,0.08); border:1.5px solid rgba(16,185,129,0.3); border-radius:14px; padding:16px; text-align:center;">
-                    <div style="color:#34d399; font-weight:800; font-size:14px; margin-bottom:10px;">🎉 Order Completed & Delivered</div>
-                    <button type="button" class="btn btn-primary" style="width:100%; background:#25d366; color:#000; font-weight:900; font-size:13.5px; padding:12px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:8px;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
-                        <span>📲 Send "Thank You & Google Review" WhatsApp Note</span>
+                <div style="background:rgba(16,185,129,0.08); border:1.5px solid rgba(16,185,129,0.3); border-radius:14px; padding:14px 12px; text-align:center; box-sizing:border-box; overflow:hidden;">
+                    <div style="color:#34d399; font-weight:800; font-size:13px; margin-bottom:8px;">🎉 Order Completed & Delivered</div>
+                    <button type="button" class="btn btn-primary" style="width:100%; background:#25d366; color:#000; font-weight:900; font-size:13px; padding:11px 10px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:normal; line-height:1.2;" onclick="sendCustomerDeliveredWhatsApp('${ord._id}')">
+                        <span>📲 Send WhatsApp Review & Thank You</span>
                     </button>
                 </div>
             `;
@@ -1122,6 +1245,74 @@ window.recalcQuickDelCharge = function(orderId) {
     if (mainTotalEl) mainTotalEl.textContent = `₹${finalTotal}`;
 };
 
+window.handleOrderTypeToggleClick = async function(targetType) {
+    const orderId = window.currentQuickOrderId;
+    if (!orderId) return;
+
+    const orders = window.cachedOrders || [];
+    const ord = orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId));
+    if (!ord) return;
+
+    const currentStatus = (ord.status || 'pending').toLowerCase();
+    if (currentStatus === 'dispatched' || currentStatus === 'delivered' || currentStatus === 'cancelled') {
+        window.showAdminToast('⚠️ Order is already out for delivery or completed. Cannot switch order type.', 'warning');
+        return;
+    }
+
+    if (ord.orderType === targetType) return; // Already current type
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    const isNowTakeaway = (targetType === 'takeaway');
+    const subtotal = Number(ord.subtotal || ord.finalTotal || 0);
+    const discount = Number(ord.discount || 0);
+    
+    let newDelCharge = 0;
+    if (!isNowTakeaway) {
+        // Restore default delivery fee or previous value
+        newDelCharge = Number(window.cachedStoreSettings && window.cachedStoreSettings[0]?.defaultDeliveryFee) || 30;
+    }
+    const newFinalTotal = Math.max(0, subtotal - discount + newDelCharge);
+    const newAddress = isNowTakeaway ? 'Takeaway / Self-Pickup' : (ord.deliveryAddress && ord.deliveryAddress !== 'Takeaway / Self-Pickup' ? ord.deliveryAddress : 'Barbil');
+
+    // Update in memory first
+    ord.orderType = targetType;
+    ord.deliveryCharge = newDelCharge;
+    ord.finalTotal = newFinalTotal;
+    ord.total = newFinalTotal;
+    ord.deliveryAddress = newAddress;
+    ord.customerAddress = newAddress;
+
+    try {
+        const res = await fetch(`${API_URL}/orders/${ord._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({
+                orderType: targetType,
+                deliveryCharge: newDelCharge,
+                finalTotal: newFinalTotal,
+                customerAddress: newAddress
+            })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(isNowTakeaway ? '🛍️ Switched to Takeaway! Delivery fee removed.' : '🛵 Switched to Delivery! Delivery fee added.', 'success');
+            // Re-render modal to instantly reflect changes
+            window.openOrderQuickModal(ord._id);
+            // Re-render orders table
+            const currentSearch = document.getElementById('global-search-input')?.value?.trim() || window.currentSearchQuery || '';
+            if (typeof renderOrdersTable === 'function') renderOrdersTable(currentSearch);
+        } else {
+            window.showAdminToast('Failed to switch order type. Check Admin PIN.', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error updating order type', 'error');
+    }
+};
+
 window.confirmQuickOrder = async function(orderId) {
     const orders = window.cachedOrders || [];
     const order = orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId));
@@ -1161,9 +1352,7 @@ window.confirmQuickOrder = async function(orderId) {
             const shortId = String(order._id).slice(-6).toUpperCase();
             const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Order Items';
 
-            const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
-                ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
-                : 'https://littiwale-barbil.vercel.app';
+            const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : ((window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/+$/, '') : 'https://littiwale.co.in');
             const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
             const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
@@ -1209,12 +1398,59 @@ if (!window.adminOrdersLivePollInterval) {
 // Initial fetch on script execution
 window.fetchAndRenderOrders();
 
+window.ordersCurrentPage = 1;
+window.ordersPerPage = 10;
+window.ordersStatusFilter = 'all';
+window.ordersSearchQuery = '';
+
+window.handleOrdersSearch = function(q) {
+    window.ordersSearchQuery = (q || '').trim();
+    window.ordersCurrentPage = 1;
+    renderOrdersTable();
+};
+
+window.setOrdersStatusFilter = function(status, btnEl) {
+    window.ordersStatusFilter = status || 'all';
+    window.ordersCurrentPage = 1;
+    document.querySelectorAll('.order-filter-pill').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    renderOrdersTable();
+};
+
+window.setOrdersPage = function(page) {
+    window.ordersCurrentPage = page;
+    renderOrdersTable();
+    const sec = document.getElementById('orders-section');
+    if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
 function renderOrdersTable(filterQuery = '') {
     const tbody = document.getElementById('live-orders-tbody');
-    if (!tbody) return;
+    const mobileCardsContainer = document.getElementById('mobile-orders-cards-container');
+    const paginationInfo = document.getElementById('orders-pagination-info');
+    const paginationControls = document.getElementById('orders-pagination-controls');
+
+    if (!tbody && !mobileCardsContainer) return;
+
     let orders = window.cachedOrders || [];
-    const activeInput = document.getElementById('global-search-input');
-    const rawQ = (filterQuery !== '' ? filterQuery : (activeInput ? activeInput.value : (window.currentSearchQuery || ''))).trim();
+
+    // 1. Status Filter across all orders
+    const curStatus = (window.ordersStatusFilter || 'all').toLowerCase();
+    if (curStatus !== 'all') {
+        orders = orders.filter(ord => {
+            const s = (ord.status || 'pending').toLowerCase();
+            if (curStatus === 'pending') return s === 'pending';
+            if (curStatus === 'accepted') return s === 'accepted' || s === 'confirmed' || s === 'cooking' || s === 'preparing';
+            if (curStatus === 'dispatched') return s === 'dispatched';
+            if (curStatus === 'delivered') return s === 'delivered';
+            if (curStatus === 'cancelled') return s === 'cancelled';
+            return s === curStatus;
+        });
+    }
+
+    // 2. Universal Search Across ALL Orders (Not Just Page-wise)
+    const activeInput = document.getElementById('orders-table-search-input') || document.getElementById('global-search-input');
+    const rawQ = (filterQuery !== '' ? filterQuery : (window.ordersSearchQuery || (activeInput ? activeInput.value : ''))).trim();
 
     if (rawQ) {
         const q = rawQ.toLowerCase();
@@ -1237,72 +1473,194 @@ function renderOrdersTable(filterQuery = '') {
         });
     }
 
-    if (orders.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7" style="text-align:center; padding:48px 20px; color:var(--text-muted);">
-                    <div style="font-size:36px; margin-bottom:10px;">${rawQ ? '🔍' : '🛍️'}</div>
-                    <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:4px;">${rawQ ? `No Orders Matching "${rawQ}"` : 'No Active Live Orders'}</div>
-                    <div style="font-size:12px; color:var(--text-dim); max-width:380px; margin:0 auto;">
-                        ${rawQ ? 'Try searching with a different order ID, customer name, or phone number.' : 'Incoming customer orders placed from the website or WhatsApp checkout will appear here in real-time.'}
-                    </div>
-                </td>
-            </tr>
+    const totalMatching = orders.length;
+    const pageSize = window.ordersPerPage || 10;
+    const totalPages = Math.ceil(totalMatching / pageSize) || 1;
+
+    if (window.ordersCurrentPage > totalPages) window.ordersCurrentPage = totalPages;
+    if (window.ordersCurrentPage < 1) window.ordersCurrentPage = 1;
+
+    const startIdx = (window.ordersCurrentPage - 1) * pageSize;
+    const paginatedOrders = orders.slice(startIdx, startIdx + pageSize);
+
+    // Empty State
+    if (totalMatching === 0) {
+        const emptyHtml = `
+            <div style="text-align:center; padding:40px 20px; color:var(--text-muted);">
+                <div style="font-size:36px; margin-bottom:10px;">${rawQ ? '🔍' : '🛍️'}</div>
+                <div style="font-size:15px; font-weight:700; color:#fff; margin-bottom:4px;">${rawQ ? `No Orders Matching "${rawQ}"` : 'No Orders Found'}</div>
+                <div style="font-size:12px; color:var(--text-dim); max-width:380px; margin:0 auto;">
+                    ${rawQ ? 'Try searching with a different order ID, customer name, or phone number.' : 'Orders placed from the website or WhatsApp will appear here.'}
+                </div>
+            </div>
         `;
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" style="padding:0;">${emptyHtml}</td></tr>`;
+        }
+        if (mobileCardsContainer) {
+            mobileCardsContainer.innerHTML = emptyHtml;
+        }
+        if (paginationInfo) paginationInfo.textContent = 'Showing 0 orders';
+        if (paginationControls) paginationControls.innerHTML = '';
         return;
     }
 
-    tbody.innerHTML = orders.map(ord => {
-        const orderId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
-        const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Custom items';
-        const total = ord.finalTotal || ord.subtotal || 0;
-        const delCharge = Number(ord.deliveryCharge || 0);
-        const status = (ord.status || 'pending').toLowerCase();
-        const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
-        const formattedDate = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-        const targetPhone = ord.whatsappPhone || ord.customerPhone || '';
-        const rawPhone = targetPhone.replace(/\D/g, '').slice(-10);
-        const isTakeaway = (ord.orderType === 'takeaway');
+    // A. Render Desktop Table (10 Orders on Current Page)
+    if (tbody) {
+        tbody.innerHTML = paginatedOrders.map(ord => {
+            const orderId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+            const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Custom items';
+            const total = ord.finalTotal || ord.subtotal || 0;
+            const delCharge = Number(ord.deliveryCharge || 0);
+            const status = (ord.status || 'pending').toLowerCase();
+            const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
+            const formattedDate = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            const isTakeaway = (ord.orderType === 'takeaway');
 
-        let actionBtnHtml = `
-            <button type="button" class="btn btn-sm btn-primary" style="padding:6px 12px; font-size:11.5px; font-weight:800; background:var(--brand-orange); color:#000; display:inline-flex; align-items:center; gap:5px;" onclick="window.openOrderQuickModal('${ord._id}')" title="Open Order Details & Manage Status">
-                <span>👁️ Manage</span>
-            </button>
-        `;
+            return `
+                <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Tap to view full order details & actions">
+                    <td style="font-family:monospace; font-weight:900; color:var(--brand-orange);" onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
+                        #${orderId}
+                    </td>
+                    <td onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
+                        <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
+                        <div style="font-size:11px; color:var(--text-dim);">${formattedDate} • <span style="text-transform:capitalize; color:var(--brand-gold);">${ord.orderType || 'delivery'}</span></div>
+                    </td>
+                    <td onclick="event.stopPropagation();"><a href="tel:${ord.customerPhone}" style="color:var(--text-muted); text-decoration:none; font-weight:600;">${ord.customerPhone || 'N/A'}</a></td>
+                    <td style="max-width:220px; font-size:12.5px;" title="${itemsStr}">${itemsStr}</td>
+                    <td>
+                        <div style="font-weight:900; color:var(--brand-gold);">₹${total}</div>
+                        <div style="font-size:10.5px; color:var(--text-dim);">${isTakeaway ? 'Takeaway' : 'Del: ₹' + delCharge}</div>
+                    </td>
+                    <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
+                    <td onclick="event.stopPropagation();">
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <button type="button" class="btn btn-sm btn-primary" style="padding:6px 12px; font-size:11.5px; font-weight:800; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')" title="Open Order Details">
+                                <span>👁️ Manage</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="View & Print Official Bill (A4 PDF)">
+                                📄
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px; background:rgba(37,211,102,0.12); border-color:rgba(37,211,102,0.3); color:#4ade80;" onclick="window.openWhatsAppQuickModal('${ord._id}')" title="WhatsApp Customer">
+                                💬
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:rgba(239,68,68,0.35); color:#f87171;" onclick="window.confirmDeleteOrder('${ord._id}', '#${orderId}')" title="Delete Order">
+                                🗑️
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
 
-        return `
-            <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Tap to view full order details & actions">
-                <td style="font-family:monospace; font-weight:900; color:var(--brand-orange); cursor:pointer;" onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
-                    #${orderId}
-                </td>
-                <td onclick="event.stopPropagation(); window.openOrderQuickModal('${ord._id}')">
-                    <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
-                    <div style="font-size:11px; color:var(--text-dim);">${formattedDate} • <span style="text-transform:capitalize; color:var(--brand-gold);">${ord.orderType || 'delivery'}</span></div>
-                </td>
-                <td onclick="event.stopPropagation();"><a href="tel:${ord.customerPhone}" style="color:var(--text-muted); text-decoration:none; font-weight:600;">${ord.customerPhone || 'N/A'}</a></td>
-                <td style="max-width:220px; font-size:12.5px;" title="${itemsStr}">${itemsStr}</td>
-                <td>
-                    <div style="font-weight:900; color:var(--brand-gold);">₹${total}</div>
-                    <div style="font-size:10.5px; color:var(--text-dim);">${isTakeaway ? 'Takeaway' : 'Del: ₹' + delCharge}</div>
-                </td>
-                <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
-                <td onclick="event.stopPropagation();">
-                    <div style="display:flex; gap:6px; align-items:center;">
-                        ${actionBtnHtml}
-                        <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="View & Print Official Bill (A4 PDF)">
-                            📄
-                        </button>
-                        <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px; background:rgba(37,211,102,0.12); border-color:rgba(37,211,102,0.3); color:#4ade80;" onclick="window.openWhatsAppQuickModal('${ord._id}')" title="WhatsApp Customer (Direct & Status Templates)">
-                            💬
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline" style="padding:6px 8px; font-size:11px; border-color:rgba(239,68,68,0.35); color:#f87171;" onclick="window.confirmDeleteOrder('${ord._id}', '#${orderId}')" title="Permanently Delete Test Order">
-                            🗑️
-                        </button>
+    // B. Render Mobile Cards (Card System, 10 on Current Page)
+    if (mobileCardsContainer) {
+        mobileCardsContainer.innerHTML = paginatedOrders.map(ord => {
+            const orderId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+            const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Custom items';
+            const total = ord.finalTotal || ord.subtotal || 0;
+            const delCharge = Number(ord.deliveryCharge || 0);
+            const status = (ord.status || 'pending').toLowerCase();
+            const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
+            const formattedDate = ord.createdAt ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            const targetPhone = ord.whatsappPhone || ord.customerPhone || '';
+            const rawPhone = targetPhone.replace(/\D/g, '').slice(-10);
+            const isTakeaway = (ord.orderType === 'takeaway');
+
+            return `
+                <div class="mobile-order-card" onclick="window.openOrderQuickModal('${ord._id}')">
+                    <!-- Top Row: Order ID + Time + Status Pill -->
+                    <div class="mobile-order-card-header">
+                        <div>
+                            <span class="mobile-order-id">#${orderId}</span>
+                            <span style="font-size:11px; color:var(--text-dim); margin-left:6px;">${formattedDate}</span>
+                        </div>
+                        <span class="badge ${statusBadge}">${status.toUpperCase()}</span>
                     </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
+
+                    <!-- Middle Meta: Customer Info & Call / WA shortcuts -->
+                    <div class="mobile-order-card-meta">
+                        <div>
+                            <div class="mobile-order-cust-name">${ord.customerName || 'Customer'}</div>
+                            <div class="mobile-order-cust-type">
+                                <span style="color:var(--brand-gold); font-weight:700;">${isTakeaway ? '🛍️ Takeaway' : '🛵 Home Delivery'}</span>
+                                ${rawPhone ? `• +91 ${rawPhone}` : ''}
+                            </div>
+                        </div>
+                        <div class="mobile-order-phone-actions" onclick="event.stopPropagation();">
+                            ${rawPhone ? `
+                                <a href="tel:${rawPhone}" class="mobile-phone-btn call" title="Call Customer">📞</a>
+                                <a href="javascript:void(0)" onclick="window.openWhatsAppQuickModal('${ord._id}')" class="mobile-phone-btn wa" title="WhatsApp Customer">💬</a>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Items Summary Box -->
+                    <div class="mobile-order-items-box">
+                        <div style="font-weight:700; color:#fff; margin-bottom:2px;">🛒 Items:</div>
+                        <div>${itemsStr}</div>
+                    </div>
+
+                    <!-- Footer: Total Amount + Actions -->
+                    <div class="mobile-order-card-footer" onclick="event.stopPropagation();">
+                        <div class="mobile-order-total-block">
+                            <span class="mobile-order-total-amount">₹${total}</span>
+                            <span class="mobile-order-total-type">${isTakeaway ? 'Takeaway' : 'Delivery: ₹' + delCharge}</span>
+                        </div>
+                        <div class="mobile-order-actions-group">
+                            <button type="button" class="btn btn-sm btn-primary" style="padding:7px 14px; font-size:12px; font-weight:800; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')">
+                                👁️ Manage
+                            </button>
+                            <button type="button" class="btn btn-sm btn-secondary" style="padding:7px 9px; font-size:12px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="Print Bill">
+                                📄
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline" style="padding:7px 9px; font-size:12px; border-color:rgba(239,68,68,0.35); color:#f87171;" onclick="window.confirmDeleteOrder('${ord._id}', '#${orderId}')" title="Delete">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // C. Render Pagination Bar
+    if (paginationInfo) {
+        const endIdx = Math.min(startIdx + pageSize, totalMatching);
+        paginationInfo.textContent = `Showing ${startIdx + 1}–${endIdx} of ${totalMatching} orders (Page ${window.ordersCurrentPage} of ${totalPages})`;
+    }
+
+    if (paginationControls) {
+        let controlsHtml = '';
+        if (totalPages > 1) {
+            controlsHtml += `
+                <button type="button" class="page-nav-btn" onclick="window.setOrdersPage(${window.ordersCurrentPage - 1})" ${window.ordersCurrentPage === 1 ? 'disabled' : ''}>
+                    ◀ Prev
+                </button>
+            `;
+
+            // Max 5 page numbers around current
+            let startP = Math.max(1, window.ordersCurrentPage - 2);
+            let endP = Math.min(totalPages, startP + 4);
+            if (endP - startP < 4) startP = Math.max(1, endP - 4);
+
+            for (let p = startP; p <= endP; p++) {
+                controlsHtml += `
+                    <button type="button" class="page-number-pill ${p === window.ordersCurrentPage ? 'active' : ''}" onclick="window.setOrdersPage(${p})">
+                        ${p}
+                    </button>
+                `;
+            }
+
+            controlsHtml += `
+                <button type="button" class="page-nav-btn" onclick="window.setOrdersPage(${window.ordersCurrentPage + 1})" ${window.ordersCurrentPage >= totalPages ? 'disabled' : ''}>
+                    Next ▶
+                </button>
+            `;
+        }
+        paginationControls.innerHTML = controlsHtml;
+    }
 }
 
 window.directUpdateOrderStatus = async function(orderId, newStatus) {
@@ -1833,6 +2191,8 @@ window.handleContextualSearch = function(e) {
     const activeTab = document.querySelector('.tab-section.active')?.id || 'dashboard-section';
 
     if (activeTab === 'orders-section') {
+        window.ordersSearchQuery = query;
+        window.ordersCurrentPage = 1;
         renderOrdersTable(query);
     } else if (activeTab === 'menu-section') {
         renderMenuGrid(query);
@@ -2092,6 +2452,10 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 
 window.cachedAnnouncements = [];
 window.cachedCoupons = [];
+
+window.getFrontendBaseUrl = function() {
+    return (window.frontendUrl || (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) || 'https://littiwale.co.in').replace(/\/+$/, '');
+};
 
 async function loadAppConfig() {
     try {
@@ -2362,10 +2726,16 @@ window.renderDynamicDashboard = function() {
         const sortedCustomers = Object.values(customerMap)
             .sort((a, b) => b.orderCount - a.orderCount || b.totalSpend - a.totalSpend);
 
+        const topCustCards = document.getElementById('dashboard-top-customers-cards');
+
         if (sortedCustomers.length === 0) {
             topCustTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:24px;">No customer order history yet</td></tr>`;
+            if (topCustCards) topCustCards.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:16px;">No customer order history yet</div>`;
         } else {
-            topCustTbody.innerHTML = sortedCustomers.slice(0, 7).map((c, idx) => {
+            const topList = sortedCustomers.slice(0, 7);
+            
+            // Desktop Table
+            topCustTbody.innerHTML = topList.map((c, idx) => {
                 const rankBadge = idx === 0 ? '🥇 1' : (idx === 1 ? '🥈 2' : (idx === 2 ? '🥉 3' : `#${idx + 1}`));
                 const rankColor = idx === 0 ? 'var(--brand-gold)' : (idx === 1 ? '#e2e8f0' : (idx === 2 ? '#f59e0b' : 'var(--text-dim)'));
                 return `
@@ -2397,6 +2767,37 @@ window.renderDynamicDashboard = function() {
                     </tr>
                 `;
             }).join('');
+
+            // Mobile Cards (Clean & Compact)
+            if (topCustCards) {
+                topCustCards.innerHTML = topList.map((c, idx) => {
+                    const rankBadge = idx === 0 ? '🥇 1' : (idx === 1 ? '🥈 2' : (idx === 2 ? '🥉 3' : `#${idx + 1}`));
+                    return `
+                        <div class="mobile-loyal-customer-card">
+                            <div class="mobile-loyal-cust-header">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span style="font-weight:900; font-size:13px;">${rankBadge}</span>
+                                    <div>
+                                        <div style="font-weight:700; color:#fff; font-size:13.5px;">${c.name}</div>
+                                        <div style="font-size:11px; color:var(--text-dim);">+91 ${c.displayPhone}</div>
+                                    </div>
+                                </div>
+                                <span class="badge" style="background:rgba(240,78,35,0.12); color:var(--brand-orange); border:1px solid rgba(240,78,35,0.25); font-weight:800; font-size:10.5px;">
+                                    🔥 ${c.orderCount} ${c.orderCount === 1 ? 'Order' : 'Orders'}
+                                </span>
+                            </div>
+                            ${c.lastItems ? `<div style="font-size:11.5px; color:var(--brand-gold); background:rgba(0,0,0,0.25); padding:5px 8px; border-radius:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🛍️ ${c.lastItems}</div>` : ''}
+                            <div class="mobile-loyal-cust-actions">
+                                <span style="color:var(--brand-gold); font-weight:800; font-size:13px;">Total Spend: ₹${c.totalSpend.toLocaleString('en-IN')}</span>
+                                <div style="display:flex; gap:6px;">
+                                    <a href="tel:${c.phone}" class="mobile-phone-btn call" style="width:28px; height:28px; font-size:11px;">📞</a>
+                                    <a href="https://wa.me/91${c.phone}" target="_blank" class="mobile-phone-btn wa" style="width:28px; height:28px; font-size:11px;">💬</a>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
         }
     }
 
@@ -2441,37 +2842,75 @@ window.renderDynamicDashboard = function() {
 
     // 8. Recent Live Website Orders Table (Real orders from DB)
     const recentOrdersTbody = document.getElementById('dashboard-recent-orders-tbody');
-    if (recentOrdersTbody) {
+    const recentOrdersCards = document.getElementById('dashboard-recent-orders-cards');
+
+    if (recentOrdersTbody || recentOrdersCards) {
         const orders = window.cachedOrders || [];
         if (orders.length === 0) {
-            recentOrdersTbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:24px;">No live website orders received yet</td></tr>`;
+            if (recentOrdersTbody) recentOrdersTbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:24px;">No live website orders received yet</td></tr>`;
+            if (recentOrdersCards) recentOrdersCards.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:16px;">No live website orders received yet</div>`;
         } else {
             const recent = orders.slice(0, 5);
-            recentOrdersTbody.innerHTML = recent.map(ord => {
-                const shortId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
-                const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Items';
-                const total = ord.finalTotal || ord.subtotal || 0;
-                const status = (ord.status || 'pending').toLowerCase();
-                const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
 
-                return `
-                    <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Click to view & manage order">
-                        <td style="font-family:monospace; font-weight:900; color:var(--brand-orange);">#${shortId}</td>
-                        <td>
-                            <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
-                            <div style="font-size:11px; color:var(--text-dim);">${ord.customerPhone || ''}</div>
-                        </td>
-                        <td style="max-width:180px; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${itemsStr}">${itemsStr}</td>
-                        <td style="font-weight:900; color:var(--brand-gold);">₹${total}</td>
-                        <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
-                        <td onclick="event.stopPropagation();">
-                            <button type="button" class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px; font-weight:700; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')">
-                                👁️ Manage
-                            </button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+            // Desktop Table
+            if (recentOrdersTbody) {
+                recentOrdersTbody.innerHTML = recent.map(ord => {
+                    const shortId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+                    const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Items';
+                    const total = ord.finalTotal || ord.subtotal || 0;
+                    const status = (ord.status || 'pending').toLowerCase();
+                    const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
+
+                    return `
+                        <tr onclick="window.openOrderQuickModal('${ord._id}')" style="cursor:pointer;" title="Click to view & manage order">
+                            <td style="font-family:monospace; font-weight:900; color:var(--brand-orange);">#${shortId}</td>
+                            <td>
+                                <div style="font-weight:700; color:#fff;">${ord.customerName || 'Customer'}</div>
+                                <div style="font-size:11px; color:var(--text-dim);">${ord.customerPhone || ''}</div>
+                            </td>
+                            <td style="max-width:180px; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${itemsStr}">${itemsStr}</td>
+                            <td style="font-weight:900; color:var(--brand-gold);">₹${total}</td>
+                            <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
+                            <td onclick="event.stopPropagation();">
+                                <button type="button" class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px; font-weight:700; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')">
+                                    👁️ Manage
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // Mobile Cards (Zero horizontal scroll)
+            if (recentOrdersCards) {
+                recentOrdersCards.innerHTML = recent.map(ord => {
+                    const shortId = ord._id ? String(ord._id).slice(-6).toUpperCase() : 'LW-ORD';
+                    const itemsStr = (ord.items || []).map(it => `${it.quantity}x ${it.name}`).join(', ') || 'Items';
+                    const total = ord.finalTotal || ord.subtotal || 0;
+                    const status = (ord.status || 'pending').toLowerCase();
+                    const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
+
+                    return `
+                        <div class="mobile-dashboard-order-card" onclick="window.openOrderQuickModal('${ord._id}')">
+                            <div class="mobile-dashboard-order-header">
+                                <span style="font-family:var(--font-mono); font-weight:800; color:var(--brand-orange); font-size:13.5px;">#${shortId}</span>
+                                <span class="badge ${statusBadge}" style="font-size:10px;">${status.toUpperCase()}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div style="font-weight:700; color:#fff; font-size:13.5px;">${ord.customerName || 'Customer'}</div>
+                                <span style="font-weight:800; color:var(--brand-gold); font-size:14px;">₹${total}</span>
+                            </div>
+                            <div style="font-size:12px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🛒 ${itemsStr}</div>
+                            <div class="mobile-dashboard-order-footer" onclick="event.stopPropagation();">
+                                <span style="font-size:11px; color:var(--text-muted);">${ord.customerPhone || ''}</span>
+                                <button type="button" class="btn btn-sm btn-primary" style="padding:4px 10px; font-size:11px; font-weight:700; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')">
+                                    👁️ Manage
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
         }
     }
 
@@ -5534,7 +5973,7 @@ window.confirmOrderAndWhatsApp = async function() {
                 ? `*📍 Pickup Counter:* Littiwale Counter, Near Barbil Court, Rabisons Mall\n*⏱️ Ready for Pickup in:* ${estTime}` 
                 : `*📍 Delivery Address:* ${order.deliveryAddress || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
-            const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') : 'https://littiwale-barbil.vercel.app';
+            const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
             const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
             const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
@@ -5899,7 +6338,7 @@ window.sendCustomerDispatchWhatsApp = function() {
     const finalTotal = Number(order.finalTotal || order.subtotal || 0);
     const paymentStatusText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (Cash on Delivery 💵)`;
 
-    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') : 'https://littiwale-barbil.vercel.app';
+    const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
     const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
     const msg = `🛵 *YOUR FOOD IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
@@ -5968,9 +6407,7 @@ window.sendTakeawayReadyWhatsApp = function(orderId) {
     const isPrepaid = order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full');
     const paymentText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (Pay at Counter 💵)`;
 
-    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
-        ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
-        : 'https://littiwale-barbil.vercel.app';
+    const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
     const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
     const msg = `🛍️ *YOUR ORDER IS READY FOR PICKUP! — LITTIWALE BARBIL*\n\n` +
@@ -6004,9 +6441,7 @@ window.sendCustomerDeliveredWhatsApp = function(orderId) {
     const cleanCustPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
     const custName = order.customerName || 'Foodie';
 
-    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
-        ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
-        : 'https://littiwale-barbil.vercel.app';
+    const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
 
     const msg = `🎉 *ORDER DELIVERED — THANK YOU FOR CHOOSING LITTIWALE!* ❤️\n\n` +
                 `Dear *${custName}*,\n` +
@@ -6096,9 +6531,7 @@ window.executeWhatsAppAction = function(actionType) {
     const finalTotal = Number(order.finalTotal || order.subtotal || 0);
     const estTime = order.estimatedTime || (isTakeaway ? '15-20 mins' : '25-35 mins');
 
-    const baseUrl = (window.cachedStoreSettings && window.cachedStoreSettings[0]?.canonicalUrl) 
-        ? window.cachedStoreSettings[0].canonicalUrl.replace(/\/$/, '') 
-        : 'https://littiwale-barbil.vercel.app';
+    const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
     const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
     let msg = '';
