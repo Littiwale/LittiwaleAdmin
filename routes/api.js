@@ -1423,6 +1423,9 @@ function buildLuxuryOrderEmailHtml({ ord, newStatus, isDelivered, isTakeaway, cl
                                     Ward No. 7, Punjabi Para, Barbil, Odisha • Ph: +91 6370680744<br>
                                     Authentic Wood-Fired Taste of Bihar • Quality & Hygiene Assured
                                 </div>
+                                <div style="font-size:10.5px; color:#71717a; margin-top:8px; font-style:italic;">
+                                    This is an automated system-generated email. Please do not reply directly to this email.
+                                </div>
                             </td>
                         </tr>
 
