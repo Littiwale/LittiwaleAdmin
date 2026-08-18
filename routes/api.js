@@ -2108,8 +2108,9 @@ async function sendNewOrderResendEmail(ord) {
 
                                 <!-- Footer -->
                                 <tr>
-                                    <td style="background:#0c0c10; padding:16px; text-align:center; font-size:11.5px; color:#64748b; border-top:1px solid #27272a;">
-                                        Littiwale Barbil • Admin Kitchen Notification System
+                                    <td style="background:#0c0c10; padding:18px; text-align:center; font-size:11.5px; color:#64748b; border-top:1px solid #27272a; line-height:1.5;">
+                                        <strong style="color:#f97316;">Littiwale Barbil</strong> • Admin Kitchen Notification System<br>
+                                        <span style="font-size:10.5px; color:#71717a; font-style:italic;">This is an automated system-generated notification for Admin.</span>
                                     </td>
                                 </tr>
                             </table>
@@ -2119,20 +2120,6 @@ async function sendNewOrderResendEmail(ord) {
             </body>
             </html>
         `;
-
-        const cleanOrderId = String(ord.orderId || ord._id || 'Order').replace(/[^a-zA-Z0-9]/g, '');
-        let attachments = [];
-        try {
-            const pdfBuffer = await generateOrderPdfBuffer(ord);
-            if (pdfBuffer && pdfBuffer.length > 0) {
-                attachments.push({
-                    filename: `${cleanOrderId}bill.pdf`,
-                    content: pdfBuffer.toString('base64')
-                });
-            }
-        } catch(pdfErr) {
-            console.warn('⚠️ Could not generate PDF attachment for admin email:', pdfErr.message);
-        }
 
         const res = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -2144,17 +2131,16 @@ async function sendNewOrderResendEmail(ord) {
                 from: 'Littiwale Orders <orders@littiwale.co.in>',
                 to: [adminEmail],
                 subject: `[NEW ORDER] #${String(ord.orderId || ord._id).toUpperCase()} - Rs. ${ord.finalTotal || ord.total} (${isTakeaway ? 'Takeaway' : 'Delivery'})`,
-                html: emailHtml,
-                attachments: attachments
+                html: emailHtml
             })
         });
 
         if (res.ok) {
             const data = await res.json();
-            console.log(`📧 Resend email with PDF (${cleanOrderId}bill.pdf) successfully dispatched to Admin (${adminEmail}) for Order #${ord.orderId || ord._id}! Email ID:`, data.id);
+            console.log(`📧 Resend new order alert email successfully dispatched to Admin (${adminEmail}) for Order #${ord.orderId || ord._id}! Email ID:`, data.id);
         }
     } catch (e) {
-        console.error('❌ Resend email dispatch failed:', e.message);
+        console.error('❌ Resend admin email dispatch failed:', e.message);
     }
 }
 
