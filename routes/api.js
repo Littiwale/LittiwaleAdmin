@@ -1624,6 +1624,71 @@ router.post('/customer/login', async (req, res) => {
     }
 });
 
+// 2.5 Customer Google OAuth Sync
+router.post('/customer/google-auth', async (req, res) => {
+    try {
+        const { supabaseId, email, name, avatarUrl } = req.body;
+        if (!email) {
+            return res.status(400).json({ success: false, error: 'Email is required from Google Auth' });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+        const cleanName = String(name || 'Customer').trim();
+        const cleanAvatar = String(avatarUrl || '');
+
+        let c = null;
+        const existing = await supabaseDb.query(
+            `SELECT * FROM customers WHERE LOWER(email) = $1 OR (supabase_id != '' AND supabase_id = $2) LIMIT 1`,
+            [cleanEmail, supabaseId || '']
+        );
+
+        if (existing.rows && existing.rows.length > 0) {
+            c = existing.rows[0];
+            const updateRes = await supabaseDb.query(
+                `UPDATE customers SET 
+                    name = CASE WHEN (name IS NULL OR name = '' OR name = 'Customer') THEN $1 ELSE name END, 
+                    avatar_url = COALESCE(NULLIF($2, ''), avatar_url),
+                    supabase_id = COALESCE(NULLIF($3, ''), supabase_id),
+                    is_verified = true,
+                    updated_at = NOW() 
+                 WHERE id = $4 RETURNING *`,
+                [cleanName, cleanAvatar, supabaseId || '', c.id]
+            );
+            c = updateRes.rows[0] || c;
+        } else {
+            const insertRes = await supabaseDb.query(
+                `INSERT INTO customers (email, name, auth_provider, supabase_id, avatar_url, is_verified, addresses, created_at, updated_at)
+                 VALUES ($1, $2, 'google', $3, $4, true, '[]'::jsonb, NOW(), NOW())
+                 RETURNING *`,
+                [cleanEmail, cleanName, supabaseId || '', cleanAvatar]
+            );
+            c = insertRes.rows[0];
+        }
+
+        const token = jwt.sign(
+            { id: c.id, phone: c.phone || '', email: c.email, name: c.name },
+            JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+
+        res.json({
+            success: true,
+            token,
+            customer: {
+                id: c.id,
+                name: c.name,
+                phone: c.phone || '',
+                email: c.email,
+                avatarUrl: c.avatar_url,
+                addresses: Array.isArray(c.addresses) ? c.addresses : []
+            }
+        });
+    } catch (err) {
+        console.error('Customer Google Auth sync error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // 3. Customer Forgot Password (Generate & return new 4-char Temp Password)
 router.post('/customer/forgot-password', async (req, res) => {
     try {
