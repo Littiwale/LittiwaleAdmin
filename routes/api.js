@@ -1582,20 +1582,25 @@ router.post('/customer/register', async (req, res) => {
         const tempPassword = generate4CharTempPassword();
         const initialAddresses = address ? [{ id: `addr_${Date.now()}`, label: 'Home', address: address.trim(), isDefault: true }] : [];
 
-        await supabaseDb.query(
+        const insertRes = await supabaseDb.query(
             `INSERT INTO customers (phone, email, name, temp_password, password_hash, addresses, updated_at)
-             VALUES ($1, $2, $3, $4, $4, $5, NOW())`,
+             VALUES ($1, $2, $3, $4, $4, $5, NOW()) RETURNING *`,
             [cleanPhone, cleanEmail, cleanName || 'Customer', tempPassword, JSON.stringify(initialAddresses)]
         );
+
+        const newCustomer = insertRes.rows[0];
 
         // Send email via Resend
         sendCustomerTempPasswordEmail(cleanEmail, cleanName, tempPassword, false).catch(() => {});
 
+        const masked = cleanEmail.length > 3 ? `${cleanEmail.slice(0,2)}***@${cleanEmail.split('@')[1]}` : cleanEmail;
+
         res.status(201).json({
             success: true,
-            tempPassword: tempPassword,
-            message: `Account created successfully! Your Temporary Password is: ${tempPassword}`,
+            emailMasked: masked,
+            message: `Account created successfully! Your secure 4-character Login PIN has been sent to ${masked}.`,
             customer: {
+                id: newCustomer.id,
                 name: cleanName,
                 phone: cleanPhone,
                 email: cleanEmail,
@@ -1705,9 +1710,14 @@ router.post('/customer/google-auth', async (req, res) => {
             { expiresIn: '30d' }
         );
 
+        const isNewUser = !existing.rows || existing.rows.length === 0;
+        const hasCustomPin = Boolean(c.password_hash || c.temp_password);
+
         res.json({
             success: true,
             token,
+            isNewUser,
+            hasCustomPin,
             customer: {
                 id: c.id,
                 name: c.name,
@@ -1751,15 +1761,21 @@ router.post('/customer/forgot-password', async (req, res) => {
             [newTempPassword, c.id]
         );
 
+        let emailMasked = '';
         if (c.email) {
+            const cleanE = c.email.trim();
+            const parts = cleanE.split('@');
+            emailMasked = parts[0].length > 2 ? `${parts[0].slice(0, 2)}***@${parts[1]}` : cleanE;
             sendCustomerTempPasswordEmail(c.email, c.name, newTempPassword, true).catch(() => {});
         }
 
         res.json({
             success: true,
-            tempPassword: newTempPassword,
+            emailMasked: emailMasked,
             phone: c.phone,
-            message: `New temporary password generated: ${newTempPassword}`
+            message: emailMasked 
+                ? `A new 4-character Login PIN has been sent to your registered email (${emailMasked}). Please check your Inbox / Spam folder.`
+                : 'Password reset instructions have been dispatched.'
         });
     } catch (err) {
         console.error('Forgot password error:', err);
