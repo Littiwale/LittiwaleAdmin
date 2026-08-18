@@ -1985,7 +1985,7 @@ router.put('/customers/:phone/addresses/:addrId/default', async (req, res) => {
 // Helper to send Resend email notification asynchronously to ADMIN ONLY
 async function sendNewOrderResendEmail(ord) {
     const resendApiKey = process.env.RESEND_API_KEY;
-    const adminEmail = process.env.ADMIN_EMAIL || 'spicy88ck@gmail.com';
+    const adminEmail = (process.env.ADMIN_EMAIL && !process.env.ADMIN_EMAIL.includes('admin@littiwale.co.in')) ? process.env.ADMIN_EMAIL : 'spicy88ck@gmail.com';
     if (!resendApiKey) {
         console.warn('⚠️ Resend API Key not configured in .env. Skipping email.');
         return;

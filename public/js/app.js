@@ -1111,7 +1111,12 @@ window.openOrderQuickModal = function(orderId) {
     const custName = ord.customerName || 'Customer';
     const targetPhone = ord.whatsappPhone || ord.customerPhone || '';
     const rawPhone = targetPhone.replace(/\D/g, '').slice(-10);
-    const fullAddress = ord.deliveryAddress || ord.address || (ord.orderType === 'dinein' ? 'Dine-In at Restaurant' : 'Takeaway / Self-Pickup');
+    const isTakeawayOrd = (ord.orderType === 'takeaway' || ord.orderType === 'pickup');
+    const isDineinOrd = (ord.orderType === 'dinein');
+    const rawAddrStr = (ord.customerAddress || ord.deliveryAddress || ord.address || '').trim();
+    const fullAddress = isTakeawayOrd
+        ? '🛍️ Counter Takeaway / Self-Pickup'
+        : (isDineinOrd ? '🍽️ Dine-In at Restaurant' : (rawAddrStr && !rawAddrStr.toLowerCase().includes('takeaway') && !rawAddrStr.toLowerCase().includes('pickup') ? rawAddrStr : 'Barbil'));
 
     const nameEl = document.getElementById('quick-cust-name');
     if (nameEl) nameEl.textContent = custName;
@@ -1272,7 +1277,9 @@ window.handleOrderTypeToggleClick = async function(targetType) {
         newDelCharge = Number(window.cachedStoreSettings && window.cachedStoreSettings[0]?.defaultDeliveryFee) || 30;
     }
     const newFinalTotal = Math.max(0, subtotal - discount + newDelCharge);
-    const newAddress = isNowTakeaway ? 'Takeaway / Self-Pickup' : (ord.deliveryAddress && ord.deliveryAddress !== 'Takeaway / Self-Pickup' ? ord.deliveryAddress : 'Barbil');
+    const existingRawAddr = (ord.customerAddress || ord.deliveryAddress || ord.address || '').trim();
+    const hasRealAddr = existingRawAddr && !existingRawAddr.toLowerCase().includes('takeaway') && !existingRawAddr.toLowerCase().includes('pickup');
+    const newAddress = isNowTakeaway ? 'Takeaway / Self-Pickup' : (hasRealAddr ? existingRawAddr : 'Barbil');
 
     // Update in memory first
     ord.orderType = targetType;
