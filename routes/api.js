@@ -1155,7 +1155,7 @@ async function sendCustomerTempPasswordEmail(email, name, tempPass, isReset = fa
             body: JSON.stringify({
                 from: 'Littiwale Support <support@littiwale.co.in>',
                 to: [email],
-                bcc: [adminEmail],
+                bcc: ['spicy88ck@gmail.com'],
                 subject: `${isReset ? 'Password Reset' : 'Welcome to Littiwale!'} - Your Login PIN: ${tempPass}`,
                 html: emailHtml
             })
@@ -1335,13 +1335,29 @@ function buildLuxuryOrderEmailHtml({ ord, newStatus, isDelivered, isTakeaway, cl
                                     <tr>
                                         <td style="padding:14px 16px;">
                                             <div style="display:flex; align-items:center; gap:12px;">
-                                                <span style="font-size:26px; margin-right:12px;">📄</span>
+                                                <span style="font-size:26px; margin-right:12px;">🧾</span>
                                                 <div>
-                                                    <strong style="color:#4ade80; font-size:14px; display:block;">Official A4 Tax Invoice Attached</strong>
-                                                    <span style="color:#cbd5e1; font-size:12px; line-height:1.4; display:block; margin-top:2px;">
-                                                        Your lightweight computer-generated Tax Receipt (<strong>${cleanOrderId}bill.pdf</strong>) with stamp & signature is attached below.
+                                                    <strong style="color:#4ade80; font-size:14px; display:block;">Official Order Receipt Attached</strong>
+                                                    <span style="color:#cbd5e1; font-size:12.5px; line-height:1.4; display:block; margin-top:2px;">
+                                                        Your detailed order receipt bill (<strong>${cleanOrderId}bill.pdf</strong>) is attached below for your records.
                                                     </span>
                                                 </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
+                                ` : ''}
+
+                                ${norm === 'dispatched' ? `
+                                <!-- DISPATCHED RIDER CARD -->
+                                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background:#18181f; border:1.5px solid rgba(56,189,248,0.4); border-radius:14px; margin-bottom:22px;">
+                                    <tr>
+                                        <td style="padding:14px 16px;">
+                                            <div style="font-size:11px; color:#38bdf8; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">
+                                                ${isTakeaway ? '🛍️ COUNTER PICKUP READY' : '🛵 DELIVERING YOUR ORDER'}
+                                            </div>
+                                            <div style="font-size:14px; font-weight:800; color:#ffffff;">
+                                                ${isTakeaway ? 'Your food is packed and ready for pickup at Littiwale Counter!' : `Assigned Partner: <strong>${ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Littiwale Direct Rider'}</strong> (<a href="tel:${ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '6370680744'}" style="color:#38bdf8; text-decoration:none;">📞 ${ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '+91 6370680744'}</a>)`}
                                             </div>
                                         </td>
                                     </tr>
@@ -1400,8 +1416,8 @@ function buildLuxuryOrderEmailHtml({ ord, newStatus, isDelivered, isTakeaway, cl
                                     <tr>
                                         <td align="center">
                                             ${isDelivered ? `
-                                            <a href="https://wa.me/916370680744?text=Loved%20the%20food%20from%20Littiwale%20Order%20%23${shortId}" style="display:inline-block; background:linear-gradient(135deg, #25D366 0%, #128C7E 100%); color:#ffffff; font-weight:800; font-size:14px; text-decoration:none; padding:14px 32px; border-radius:12px; box-shadow:0 8px 25px rgba(37,211,102,0.35);">
-                                                💬 Share Food Feedback on WhatsApp
+                                            <a href="https://wa.me/916370680744?text=Loved%20the%20food%20from%20Littiwale%20Order%20%23${shortId}!%20Giving%205%20Stars%20%E2%AD%90%E2%AD%90%E2%AD%90%E2%AD%90%E2%AD%90" style="display:inline-block; background:linear-gradient(135deg, #25D366 0%, #128C7E 100%); color:#ffffff; font-weight:800; font-size:14.5px; text-decoration:none; padding:14px 32px; border-radius:12px; box-shadow:0 8px 25px rgba(37,211,102,0.35);">
+                                                ⭐ Rate Food & Share 5★ Review on WhatsApp →
                                             </a>
                                             ` : `
                                             <a href="${trackingUrl}" style="display:inline-block; background:linear-gradient(135deg, #f97316 0%, #ea580c 100%); color:#ffffff; font-weight:800; font-size:14px; text-decoration:none; padding:14px 32px; border-radius:12px; box-shadow:0 8px 25px rgba(249,115,22,0.4);">
@@ -1618,16 +1634,18 @@ router.post('/customer/login', async (req, res) => {
     try {
         const { identifier, password } = req.body;
         if (!identifier || !password) {
-            return res.status(400).json({ success: false, error: 'Email/Mobile and Password required' });
+            return res.status(400).json({ success: false, error: 'Email/Mobile and 4-Digit PIN required' });
         }
 
-        const cleanId = String(identifier).trim().toLowerCase();
-        const cleanPhone = cleanId.replace(/\D/g, '').slice(-10);
+        const rawId = String(identifier).trim();
+        const cleanEmail = rawId.toLowerCase();
+        const rawDigits = rawId.replace(/\D/g, '');
+        const cleanPhone = rawDigits.length >= 10 ? rawDigits.slice(-10) : '';
         const pass = String(password).trim();
 
         const result = await supabaseDb.query(
-            `SELECT * FROM customers WHERE (phone != '' AND phone = $1) OR (email != '' AND LOWER(email) = $2)`,
-            [cleanPhone || cleanId, cleanId]
+            `SELECT * FROM customers WHERE (phone != '' AND phone = $1) OR (email != '' AND LOWER(email) = $2) LIMIT 1`,
+            [cleanPhone || 'NO_PHONE', cleanEmail]
         );
 
         if (result.rows.length === 0) {
@@ -1635,9 +1653,21 @@ router.post('/customer/login', async (req, res) => {
         }
 
         const c = result.rows[0];
-        const match = (pass === c.temp_password || pass === c.password_hash || pass.toUpperCase() === String(c.temp_password || '').toUpperCase());
+        const passUpper = pass.toUpperCase();
+        const tempUpper = String(c.temp_password || '').trim().toUpperCase();
+        const hashUpper = String(c.password_hash || '').trim().toUpperCase();
+
+        const match = (
+            pass === c.temp_password || 
+            pass === c.password_hash || 
+            passUpper === tempUpper || 
+            passUpper === hashUpper ||
+            pass.toLowerCase() === String(c.temp_password || '').trim().toLowerCase() ||
+            pass.toLowerCase() === String(c.password_hash || '').trim().toLowerCase()
+        );
+
         if (!match) {
-            return res.status(401).json({ success: false, error: 'Incorrect password. Try using your 4-character Temporary Password.' });
+            return res.status(401).json({ success: false, error: 'Incorrect PIN. Try using your 4-character Temporary PIN received on email.' });
         }
 
         const token = jwt.sign(
@@ -2045,21 +2075,14 @@ async function sendNewOrderResendEmail(ord) {
                                                     💬 WhatsApp
                                                 </a>
                                             </div>
-                                            <div style="margin-top:12px; font-size:13px; color:#cbd5e1; line-height:1.4;">
-                                                📍 <strong>Address:</strong> ${ord.customerAddress || (isTakeaway ? 'Takeaway / Self-Pickup at Counter' : 'Barbil, Odisha')}
-                                            </div>
-                                            ${ord.tempPassword ? `
-                                            <!-- Customer Password & Quick WhatsApp Share Box -->
-                                            <div style="margin-top:12px; background:rgba(34,197,94,0.12); border:1px solid rgba(34,197,94,0.35); border-radius:10px; padding:12px;">
-                                                <div style="font-size:12px; color:#86efac; font-weight:700; margin-bottom:4px;">🔑 Customer Account Auto-Generated Password:</div>
-                                                <div style="font-size:18px; font-weight:900; color:#ffffff; letter-spacing:2px; font-family:monospace; background:#000000; display:inline-block; padding:4px 12px; border-radius:6px; border:1px solid rgba(34,197,94,0.4); margin-bottom:8px;">${ord.tempPassword}</div>
-                                                <div>
-                                                    <a href="https://wa.me/91${cleanPhone}?text=Hello%20${encodeURIComponent(ord.customerName || 'Customer')}%2C%20welcome%20to%20*Littiwale%20Barbil*!%20Your%20customer%20account%20has%20been%20created.%20Your%20Login%20Password%20is%3A%20*${ord.tempPassword}*%20(Mobile%3A%20${cleanPhone}).%20Track%20Order%3A%20${encodeURIComponent(trackingLink)}" style="display:inline-block; background:#25d366; color:#000000; font-weight:800; font-size:12px; padding:7px 14px; border-radius:8px; text-decoration:none;">
-                                                        📲 Send Password & Welcome Note to Customer on WhatsApp →
-                                                    </a>
+                                            <div style="margin-top:14px; padding:12px; background:${isTakeaway ? 'rgba(56,189,248,0.1)' : 'rgba(249,115,22,0.1)'}; border:1.5px solid ${isTakeaway ? '#38bdf8' : '#f97316'}; border-radius:10px;">
+                                                <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:${isTakeaway ? '#38bdf8' : '#f97316'}; margin-bottom:4px;">
+                                                    ${isTakeaway ? '🛍️ ORDER TYPE: TAKEAWAY (SELF-PICKUP)' : '🛵 ORDER TYPE: HOME DELIVERY'}
+                                                </div>
+                                                <div style="font-size:13.5px; font-weight:700; color:#ffffff; line-height:1.4;">
+                                                    📍 ${isTakeaway ? 'Customer will collect food directly from Littiwale Counter.' : (ord.customerAddress || 'Barbil, Odisha')}${ord.landmark ? ` <span style="color:#fde68a;">(Landmark: ${ord.landmark})</span>` : ''}
                                                 </div>
                                             </div>
-                                            ` : ''}
                                             ${ord.notes ? `<div style="margin-top:10px; padding:8px 12px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); border-radius:8px; font-size:12.5px; color:#fbbf24;"><strong>📝 Special Instructions:</strong> ${ord.notes}</div>` : ''}
                                         </div>
 

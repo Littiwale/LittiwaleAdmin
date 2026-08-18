@@ -12,6 +12,12 @@
     ],
     "headers": [
         {
+            "source": "/(.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|ttf|mp3|wav|ogg|css|js))",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
+            ]
+        },
+        {
             "source": "/api/(.*)",
             "headers": [
                 { "key": "Access-Control-Allow-Credentials", "value": "true" },

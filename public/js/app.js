@@ -645,8 +645,24 @@ let isInitialOrdersLoaded = false;
 let alarmIntervalId = null;
 let isAlarmMuted = false;
 
-// Request Web Notifications permission upon interaction
+let adminAudioCtx = null;
+function unlockAdminAudio() {
+    try {
+        if (!adminAudioCtx) {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx) adminAudioCtx = new AudioCtx();
+        }
+        if (adminAudioCtx && adminAudioCtx.state === 'suspended') {
+            adminAudioCtx.resume();
+        }
+    } catch(e) {}
+}
+document.addEventListener('click', unlockAdminAudio);
+document.addEventListener('touchstart', unlockAdminAudio);
+document.addEventListener('keydown', unlockAdminAudio);
+
 function requestNotificationPermission() {
+    unlockAdminAudio();
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission().catch(() => {});
     }
@@ -657,46 +673,33 @@ document.addEventListener('touchstart', requestNotificationPermission, { once: t
 function playLoudAlarmPulse() {
     if (isAlarmMuted) return;
     try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
-        if (ctx.state === 'suspended') {
-            ctx.resume();
-        }
+        unlockAdminAudio();
+        if (!adminAudioCtx) return;
+        const ctx = adminAudioCtx;
 
-        // Two-tone loud restaurant order chime
         const now = ctx.currentTime;
         
-        // Tone 1 (High chime)
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.type = 'triangle';
-        osc1.frequency.setValueAtTime(659.25, now); // E5
-        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
-        gain1.gain.setValueAtTime(0.5, now);
-        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.3);
-
-        // Tone 2 (Alert ring)
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(880, now + 0.25);
-        osc2.frequency.exponentialRampToValueAtTime(1174.66, now + 0.5); // D6
-        gain2.gain.setValueAtTime(0.6, now + 0.25);
-        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + 0.25);
-        osc2.stop(now + 0.65);
+        // Loud 3-Tone Escalating Kitchen Alarm (E5 -> G5 -> C6)
+        const notes = [659.25, 783.99, 1046.50, 1318.51];
+        notes.forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + (i * 0.12));
+            gain.gain.setValueAtTime(0.85, now + (i * 0.12));
+            gain.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.12) + 0.28);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + (i * 0.12));
+            osc.stop(now + (i * 0.12) + 0.3);
+        });
 
         // Mobile Device Vibration
-        if ('vibrate' in navigator) {
-            navigator.vibrate([400, 150, 400, 150, 600]);
-        }
+        try {
+            if ('vibrate' in navigator) {
+                navigator.vibrate([500, 150, 500, 150, 700]);
+            }
+        } catch(e) {}
     } catch(e) {
         console.warn('Audio play error:', e);
     }
