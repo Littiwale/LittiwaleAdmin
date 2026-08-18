@@ -1007,31 +1007,44 @@ router.get('/orders/:id', async (req, res) => {
     }
 });
 
-router.get('/orders/customer/:phone', async (req, res) => {
+router.get('/orders/customer/:phoneOrEmail', async (req, res) => {
     try {
-        const phone = req.params.phone.replace(/\D/g, '').slice(-10);
-        const sbRes = await supabaseDb.query(
-            `SELECT * FROM orders WHERE "customerPhone" LIKE $1 ORDER BY id DESC`,
-            [`%${phone}`]
-        );
+        const param = decodeURIComponent(req.params.phoneOrEmail).trim();
+        let query = '';
+        let params = [];
+
+        if (param.includes('@')) {
+            query = `SELECT * FROM orders WHERE LOWER("customerEmail") = $1 OR LOWER("email") = $1 ORDER BY id DESC`;
+            params = [param.toLowerCase()];
+        } else {
+            const phone = param.replace(/\D/g, '').slice(-10);
+            query = `SELECT * FROM orders WHERE "customerPhone" LIKE $1 OR "phone" LIKE $1 ORDER BY id DESC`;
+            params = [`%${phone}`];
+        }
+
+        const sbRes = await supabaseDb.query(query, params);
         const orders = (sbRes.rows || []).map(o => ({
             ...o,
             _id: o._id || o.orderId || String(o.id),
             id: o.orderId || o.id,
             orderId: o.orderId || o.id,
             customer: {
-                name: o.customerName || 'Customer',
-                phone: o.customerPhone || phone,
-                address: o.customerAddress || ''
+                name: o.customerName || o.name || 'Customer',
+                phone: o.customerPhone || o.phone || '',
+                email: o.customerEmail || o.email || '',
+                address: o.customerAddress || o.address || ''
             },
             items: Array.isArray(o.items) ? o.items : []
         }));
+        
         const lastOrder = orders[0] || {};
         const customer = lastOrder.customer || {
             name: '',
-            phone: phone,
+            phone: param.includes('@') ? '' : param,
+            email: param.includes('@') ? param : '',
             address: ''
         };
+
         res.json({
             success: true,
             hasOrders: orders.length > 0,
@@ -1773,6 +1786,58 @@ router.post('/customer/change-password', async (req, res) => {
         res.json({ success: true, message: 'Password updated successfully! You can now log in with your new password.' });
     } catch (err) {
         console.error('Change password error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// 5. Customer Update Profile (Phone, Name, Addresses)
+router.post('/customer/update-profile', async (req, res) => {
+    try {
+        const { id, email, phone, name, addresses } = req.body;
+        const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+        const cleanEmail = (email || '').trim().toLowerCase();
+
+        let query = '';
+        let params = [];
+        if (id) {
+            query = `UPDATE customers SET 
+                        name = COALESCE(NULLIF($1, ''), name),
+                        phone = COALESCE(NULLIF($2, ''), phone),
+                        addresses = COALESCE($3::jsonb, addresses),
+                        updated_at = NOW()
+                     WHERE id = $4 RETURNING *`;
+            params = [name || '', cleanPhone || '', JSON.stringify(addresses || []), id];
+        } else if (cleanEmail) {
+            query = `UPDATE customers SET 
+                        name = COALESCE(NULLIF($1, ''), name),
+                        phone = COALESCE(NULLIF($2, ''), phone),
+                        addresses = COALESCE($3::jsonb, addresses),
+                        updated_at = NOW()
+                     WHERE LOWER(email) = $4 RETURNING *`;
+            params = [name || '', cleanPhone || '', JSON.stringify(addresses || []), cleanEmail];
+        } else {
+            return res.status(400).json({ success: false, error: 'Customer ID or Email is required' });
+        }
+
+        const result = await supabaseDb.query(query, params);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Customer not found' });
+        }
+
+        const c = result.rows[0];
+        res.json({
+            success: true,
+            customer: {
+                id: c.id,
+                name: c.name,
+                phone: c.phone || '',
+                email: c.email,
+                avatarUrl: c.avatar_url,
+                addresses: Array.isArray(c.addresses) ? c.addresses : []
+            }
+        });
+    } catch (err) {
+        console.error('Update profile error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
