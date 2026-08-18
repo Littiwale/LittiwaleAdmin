@@ -1153,10 +1153,10 @@ async function sendCustomerTempPasswordEmail(email, name, tempPass, isReset = fa
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                from: 'Littiwale Orders <orders@littiwale.co.in>',
+                from: 'Littiwale Support <support@littiwale.co.in>',
                 to: [email],
                 bcc: [adminEmail],
-                subject: `${isReset ? 'Password Reset' : 'Welcome to Littiwale!'} - Your Temp Password: ${tempPass}`,
+                subject: `${isReset ? 'Password Reset' : 'Welcome to Littiwale!'} - Your Login PIN: ${tempPass}`,
                 html: emailHtml
             })
         });
