@@ -1017,20 +1017,24 @@ router.get('/orders/customer/:phoneOrEmail', async (req, res) => {
             const custRes = await supabaseDb.query(`SELECT * FROM customers WHERE LOWER(email) = $1 LIMIT 1`, [param.toLowerCase()]);
             if (custRes.rows.length > 0) {
                 customer = custRes.rows[0];
-                if (customer.phone) {
+                if (customer.phone && customer.phone.trim() !== '') {
                     const phone = customer.phone.replace(/\D/g, '').slice(-10);
-                    const sbRes = await supabaseDb.query(`SELECT * FROM orders WHERE "customerPhone" LIKE $1 ORDER BY id DESC`, [`%${phone}`]);
-                    orders = sbRes.rows || [];
+                    if (phone.length >= 10) {
+                        const sbRes = await supabaseDb.query(`SELECT * FROM orders WHERE "customerPhone" LIKE $1 ORDER BY id DESC`, [`%${phone}`]);
+                        orders = sbRes.rows || [];
+                    }
                 }
             }
         } else {
             const phone = param.replace(/\D/g, '').slice(-10);
-            const sbRes = await supabaseDb.query(`SELECT * FROM orders WHERE "customerPhone" LIKE $1 ORDER BY id DESC`, [`%${phone}`]);
-            orders = sbRes.rows || [];
-            
-            const custRes = await supabaseDb.query(`SELECT * FROM customers WHERE phone = $1 LIMIT 1`, [phone]);
-            if (custRes.rows.length > 0) {
-                customer = custRes.rows[0];
+            if (phone.length >= 10) {
+                const sbRes = await supabaseDb.query(`SELECT * FROM orders WHERE "customerPhone" LIKE $1 ORDER BY id DESC`, [`%${phone}`]);
+                orders = sbRes.rows || [];
+                
+                const custRes = await supabaseDb.query(`SELECT * FROM customers WHERE phone = $1 LIMIT 1`, [phone]);
+                if (custRes.rows.length > 0) {
+                    customer = custRes.rows[0];
+                }
             }
         }
 
