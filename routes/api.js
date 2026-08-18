@@ -1010,48 +1010,58 @@ router.get('/orders/:id', async (req, res) => {
 router.get('/orders/customer/:phoneOrEmail', async (req, res) => {
     try {
         const param = decodeURIComponent(req.params.phoneOrEmail).trim();
-        let query = '';
-        let params = [];
+        let orders = [];
+        let customer = null;
 
         if (param.includes('@')) {
-            query = `SELECT * FROM orders WHERE LOWER("customerEmail") = $1 OR LOWER("email") = $1 ORDER BY id DESC`;
-            params = [param.toLowerCase()];
+            const custRes = await supabaseDb.query(`SELECT * FROM customers WHERE LOWER(email) = $1 LIMIT 1`, [param.toLowerCase()]);
+            if (custRes.rows.length > 0) {
+                customer = custRes.rows[0];
+                if (customer.phone) {
+                    const phone = customer.phone.replace(/\D/g, '').slice(-10);
+                    const sbRes = await supabaseDb.query(`SELECT * FROM orders WHERE "customerPhone" LIKE $1 ORDER BY id DESC`, [`%${phone}`]);
+                    orders = sbRes.rows || [];
+                }
+            }
         } else {
             const phone = param.replace(/\D/g, '').slice(-10);
-            query = `SELECT * FROM orders WHERE "customerPhone" LIKE $1 OR "phone" LIKE $1 ORDER BY id DESC`;
-            params = [`%${phone}`];
+            const sbRes = await supabaseDb.query(`SELECT * FROM orders WHERE "customerPhone" LIKE $1 ORDER BY id DESC`, [`%${phone}`]);
+            orders = sbRes.rows || [];
+            
+            const custRes = await supabaseDb.query(`SELECT * FROM customers WHERE phone = $1 LIMIT 1`, [phone]);
+            if (custRes.rows.length > 0) {
+                customer = custRes.rows[0];
+            }
         }
 
-        const sbRes = await supabaseDb.query(query, params);
-        const orders = (sbRes.rows || []).map(o => ({
+        const formattedOrders = orders.map(o => ({
             ...o,
             _id: o._id || o.orderId || String(o.id),
             id: o.orderId || o.id,
             orderId: o.orderId || o.id,
             customer: {
-                name: o.customerName || o.name || 'Customer',
-                phone: o.customerPhone || o.phone || '',
-                email: o.customerEmail || o.email || '',
-                address: o.customerAddress || o.address || ''
+                name: o.customerName || 'Customer',
+                phone: o.customerPhone || '',
+                address: o.customerAddress || ''
             },
             items: Array.isArray(o.items) ? o.items : []
         }));
-        
-        const lastOrder = orders[0] || {};
-        const customer = lastOrder.customer || {
-            name: '',
-            phone: param.includes('@') ? '' : param,
-            email: param.includes('@') ? param : '',
-            address: ''
-        };
 
         res.json({
             success: true,
-            hasOrders: orders.length > 0,
-            orders,
-            customer
+            hasOrders: formattedOrders.length > 0,
+            orders: formattedOrders,
+            customer: customer ? {
+                id: customer.id,
+                name: customer.name,
+                phone: customer.phone || '',
+                email: customer.email,
+                avatarUrl: customer.avatar_url,
+                addresses: Array.isArray(customer.addresses) ? customer.addresses : []
+            } : null
         });
     } catch (err) {
+        console.error('Error fetching customer orders:', err);
         res.status(500).json({ success: false, hasOrders: false, error: err.message, orders: [] });
     }
 });
@@ -1790,41 +1800,50 @@ router.post('/customer/change-password', async (req, res) => {
     }
 });
 
-// 5. Customer Update Profile (Phone, Name, Addresses)
+// 5. Customer Update Profile (Phone, Name, Addresses & GPS Coordinates)
 router.post('/customer/update-profile', async (req, res) => {
     try {
-        const { id, email, phone, name, addresses } = req.body;
+        const { id, email, phone, name, addresses, addressObj } = req.body;
         const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
         const cleanEmail = (email || '').trim().toLowerCase();
 
-        let query = '';
-        let params = [];
+        let targetCustomer = null;
         if (id) {
-            query = `UPDATE customers SET 
-                        name = COALESCE(NULLIF($1, ''), name),
-                        phone = COALESCE(NULLIF($2, ''), phone),
-                        addresses = COALESCE($3::jsonb, addresses),
-                        updated_at = NOW()
-                     WHERE id = $4 RETURNING *`;
-            params = [name || '', cleanPhone || '', JSON.stringify(addresses || []), id];
+            const r = await supabaseDb.query(`SELECT * FROM customers WHERE id = $1`, [id]);
+            targetCustomer = r.rows[0];
         } else if (cleanEmail) {
-            query = `UPDATE customers SET 
-                        name = COALESCE(NULLIF($1, ''), name),
-                        phone = COALESCE(NULLIF($2, ''), phone),
-                        addresses = COALESCE($3::jsonb, addresses),
-                        updated_at = NOW()
-                     WHERE LOWER(email) = $4 RETURNING *`;
-            params = [name || '', cleanPhone || '', JSON.stringify(addresses || []), cleanEmail];
-        } else {
-            return res.status(400).json({ success: false, error: 'Customer ID or Email is required' });
+            const r = await supabaseDb.query(`SELECT * FROM customers WHERE LOWER(email) = $1`, [cleanEmail]);
+            targetCustomer = r.rows[0];
+        } else if (cleanPhone) {
+            const r = await supabaseDb.query(`SELECT * FROM customers WHERE phone = $1`, [cleanPhone]);
+            targetCustomer = r.rows[0];
         }
 
-        const result = await supabaseDb.query(query, params);
-        if (result.rows.length === 0) {
+        if (!targetCustomer) {
             return res.status(404).json({ success: false, error: 'Customer not found' });
         }
 
-        const c = result.rows[0];
+        let updatedAddresses = Array.isArray(addresses) ? addresses : (Array.isArray(targetCustomer.addresses) ? targetCustomer.addresses : []);
+        if (addressObj) {
+            const idx = updatedAddresses.findIndex(a => a.id === addressObj.id);
+            if (idx >= 0) {
+                updatedAddresses[idx] = { ...updatedAddresses[idx], ...addressObj };
+            } else {
+                updatedAddresses.unshift(addressObj);
+            }
+        }
+
+        const updateRes = await supabaseDb.query(
+            `UPDATE customers SET 
+                name = COALESCE(NULLIF($1, ''), name),
+                phone = COALESCE(NULLIF($2, ''), phone),
+                addresses = $3::jsonb,
+                updated_at = NOW()
+             WHERE id = $4 RETURNING *`,
+            [name || targetCustomer.name, cleanPhone || targetCustomer.phone, JSON.stringify(updatedAddresses), targetCustomer.id]
+        );
+
+        const c = updateRes.rows[0];
         res.json({
             success: true,
             customer: {
