@@ -1311,6 +1311,8 @@ window.handleOrderTypeToggleClick = async function(targetType) {
     } catch(e) {
         window.showAdminToast('Error updating order type', 'error');
     }
+};
+
 window.editQuickOrderAddress = async function() {
     const orderId = window.currentQuickOrderId;
     if (!orderId) return;
