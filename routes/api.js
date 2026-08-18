@@ -833,6 +833,8 @@ router.put('/settings/:storeId', checkPin, async (req, res) => {
         if (payload.dabbaNonvegSubtitle !== undefined) { updates.push(`"dabbaNonvegSubtitle" = $${idx++}`); values.push(payload.dabbaNonvegSubtitle); }
         if (payload.dabbaNonvegWeeklyOldPrice !== undefined) { updates.push(`"dabbaNonvegWeeklyOldPrice" = $${idx++}`); values.push(payload.dabbaNonvegWeeklyOldPrice); }
         if (payload.dabbaNonvegWeeklyNewPrice !== undefined) { updates.push(`"dabbaNonvegWeeklyNewPrice" = $${idx++}`); values.push(payload.dabbaNonvegWeeklyNewPrice); }
+        if (payload.isMaintenanceMode !== undefined) { updates.push(`"isMaintenanceMode" = $${idx++}`); values.push(Boolean(payload.isMaintenanceMode)); }
+        if (payload.maintenanceMessage !== undefined) { updates.push(`"maintenanceMessage" = $${idx++}`); values.push(payload.maintenanceMessage); }
         if (payload.dabbaNonvegMonthlyOldPrice !== undefined) { updates.push(`"dabbaNonvegMonthlyOldPrice" = $${idx++}`); values.push(payload.dabbaNonvegMonthlyOldPrice); }
         if (payload.dabbaNonvegMonthlyNewPrice !== undefined) { updates.push(`"dabbaNonvegMonthlyNewPrice" = $${idx++}`); values.push(payload.dabbaNonvegMonthlyNewPrice); }
 

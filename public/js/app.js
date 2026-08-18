@@ -4270,12 +4270,74 @@ async function loadStoreSettings() {
         }
         if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
 
+        // Populate Maintenance Mode UI Controls
+        const maintenanceToggle = document.getElementById('global-maintenance-toggle');
+        const maintenanceInput = document.getElementById('maintenance-message-input');
+        const maintenanceBadge = document.getElementById('maintenance-status-badge');
+        
+        const isMaintenance = settings.some(s => s.isMaintenanceMode === true);
+        const maintMsg = (settings.find(s => s.maintenanceMessage) || {}).maintenanceMessage || '';
+
+        if (maintenanceToggle) maintenanceToggle.checked = isMaintenance;
+        if (maintenanceInput && maintMsg) maintenanceInput.value = maintMsg;
+        if (maintenanceBadge) {
+            if (isMaintenance) {
+                maintenanceBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                maintenanceBadge.style.color = '#f87171';
+                maintenanceBadge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                maintenanceBadge.innerHTML = '🚨 UNDER MAINTENANCE (Customers Blocked)';
+            } else {
+                maintenanceBadge.style.background = 'rgba(34, 197, 94, 0.15)';
+                maintenanceBadge.style.color = '#4ade80';
+                maintenanceBadge.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+                maintenanceBadge.innerHTML = '🟢 LIVE (Website Active)';
+            }
+        }
+
         // Auto-reopen if offlineUntil timer has expired
         autoReopenIfTimePassed();
 
         if (typeof window.loadDeliveryBoys === 'function') window.loadDeliveryBoys();
     } catch (e) { console.error(e); }
 }
+
+window.toggleMaintenanceMode = async function(isMaintenance) {
+    try {
+        const msg = document.getElementById('maintenance-message-input')?.value || 'We are currently upgrading our website to serve you better! In the meantime, our kitchen is open — please place your order directly via Call, WhatsApp, or Zomato below.';
+        await apiCall('/settings/cloud', 'PUT', { isMaintenanceMode: isMaintenance, maintenanceMessage: msg });
+        
+        const badge = document.getElementById('maintenance-status-badge');
+        if (badge) {
+            if (isMaintenance) {
+                badge.style.background = 'rgba(239, 68, 68, 0.15)';
+                badge.style.color = '#f87171';
+                badge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                badge.innerHTML = '🚨 UNDER MAINTENANCE (Customers Blocked)';
+                window.showAdminToast('🛠️ Website is now in Maintenance Mode!', 'warning');
+            } else {
+                badge.style.background = 'rgba(34, 197, 94, 0.15)';
+                badge.style.color = '#4ade80';
+                badge.style.border = '1px solid rgba(34, 197, 94, 0.3)';
+                badge.innerHTML = '🟢 LIVE (Website Active)';
+                window.showAdminToast('✅ Website is now LIVE for all customers!', 'success');
+            }
+        }
+        loadStoreSettings();
+    } catch(e) {
+        window.showAdminToast('Error updating maintenance mode', 'error');
+    }
+};
+
+window.saveMaintenanceMessage = async function() {
+    const isMaintenance = document.getElementById('global-maintenance-toggle')?.checked || false;
+    const msg = document.getElementById('maintenance-message-input')?.value || '';
+    try {
+        await apiCall('/settings/cloud', 'PUT', { isMaintenanceMode: isMaintenance, maintenanceMessage: msg });
+        window.showAdminToast('Maintenance notice saved!', 'success');
+    } catch(e) {
+        window.showAdminToast('Error saving maintenance notice', 'error');
+    }
+};
 
 async function saveStoreSetting(storeId) {
     const autoSchedule = document.getElementById(`${storeId}-auto`).checked;
