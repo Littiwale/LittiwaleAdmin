@@ -21,6 +21,8 @@ if (SUPABASE_URL && SUPABASE_KEY) {
     }
 }
 
+const JWT_SECRET = process.env.JWT_SECRET || 'littiwale_super_secret_jwt_key_2026';
+
 function toSlug(str) {
     return (str || 'general')
         .toLowerCase()
@@ -1640,7 +1642,7 @@ router.post('/customer/google-auth', async (req, res) => {
 
         let c = null;
         const existing = await supabaseDb.query(
-            `SELECT * FROM customers WHERE LOWER(email) = $1 OR (supabase_id != '' AND supabase_id = $2) LIMIT 1`,
+            `SELECT * FROM customers WHERE LOWER(email) = $1 OR (supabase_id IS NOT NULL AND supabase_id = $2 AND $2 != '') LIMIT 1`,
             [cleanEmail, supabaseId || '']
         );
 
