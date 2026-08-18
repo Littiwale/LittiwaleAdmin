@@ -2501,8 +2501,11 @@
                             </a>
                         </div>
                     </div>
-                    <div style="font-size:12.5px; color:#cbd5e1; line-height:1.4; border-top:1px dashed rgba(255,255,255,0.08); padding-top:8px; word-break:break-word;">
-                        📍 <strong style="color:#94a3b8;">Address:</strong> <span id="quick-cust-address">-</span>
+                    <div style="font-size:12.5px; color:#cbd5e1; line-height:1.4; border-top:1px dashed rgba(255,255,255,0.08); padding-top:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; word-break:break-word;">
+                        <div>
+                            📍 <strong style="color:#94a3b8;">Address:</strong> <span id="quick-cust-address">-</span>
+                        </div>
+                        <button type="button" onclick="window.editQuickOrderAddress()" style="background:rgba(56,189,248,0.15); border:1px solid #38bdf8; color:#38bdf8; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:6px; cursor:pointer; flex-shrink:0;">✏️ Edit</button>
                     </div>
                     <!-- Customer Special Instructions / Notes -->
                     <div id="quick-order-notes-wrap" style="display:none; margin-top:10px; padding:10px 12px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; font-size:12.5px; color:#fde68a; line-height:1.4;">

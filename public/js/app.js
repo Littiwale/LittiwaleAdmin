@@ -1311,6 +1311,45 @@ window.handleOrderTypeToggleClick = async function(targetType) {
     } catch(e) {
         window.showAdminToast('Error updating order type', 'error');
     }
+window.editQuickOrderAddress = async function() {
+    const orderId = window.currentQuickOrderId;
+    if (!orderId) return;
+
+    const orders = window.cachedOrders || [];
+    const ord = orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId));
+    if (!ord) return;
+
+    const currentAddr = ord.customerAddress || ord.deliveryAddress || ord.address || '';
+    const newAddr = prompt('✏️ Enter Customer Delivery Address & Landmark:', currentAddr);
+    if (newAddr === null) return; // User cancelled
+    const cleanAddr = newAddr.trim();
+    if (!cleanAddr) return;
+
+    ord.customerAddress = cleanAddr;
+    ord.deliveryAddress = cleanAddr;
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/orders/${ord._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ customerAddress: cleanAddr })
+        });
+
+        if (res.ok) {
+            window.showAdminToast('✅ Delivery Address updated successfully!', 'success');
+            const addrEl = document.getElementById('quick-cust-address');
+            if (addrEl) addrEl.textContent = cleanAddr;
+        } else {
+            window.showAdminToast('Failed to update address', 'error');
+        }
+    } catch(e) {
+        window.showAdminToast('Error saving address', 'error');
+    }
 };
 
 window.confirmQuickOrder = async function(orderId) {
