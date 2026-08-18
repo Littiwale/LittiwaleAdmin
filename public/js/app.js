@@ -2961,7 +2961,7 @@ window.renderDynamicDashboard = function() {
                 <div class="activity-icon-box">🍽️</div>
                 <div class="activity-content">
                     <div class="activity-title">Menu Catalog Synced</div>
-                    <div class="activity-desc">${totalMenu} dishes live across ${totalCat} categories in MongoDB.</div>
+                    <div class="activity-desc">${totalMenu} dishes live across ${totalCat} categories in database.</div>
                 </div>
                 <span class="activity-time">Live</span>
             </div>
