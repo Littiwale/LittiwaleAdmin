@@ -20,8 +20,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- CSS Stylesheet -->
-    <link rel="stylesheet" href="css/style.css?v=6.5">
-    <link rel="stylesheet" href="css/receipt-printer.css?v=1.0">
+    <link rel="stylesheet" href="css/style.css?v=6.7">
+    <link rel="stylesheet" href="css/receipt-printer.css?v=1.1">
 </head>
 <body>
 
@@ -201,6 +201,12 @@
                     <span class="nav-item-badge" style="background:rgba(16,185,129,0.15); color:#10b981; border-color:rgba(16,185,129,0.3)">Live</span>
                 </button>
 
+                <button class="nav-item" data-target="billing-section" data-title="Print Bills & Thermal Hub" data-bc="Print Bills">
+                    <span class="nav-item-icon">🖨️</span>
+                    <span class="nav-item-text">Print Bills</span>
+                    <span class="nav-item-badge" style="background:rgba(59,130,246,0.18); color:#60a5fa; border:1px solid rgba(59,130,246,0.3)">POS</span>
+                </button>
+
                 <button class="nav-item" data-target="settings-section" data-title="Opening Hours & Store" data-bc="Store Settings">
                     <span class="nav-item-icon">🕒</span>
                     <span class="nav-item-text">Opening Hours</span>
@@ -216,7 +222,7 @@
                     <span class="nav-item-text">Media Library</span>
                 </button>
 
-                <div class="nav-section-label">Insights & System</div>
+                <div class="nav-section-label" id="nav-label-insights">Insights & System</div>
 
                 <button class="nav-item" data-target="finance-section" data-title="Finance & Revenue" data-bc="Finance">
                     <span class="nav-item-icon">💰</span>
@@ -383,8 +389,130 @@
                      ========================================================================== -->
                 <section id="dashboard-section" class="tab-section active">
                     
+                    <!-- STAFF & ORDER MANAGER POS DASHBOARD HUB -->
+                    <div id="staff-dashboard-hub" style="display:none; margin-bottom:24px;">
+                        
+                        <!-- Staff Welcome Banner -->
+                        <div style="background:linear-gradient(135deg, rgba(234,88,12,0.18), rgba(245,158,11,0.08)); border:1.5px solid rgba(234,88,12,0.35); border-radius:16px; padding:20px 24px; margin-bottom:20px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span style="font-size:20px;">👨‍🍳</span>
+                                    <h2 style="margin:0; font-size:1.35rem; font-weight:900; color:#fff;">Kitchen & Billing Desk Hub</h2>
+                                    <span class="badge" style="background:rgba(234,88,12,0.25); color:#ea580c; border:1px solid rgba(234,88,12,0.4); font-size:11px; padding:3px 8px;">Order Manager</span>
+                                </div>
+                                <div style="font-size:12.5px; color:var(--text-muted); margin-top:4px;">
+                                    Quick call entry, live kitchen status & Bluetooth thermal receipt printing.
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="window.openCreateOrderModal()" 
+                                style="background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); font-weight:900; font-size:13.5px; padding:10px 20px; box-shadow:0 4px 18px rgba(234,88,12,0.45); display:inline-flex; align-items:center; gap:8px;">
+                                <span>⚡ ➕</span>
+                                <span>Create New Order</span>
+                            </button>
+                        </div>
+
+                        <!-- 4 Big Mobile-Friendly Quick Action Cards -->
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
+                            
+                            <!-- Card 1: Create Order -->
+                            <div onclick="window.openCreateOrderModal()" style="cursor:pointer; background:#161622; border:1.5px solid rgba(234,88,12,0.4); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s; box-shadow:0 8px 25px rgba(0,0,0,0.4);">
+                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(234,88,12,0.2); border:1px solid rgba(234,88,12,0.5); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
+                                    📝
+                                </div>
+                                <div>
+                                    <div style="font-size:14px; font-weight:900; color:#fff;">New Call / Counter Order</div>
+                                    <div style="font-size:11.5px; color:#ea580c; font-weight:700; margin-top:2px;">⚡ 1-Tap POS Entry →</div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Live Queue -->
+                            <div onclick="switchSection('orders-section')" style="cursor:pointer; background:#161622; border:1.5px solid rgba(245,158,11,0.25); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s;">
+                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(245,158,11,0.18); border:1px solid rgba(245,158,11,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
+                                    🛍️
+                                </div>
+                                <div>
+                                    <div style="font-size:14px; font-weight:900; color:#fff;">Live Orders Queue</div>
+                                    <div style="font-size:11.5px; color:#fbbf24; font-weight:700; margin-top:2px;" id="staff-pending-count-text">0 Pending Orders</div>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: Menu Stock -->
+                            <div onclick="switchSection('menu-section')" style="cursor:pointer; background:#161622; border:1.5px solid rgba(16,185,129,0.25); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s;">
+                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
+                                    🍽️
+                                </div>
+                                <div>
+                                    <div style="font-size:14px; font-weight:900; color:#fff;">Menu Stock Control</div>
+                                    <div style="font-size:11.5px; color:#34d399; font-weight:700; margin-top:2px;">Toggle In/Out of Stock →</div>
+                                </div>
+                            </div>
+
+                            <!-- Card 4: Print Thermal Bill & Receipt Station -->
+                            <div onclick="switchSection('billing-section')" style="cursor:pointer; background:#161622; border:1.5px solid rgba(59,130,246,0.25); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s;">
+                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(59,130,246,0.18); border:1px solid rgba(59,130,246,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
+                                    🖨️
+                                </div>
+                                <div>
+                                    <div style="font-size:14px; font-weight:900; color:#fff;">Print & Preview Bills</div>
+                                    <div style="font-size:11.5px; color:#60a5fa; font-weight:700; margin-top:2px;">View Orders & Thermal Print →</div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Staff Operational Numbers Strip -->
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; background:#14141c; border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:14px 18px;">
+                            <div style="text-align:center; padding:6px;">
+                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#94a3b8;">Today's Orders</div>
+                                <div style="font-size:22px; font-weight:900; color:#fff; margin-top:2px;" id="staff-kpi-today-orders">0</div>
+                            </div>
+                            <div style="text-align:center; padding:6px; border-left:1px solid rgba(255,255,255,0.06);">
+                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#fbbf24;">Pending in Kitchen</div>
+                                <div style="font-size:22px; font-weight:900; color:#fbbf24; margin-top:2px;" id="staff-kpi-pending-orders">0</div>
+                            </div>
+                            <div style="text-align:center; padding:6px; border-left:1px solid rgba(255,255,255,0.06);">
+                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#22c55e;">Delivered Today</div>
+                                <div style="font-size:22px; font-weight:900; color:#22c55e; margin-top:2px;" id="staff-kpi-delivered-orders">0</div>
+                            </div>
+                            <div style="text-align:center; padding:6px; border-left:1px solid rgba(255,255,255,0.06);">
+                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#ef4444;">Out of Stock</div>
+                                <div style="font-size:22px; font-weight:900; color:#ef4444; margin-top:2px;" id="staff-kpi-out-stock">0</div>
+                            </div>
+                        </div>
+
+                        <!-- Staff Live Orders Section (Quick Kitchen View) -->
+                        <div class="card-panel" style="margin-top:20px;">
+                            <div class="card-panel-header" style="flex-wrap:wrap; gap:10px;">
+                                <div>
+                                    <h3 class="card-panel-title"><span>🍳</span> Live Kitchen & Dispatch Queue</h3>
+                                    <p class="card-panel-subtitle">Current active incoming orders that need preparation or dispatch</p>
+                                </div>
+                                <div style="display:flex; gap:8px;">
+                                    <button type="button" class="btn btn-sm btn-secondary" onclick="window.fetchAndRenderOrders()">
+                                        🔄 Refresh
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="switchSection('orders-section')">
+                                        All Orders →
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div id="staff-live-orders-container" style="display:flex; flex-direction:column; gap:12px; margin-top:14px;">
+                                <div style="text-align:center; padding:24px; color:#94a3b8; font-size:13px;">
+                                    Loading live kitchen orders...
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- SUPERADMIN EXECUTIVE VIEW (HIDDEN FOR ORDER STAFF) -->
+                    <!-- ========================================== -->
+                    <div id="superadmin-dashboard-view">
+
                     <!-- Welcome Row -->
-                    <div class="welcome-banner">
+                    <div class="welcome-banner" id="superadmin-welcome-banner">
                         <div class="welcome-title">
                             Welcome back, Admin 👋
                         </div>
@@ -827,6 +955,8 @@
                         </div>
 
                     </div>
+
+                    </div> <!-- /#superadmin-dashboard-view -->
                 </section>
 
 
@@ -1226,9 +1356,14 @@
                             <button type="button" class="order-filter-pill" onclick="setOrdersStatusFilter('cancelled', this)">Cancelled</button>
                         </div>
 
-                        <button class="btn btn-secondary" onclick="refreshOrders()" style="display:inline-flex; align-items:center; gap:6px;">
-                            🔄 <span>Refresh</span>
-                        </button>
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-secondary" onclick="refreshOrders()" style="display:inline-flex; align-items:center; gap:6px;">
+                                🔄 <span>Refresh</span>
+                            </button>
+                            <button class="btn btn-primary" onclick="window.openCreateOrderModal()" style="display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); font-weight:800; box-shadow:0 4px 15px rgba(234,88,12,0.35);">
+                                ➕ <span>Create New Order</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="card-panel" style="padding:0; overflow:hidden;">
@@ -1269,6 +1404,92 @@
                     </div>
                 </section>
 
+                <!-- ==========================================================================
+                     TAB: DEDICATED THERMAL BILLING & PRINT STATION SECTION
+                     ========================================================================== -->
+                <section id="billing-section" class="tab-section hidden">
+                    
+                    <!-- Header Bar -->
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px;">
+                        <div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span style="font-size:24px;">🖨️</span>
+                                <h2 style="font-size:20px; font-weight:900; color:#fff; margin:0; letter-spacing:0.3px;">Print Bills & Thermal Hub</h2>
+                                <span style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4); padding:2px 8px; border-radius:8px; font-size:11px; font-weight:800;">58mm / 80mm ESC/POS</span>
+                            </div>
+                            <div style="font-size:12.5px; color:#94a3b8; margin-top:3px;">
+                                Order number, customer details, itemized bill, and 1-tap Bluetooth thermal printing
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="window.fetchAndRenderOrders()" style="display:inline-flex; align-items:center; gap:6px;">
+                                <span>🔄 Refresh Orders</span>
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="window.openCreateOrderModal()" style="display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%);">
+                                <span>⚡ + New Order</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Search & Filter Controls -->
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:18px; background:#141520; padding:12px 16px; border-radius:12px; border:1px solid rgba(255,255,255,0.06);">
+                        <div style="flex:1; min-width:220px; position:relative;">
+                            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:14px; color:#64748b;">🔍</span>
+                            <input type="text" id="billing-tab-search-input" placeholder="Search bills by #ID, customer name, phone, or dish..." 
+                                style="width:100%; padding:9px 14px 9px 34px; background:#0e0f17; border:1px solid rgba(255,255,255,0.1); border-radius:8px; color:#fff; font-size:13px;"
+                                oninput="window.filterBillingTabOrders(this.value)">
+                        </div>
+                        <div style="display:flex; gap:6px; overflow-x:auto; max-width:100%; padding-bottom:2px;" id="billing-tab-status-filters">
+                            <button type="button" class="order-filter-pill active" onclick="window.setBillingStatusFilter('all', this)">All Bills</button>
+                            <button type="button" class="order-filter-pill" onclick="window.setBillingStatusFilter('pending', this)">Pending</button>
+                            <button type="button" class="order-filter-pill" onclick="window.setBillingStatusFilter('cooking', this)">Cooking</button>
+                            <button type="button" class="order-filter-pill" onclick="window.setBillingStatusFilter('dispatched', this)">Dispatched</button>
+                            <button type="button" class="order-filter-pill" onclick="window.setBillingStatusFilter('delivered', this)">Delivered</button>
+                        </div>
+                    </div>
+
+                    <!-- Main Grid: Orders List on Left, Sticky Receipt on Right -->
+                    <div class="billing-tab-grid">
+                        
+                        <!-- Left Pane: Orders List -->
+                        <div style="display:flex; flex-direction:column; gap:12px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:12px; font-weight:800; text-transform:uppercase; color:#94a3b8; letter-spacing:0.5px;" id="billing-tab-count-label">Recent Orders</span>
+                                <span style="font-size:11px; color:#ea580c; font-weight:700;">Tap card to preview • Click Print to issue ticket</span>
+                            </div>
+
+                            <div id="billing-tab-orders-list" style="display:flex; flex-direction:column; gap:10px;">
+                                <!-- Injected by app.js -->
+                            </div>
+                        </div>
+
+                        <!-- Right Pane: Simulated Receipt Preview (Sticky) -->
+                        <div class="billing-tab-preview-sticky" style="position:sticky; top:80px; display:flex; flex-direction:column; gap:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:12px; font-weight:800; text-transform:uppercase; color:#94a3b8; letter-spacing:0.5px;">
+                                    📄 Receipt Preview
+                                </span>
+                                <span style="font-size:11px; color:#10b981; font-weight:700;">● Bluetooth Ready</span>
+                            </div>
+
+                            <!-- Receipt paper container -->
+                            <div style="background:#ffffff; color:#000000; border-radius:10px; padding:16px 18px; box-shadow:0 8px 30px rgba(0,0,0,0.6); border-top:3px dashed #94a3b8; border-bottom:3px dashed #94a3b8; max-height:75vh; overflow-y:auto;" id="billing-tab-receipt-container">
+                                <div style="text-align:center; padding:40px 10px; color:#64748b; font-size:13px; font-family:sans-serif;">
+                                    Select an order from the list to preview the thermal receipt
+                                </div>
+                            </div>
+
+                            <!-- Print Button -->
+                            <button type="button" id="billing-tab-print-btn" class="btn btn-primary" onclick="window.printCurrentBillingOrder()" 
+                                style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-weight:900; font-size:14px; padding:12px 20px; box-shadow:0 4px 16px rgba(37,99,235,0.4); display:inline-flex; align-items:center; justify-content:center; gap:8px;">
+                                <span>⚡ 🖨️ Print This Thermal Receipt</span>
+                            </button>
+                        </div>
+
+                    </div>
+
+                </section>
 
                 <!-- ==========================================================================
                      TAB 5: DELIVERY MANAGEMENT & LOGISTICS (DEPRECATED: MOVED TO SETTINGS)
@@ -3015,6 +3236,271 @@
         </div>
     </div>
 
+    <!-- ⚡ Create New Order (POS / Direct Call Orders) Modal -->
+    <div id="modal-create-order" class="modal hidden">
+        <div class="modal-content admin-create-order-content" style="max-width:860px; width:95%; padding:0; overflow:hidden; border-radius:18px; border:1.5px solid rgba(234,88,12,0.35); background:#12131a; box-shadow:0 25px 70px rgba(0,0,0,0.9); box-sizing:border-box;">
+            
+            <!-- Modal Header -->
+            <div class="modal-header" style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); background:linear-gradient(135deg, rgba(234,88,12,0.18), rgba(194,65,12,0.08)); display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                    <div style="width:38px; height:38px; border-radius:10px; background:rgba(234,88,12,0.22); display:flex; align-items:center; justify-content:center; font-size:20px; border:1px solid rgba(234,88,12,0.4); flex-shrink:0;">
+                        📝
+                    </div>
+                    <div style="min-width:0;">
+                        <h3 class="modal-title" style="color:#ffffff; font-size:1.15rem; font-weight:900; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Create New Order</h3>
+                        <div style="font-size:11.5px; color:var(--text-dim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Direct Counter / Phone POS Entry</div>
+                    </div>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="window.closeModal('modal-create-order')" style="flex-shrink:0;">✕</button>
+            </div>
+
+            <!-- Modal Body (Responsive Grid / Stack) -->
+            <div class="admin-create-order-scrollable" style="padding:18px 20px; max-height:82vh; overflow-y:auto; box-sizing:border-box;">
+                <div class="admin-create-order-grid" style="display:grid; grid-template-columns: 1.05fr 1fr; gap:20px; align-items:start; width:100%; box-sizing:border-box;">
+                    
+                    <!-- Left Column: Customer & Delivery Details -->
+                    <div style="display:flex; flex-direction:column; gap:12px; min-width:0; width:100%; box-sizing:border-box;">
+                        
+                        <div style="font-size:11.5px; font-weight:800; text-transform:uppercase; color:#ea580c; letter-spacing:1px; margin-bottom:-4px;">
+                            1. Customer Details
+                        </div>
+
+                        <!-- Phone Number with Real-time Lookup -->
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label" style="font-size:12px; display:flex; justify-content:space-between;">
+                                <span>Mobile Number *</span>
+                                <span id="create-order-phone-status" style="font-size:11px; font-weight:700; color:#94a3b8;">Enter 10-digit number</span>
+                            </label>
+                            <div style="position:relative;">
+                                <input type="tel" id="create-order-phone" class="form-control" placeholder="e.g. 7004826839" maxlength="10" 
+                                    style="padding-right:36px; font-weight:700; font-family:monospace; font-size:14px; width:100%; box-sizing:border-box;"
+                                    oninput="window.handleAdminOrderPhoneLookup(this.value)">
+                                <span id="create-order-phone-spinner" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); display:none; font-size:14px;">⏳</span>
+                            </div>
+                        </div>
+
+                        <!-- Name & Email Row -->
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;" class="admin-order-name-email-row">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Customer Name *</label>
+                                <input type="text" id="create-order-name" class="form-control" placeholder="e.g. Sankalp" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Email (Optional)</label>
+                                <input type="email" id="create-order-email" class="form-control" placeholder="customer@gmail.com" style="width:100%; box-sizing:border-box;">
+                            </div>
+                        </div>
+
+                        <!-- Order Type: Delivery vs Takeaway -->
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label" style="font-size:12px;">Order Type</label>
+                            <div class="admin-order-type-selector" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <label id="label-type-delivery" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:10px; background:rgba(234,88,12,0.15); border:1.5px solid #ea580c; border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:800; color:#fff; transition:all 0.2s; box-sizing:border-box;">
+                                    <input type="radio" name="admin-order-type" value="delivery" checked style="display:none;" onchange="window.setAdminOrderType('delivery')">
+                                    <span>🛵 Home Delivery</span>
+                                </label>
+                                <label id="label-type-takeaway" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:10px; background:rgba(255,255,255,0.03); border:1.5px solid rgba(255,255,255,0.12); border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:800; color:#94a3b8; transition:all 0.2s; box-sizing:border-box;">
+                                    <input type="radio" name="admin-order-type" value="takeaway" style="display:none;" onchange="window.setAdminOrderType('takeaway')">
+                                    <span>🛍️ Takeaway</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Delivery Address & Landmark (Toggleable) -->
+                        <div id="admin-order-address-group" style="display:flex; flex-direction:column; gap:10px;">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Delivery Address *</label>
+                                <input type="text" id="create-order-address" class="form-control" placeholder="House no, Street, Area in Barbil" style="width:100%; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label class="form-label" style="font-size:12px;">Landmark (Optional)</label>
+                                <input type="text" id="create-order-landmark" class="form-control" placeholder="Near Temple / School / Landmark" style="width:100%; box-sizing:border-box;">
+                            </div>
+                        </div>
+
+                        <!-- Payment Method: COD vs Online -->
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label" style="font-size:12px;">Payment Method</label>
+                            <div class="admin-order-payment-selector" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <label id="label-pay-cod" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:10px; background:rgba(245,158,11,0.15); border:1.5px solid #f59e0b; border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:800; color:#fbbf24; transition:all 0.2s; box-sizing:border-box;">
+                                    <input type="radio" name="admin-order-payment" value="COD" checked style="display:none;" onchange="window.setAdminOrderPayment('COD')">
+                                    <span>💵 Cash on Delivery</span>
+                                </label>
+                                <label id="label-pay-online" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:10px; background:rgba(255,255,255,0.03); border:1.5px solid rgba(255,255,255,0.12); border-radius:10px; cursor:pointer; font-size:12.5px; font-weight:800; color:#94a3b8; transition:all 0.2s; box-sizing:border-box;">
+                                    <input type="radio" name="admin-order-payment" value="Online" style="display:none;" onchange="window.setAdminOrderPayment('Online')">
+                                    <span>💳 Paid Online</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Cooking / Kitchen Notes -->
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label class="form-label" style="font-size:12px;">Cooking Instructions (Optional)</label>
+                            <input type="text" id="create-order-notes" class="form-control" placeholder="e.g. Less spicy, extra chutney" style="width:100%; box-sizing:border-box;">
+                        </div>
+
+                    </div>
+
+                    <!-- Right Column: Menu Picker & Live Cart Summary -->
+                    <div style="display:flex; flex-direction:column; gap:12px; min-width:0; width:100%; box-sizing:border-box;">
+                        
+                        <div style="font-size:11.5px; font-weight:800; text-transform:uppercase; color:#ea580c; letter-spacing:1px; margin-bottom:-4px;">
+                            2. Add Dishes to Order
+                        </div>
+
+                        <!-- Search Menu Box -->
+                        <div style="position:relative; width:100%;">
+                            <input type="text" id="admin-order-search-dish" class="form-control" placeholder="Search 151 dishes by name..." 
+                                style="font-size:13px; padding-left:34px; width:100%; box-sizing:border-box;" oninput="window.filterAdminOrderDishes(this.value)">
+                            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:14px; color:var(--text-muted);">🔍</span>
+                        </div>
+
+                        <!-- Search Results Dropdown List -->
+                        <div id="admin-order-dish-results" style="max-height:160px; overflow-y:auto; overflow-x:hidden; background:#181822; border:1px solid rgba(255,255,255,0.08); border-radius:10px; display:flex; flex-direction:column; gap:4px; padding:6px; box-sizing:border-box; width:100%;">
+                            <!-- Injected by app.js -->
+                        </div>
+
+                        <!-- Selected Items Table -->
+                        <div style="background:#181822; border:1px solid rgba(255,255,255,0.08); border-radius:10px; overflow:hidden; box-sizing:border-box; width:100%;">
+                            <div style="padding:8px 12px; background:rgba(255,255,255,0.02); border-bottom:1px solid rgba(255,255,255,0.06); font-size:11.5px; font-weight:800; text-transform:uppercase; color:#94a3b8; display:flex; justify-content:space-between;">
+                                <span>Selected Items</span>
+                                <span id="admin-order-items-count">0 items</span>
+                            </div>
+                            <div id="admin-order-selected-list" style="max-height:180px; overflow-y:auto; overflow-x:hidden; padding:6px 8px; display:flex; flex-direction:column; gap:6px; box-sizing:border-box; width:100%;">
+                                <div style="text-align:center; padding:18px; color:#64748b; font-size:12px;">
+                                    No dishes selected yet. Search and click "+ Add" above.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bill Breakdown Box -->
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; box-sizing:border-box; width:100%;">
+                            <div class="admin-order-bill-row" style="display:flex; justify-content:space-between; font-size:13px; color:#94a3b8; width:100%; box-sizing:border-box;">
+                                <span>Items Subtotal:</span>
+                                <strong style="color:#fff;" id="admin-order-subtotal">₹0</strong>
+                            </div>
+                            <div class="admin-order-bill-row" style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#94a3b8; width:100%; box-sizing:border-box;">
+                                <span>Delivery Fee (₹):</span>
+                                <input type="number" id="admin-order-delivery-fee" class="admin-order-bill-input" value="30" min="0" 
+                                    style="width:75px; text-align:right; padding:4px 8px; background:#12131a; border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:#fff; font-size:13px; font-weight:700; box-sizing:border-box;"
+                                    oninput="window.recalcAdminOrderBill()">
+                            </div>
+                            <div class="admin-order-bill-row" style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#94a3b8; width:100%; box-sizing:border-box;">
+                                <span>Discount (₹):</span>
+                                <input type="number" id="admin-order-discount" class="admin-order-bill-input" value="0" min="0" 
+                                    style="width:75px; text-align:right; padding:4px 8px; background:#12131a; border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:#22c55e; font-size:13px; font-weight:700; box-sizing:border-box;"
+                                    oninput="window.recalcAdminOrderBill()">
+                            </div>
+                            <div class="admin-order-bill-row" style="border-top:1px dashed rgba(255,255,255,0.12); padding-top:8px; margin-top:2px; display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;">
+                                <span style="font-size:14px; font-weight:900; color:#fff;">Grand Total:</span>
+                                <span style="font-size:18px; font-weight:900; color:#ea580c;" id="admin-order-grand-total">₹30</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Modal Actions Footer -->
+                <div class="admin-create-order-footer" style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08); width:100%; box-sizing:border-box;">
+                    <button type="button" class="btn btn-secondary" onclick="window.closeModal('modal-create-order')" style="padding:10px 20px;">
+                        Cancel
+                    </button>
+                    <button type="button" id="admin-create-order-submit-btn" class="btn btn-primary" onclick="window.submitAdminOrder()" 
+                        style="padding:10px 26px; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); font-weight:900; font-size:13.5px; box-shadow:0 4px 18px rgba(234,88,12,0.4);">
+                        ⚡ Confirm & Place Order
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         THERMAL BILLING & PRINT STATION MODAL (SPLIT VIEW)
+         ========================================================================== -->
+    <div id="modal-thermal-billing-hub" class="modal hidden">
+        <div class="modal-content" style="max-width:980px; width:95%; max-height:92vh; display:flex; flex-direction:column; padding:0; overflow:hidden; border-radius:18px; background:#12131c; border:1px solid rgba(255,255,255,0.12); box-shadow:0 25px 60px rgba(0,0,0,0.8);">
+            
+            <!-- Modal Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:18px 24px; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.02);">
+                <div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:22px;">🖨️</span>
+                        <h2 style="margin:0; font-size:18px; font-weight:900; color:#fff; letter-spacing:0.3px;">Thermal Billing & Print Station</h2>
+                        <span style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4); padding:2px 8px; border-radius:8px; font-size:11px; font-weight:800;">58mm / 80mm ESC/POS</span>
+                    </div>
+                    <div style="font-size:12px; color:#94a3b8; margin-top:3px;">
+                        Select any order to preview paper receipt & print directly to Bluetooth thermal printer
+                    </div>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="window.closeModal('modal-thermal-billing-hub')" 
+                    style="background:rgba(255,255,255,0.06); border:none; color:#cbd5e1; width:34px; height:34px; border-radius:10px; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+
+            <!-- Modal Body (2-Column Split View) -->
+            <div class="thermal-station-split-view" style="display:grid; grid-template-columns: 1.15fr 0.95fr; gap:0; flex:1; overflow:hidden; min-height:480px;">
+                
+                <!-- Left Pane: Orders List & Filter -->
+                <div style="display:flex; flex-direction:column; padding:18px 20px; border-right:1px solid rgba(255,255,255,0.08); background:#151622; overflow:hidden;">
+                    
+                    <!-- Search Input -->
+                    <div style="position:relative; margin-bottom:12px;">
+                        <input type="text" id="thermal-station-search-input" class="form-control" placeholder="Search orders by #ID, customer name, or phone..." 
+                            style="font-size:13px; padding:10px 14px 10px 36px; background:#0f1017; border:1px solid rgba(255,255,255,0.1); border-radius:10px;"
+                            oninput="window.filterThermalStationOrders(this.value)">
+                        <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:14px; color:#64748b;">🔍</span>
+                    </div>
+
+                    <!-- Filter summary strip -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 2px;">
+                        <span style="font-size:11.5px; font-weight:800; text-transform:uppercase; color:#94a3b8; letter-spacing:0.5px;" id="thermal-station-count-label">Recent Orders</span>
+                        <span style="font-size:11px; color:#ea580c; font-weight:700;">Click card to preview receipt</span>
+                    </div>
+
+                    <!-- Orders Scrollable List -->
+                    <div id="thermal-station-orders-list" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px;">
+                        <!-- Injected by app.js -->
+                    </div>
+                </div>
+
+                <!-- Right Pane: Real-Time Paper Receipt Preview & Print Trigger -->
+                <div style="display:flex; flex-direction:column; padding:18px 22px; background:#0e0f16; overflow:hidden;">
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="font-size:12px; font-weight:800; text-transform:uppercase; color:#94a3b8; letter-spacing:0.5px;">
+                            📄 Ticket Preview
+                        </div>
+                        <span style="font-size:11px; color:#10b981; font-weight:700;">● Thermal Paper Ready</span>
+                    </div>
+
+                    <!-- Simulated Thermal Paper Receipt Container -->
+                    <div style="flex:1; overflow-y:auto; background:#ffffff; color:#000000; border-radius:8px; padding:16px 18px; box-shadow:0 8px 30px rgba(0,0,0,0.6); border-top:3px dashed #94a3b8; border-bottom:3px dashed #94a3b8;" id="thermal-station-receipt-container">
+                        <!-- Injected dynamically by app.js -->
+                        <div style="text-align:center; padding:40px 10px; color:#64748b; font-size:13px; font-family:sans-serif;">
+                            Select an order from the list to preview the thermal receipt
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Strip -->
+                    <div style="display:flex; gap:10px; margin-top:14px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08);">
+                        <button type="button" class="btn btn-secondary" onclick="window.closeModal('modal-thermal-billing-hub')" style="padding:10px 18px; font-size:13px;">
+                            Close
+                        </button>
+                        <button type="button" id="thermal-station-print-btn" class="btn btn-primary" onclick="window.printCurrentStationOrder()" 
+                            style="flex:1; background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-weight:900; font-size:13.5px; padding:10px 20px; box-shadow:0 4px 16px rgba(37,99,235,0.4); display:inline-flex; align-items:center; justify-content:center; gap:8px;">
+                            <span>⚡ 🖨️ Print This Thermal Receipt</span>
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
     <!-- Custom Confirmation Modal -->
     <div id="confirm-modal" class="modal hidden">
         <div class="modal-content" style="max-width:400px; text-align:center;">
@@ -3032,7 +3518,7 @@
     <div id="admin-toast-container"></div>
 
     <!-- Application Controller JS -->
-    <script src="js/receipt-printer.js?v=1.0"></script>
-    <script src="js/app.js?v=6.5"></script>
+    <script src="js/receipt-printer.js?v=1.1"></script>
+    <script src="js/app.js?v=6.7"></script>
 </body>
 </html>

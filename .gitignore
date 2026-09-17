@@ -8,3 +8,10 @@ backup_mongodb/
 /*.js
 !/server.js
 
+# Local images cache & heavy backups (Served from Supabase Storage CDN)
+public/images/menu/
+public/images/announcements/
+public/images/instagram/
+public/images/optimized/
+
+

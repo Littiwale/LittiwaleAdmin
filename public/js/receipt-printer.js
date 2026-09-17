@@ -253,11 +253,12 @@
       <!-- Shop Header -->
       <div class="receipt-shop-header">
         <img src="images/logo.png" onerror="this.src='/images/logo.png'" alt="Littiwale" class="receipt-shop-logo-img">
-        <div class="receipt-shop-name">LITTIWALE</div>
+        <div class="receipt-shop-name">LITTIWALE BARBIL</div>
         <div class="receipt-shop-tagline">Taste of Desi Swag • Cloud Kitchen & Restaurant</div>
-        <div class="receipt-shop-address">
-          Ward No. 7, Punjabi Para, Barbil, Odisha 758035<br>
-          Phone: +91 63706 80744 | support@littiwale.com
+        <div class="receipt-shop-address" style="color:#000; font-weight:700;">
+          Ward No. 7, Punjabi Para, Barbil, Odisha - 758035<br>
+          Tel / WhatsApp: +91 63706 80744<br>
+          Instagram: @littiwaleofficial | Web: www.littiwale.co.in
         </div>
       </div>
 
@@ -320,11 +321,13 @@
 
       <!-- Footer Greeting & Barcode -->
       <div class="receipt-bottom-footer">
-        <div class="receipt-footer-thanks">Swag se banaya, pyaar se khilaya!</div>
-        <div style="font-size:10px; color:#6b7280; margin-bottom:8px;">Thank you for ordering with Littiwale Barbil</div>
+        <div class="receipt-footer-thanks" style="color:#000; font-weight:800;">*** THANK YOU! VISIT AGAIN ***</div>
+        <div style="font-size:10px; color:#000; font-weight:700; margin-bottom:8px;">
+          Instagram: @littiwaleofficial • www.littiwale.co.in
+        </div>
         <div class="receipt-barcode-wrap">
           <div class="receipt-barcode-bars"></div>
-          <div class="receipt-barcode-code">LW-ORD-${shortId}</div>
+          <div class="receipt-barcode-code" style="color:#000; font-weight:800;">LW-ORD-${shortId}</div>
         </div>
       </div>
     `;

@@ -245,7 +245,8 @@ router.post('/login/step2', async (req, res) => {
             }
         } catch(e) {}
 
-        const token = jwt.sign({ email: admin.email, role: 'superadmin', name: admin.name || 'Tushar' }, JWT_SECRET, { expiresIn: '30d' });
+        const userRole = admin.role || 'superadmin';
+        const token = jwt.sign({ email: admin.email, role: userRole, name: admin.name || 'Admin' }, JWT_SECRET, { expiresIn: '30d' });
 
         return res.json({
             success: true,
@@ -253,10 +254,10 @@ router.post('/login/step2', async (req, res) => {
             token,
             user: {
                 id: admin.id || admin._id || 'admin',
-                name: admin.name || 'Tushar',
+                name: admin.name || (userRole === 'order_manager' ? 'Kitchen & Orders Desk' : 'Tushar'),
                 email: admin.email,
                 phone: admin.phone,
-                role: 'superadmin'
+                role: userRole
             }
         });
     } catch (err) {
@@ -417,16 +418,16 @@ router.post('/menu', checkPin, async (req, res) => {
         payload._id = newItemId;
 
         await supabaseDb.query(
-            `INSERT INTO menus (_id, name, description, price, category, image, "isAvailable", "dietaryPreference", "isSpicy", "spicyLevel", "locationAvailability", "originalPrice", note, "isCombo", "isCraziestDeal")
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            `INSERT INTO menus (_id, name, description, price, category, image, "isAvailable", "dietaryPreference", "isSpicy", "spicyLevel", "locationAvailability", "originalPrice", note, "isCombo", "isCraziestDeal", keywords)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              ON CONFLICT (_id) DO UPDATE SET
-             name = EXCLUDED.name, description = EXCLUDED.description, price = EXCLUDED.price, category = EXCLUDED.category, image = EXCLUDED.image, "isAvailable" = EXCLUDED."isAvailable", "dietaryPreference" = EXCLUDED."dietaryPreference", "isSpicy" = EXCLUDED."isSpicy", "spicyLevel" = EXCLUDED."spicyLevel", "locationAvailability" = EXCLUDED."locationAvailability", "originalPrice" = EXCLUDED."originalPrice", note = EXCLUDED.note, "isCombo" = EXCLUDED."isCombo", "isCraziestDeal" = EXCLUDED."isCraziestDeal"`,
+             name = EXCLUDED.name, description = EXCLUDED.description, price = EXCLUDED.price, category = EXCLUDED.category, image = EXCLUDED.image, "isAvailable" = EXCLUDED."isAvailable", "dietaryPreference" = EXCLUDED."dietaryPreference", "isSpicy" = EXCLUDED."isSpicy", "spicyLevel" = EXCLUDED."spicyLevel", "locationAvailability" = EXCLUDED."locationAvailability", "originalPrice" = EXCLUDED."originalPrice", note = EXCLUDED.note, "isCombo" = EXCLUDED."isCombo", "isCraziestDeal" = EXCLUDED."isCraziestDeal", keywords = EXCLUDED.keywords`,
             [
                 newItemId, payload.name, payload.description || '', Number(payload.price || 0), payload.category,
                 payload.image || '', payload.isAvailable !== false, payload.dietaryPreference || 'veg',
                 Boolean(payload.isSpicy), Number(payload.spicyLevel || 1), payload.locationAvailability || 'both',
                 payload.originalPrice ? Number(payload.originalPrice) : null, payload.note || '',
-                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal)
+                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || ''
             ]
         );
 
@@ -452,14 +453,14 @@ router.put('/menu/:id', checkPin, async (req, res) => {
             `UPDATE menus SET
              name = $1, description = $2, price = $3, category = $4, image = $5, "isAvailable" = $6,
              "dietaryPreference" = $7, "isSpicy" = $8, "spicyLevel" = $9, "locationAvailability" = $10,
-             "originalPrice" = $11, note = $12, "isCombo" = $13, "isCraziestDeal" = $14
-             WHERE _id = $15`,
+             "originalPrice" = $11, note = $12, "isCombo" = $13, "isCraziestDeal" = $14, keywords = $15
+             WHERE _id = $16`,
             [
                 payload.name, payload.description || '', Number(payload.price || 0), payload.category,
                 payload.image || '', payload.isAvailable !== false, payload.dietaryPreference || 'veg',
                 Boolean(payload.isSpicy), Number(payload.spicyLevel || 1), payload.locationAvailability || 'both',
                 payload.originalPrice ? Number(payload.originalPrice) : null, payload.note || '',
-                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), req.params.id
+                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || '', req.params.id
             ]
         );
 
@@ -2023,14 +2024,20 @@ async function sendNewOrderResendEmail(ord) {
 
     try {
         const isTakeaway = String(ord.orderType || '').toLowerCase() === 'takeaway' || String(ord.orderType || '').toLowerCase() === 'pickup';
-        const items = Array.isArray(ord.items) ? ord.items : [];
-        const itemsHtml = items.map(it => `
-            <tr style="border-bottom: 1px solid #27272a;">
-                <td style="padding: 12px 0; color: #f8fafc; font-weight: 700; font-size: 14px;">
+        const isCOD = String(ord.paymentMethod || '').toUpperCase() === 'COD';
+        const formattedDate = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
+        const itemsList = Array.isArray(ord.items) ? ord.items : [];
+        const itemsHtml = itemsList.map(it => `
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+                <td style="padding: 10px 0; color: #1e293b; font-size: 14px; font-weight: 600;">
                     ${it.name}
-                    <span style="display:inline-block; margin-left:6px; background:rgba(249,115,22,0.2); color:#f97316; font-size:12px; font-weight:800; padding:2px 8px; border-radius:6px;">×${it.quantity || 1}</span>
                 </td>
-                <td style="padding: 12px 0; text-align: right; color: #f97316; font-weight: 800; font-size: 14px;">₹${it.subtotal || ((Number(it.price || 0)) * (Number(it.quantity || 1)))}</td>
+                <td style="padding: 10px 0; text-align: center; color: #475569; font-size: 13px; font-weight: 700;">
+                    ${it.quantity || 1}
+                </td>
+                <td style="padding: 10px 0; text-align: right; color: #0f172a; font-size: 14px; font-weight: 700;">
+                    ₹${it.subtotal || ((Number(it.price || 0)) * (Number(it.quantity || 1)))}
+                </td>
             </tr>
         `).join('');
 
@@ -2040,102 +2047,150 @@ async function sendNewOrderResendEmail(ord) {
 
         const emailHtml = `
             <!DOCTYPE html>
-            <html>
-            <head><meta charset="utf-8"><title>New Order Alert - Littiwale Admin</title></head>
-            <body style="margin:0; padding:24px 12px; background-color:#09090b; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#f8fafc;">
+            <html lang="en">
+            <head>
+                <meta charset="utf-8">
+                <title>Order #${String(ord.orderId || ord._id).toUpperCase()} - Littiwale</title>
+            </head>
+            <body style="margin:0; padding:24px 12px; background-color:#f1f5f9; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#0f172a;">
                 <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
                     <tr>
                         <td align="center">
-                            <table role="presentation" width="100%" style="max-width:580px; background:#121217; border-radius:20px; overflow:hidden; border:1px solid #27272a; box-shadow:0 25px 60px rgba(0,0,0,0.8);" border="0" cellspacing="0" cellpadding="0">
-                                <!-- Top Banner -->
+                            <table role="presentation" width="100%" style="max-width:560px; background:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #e2e8f0; box-shadow:0 10px 25px rgba(0,0,0,0.06);" border="0" cellspacing="0" cellpadding="0">
+                                
+                                <!-- Header Section -->
                                 <tr>
-                                    <td style="background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); padding:28px 24px; text-align:center;">
-                                        <div style="font-size:36px; margin-bottom:6px;">🔥</div>
-                                        <h1 style="margin:0 0 6px; font-size:22px; font-weight:900; letter-spacing:1px; color:#ffffff; text-transform:uppercase;">NEW ORDER RECEIVED!</h1>
-                                        <div style="font-size:14px; font-weight:800; color:rgba(255,255,255,0.95);">Order ID: #${String(ord.orderId || ord._id).toUpperCase()}</div>
-                                        <div style="margin-top:12px;">
-                                            <span style="display:inline-block; background:#ffffff; color:#ea580c; font-size:12px; font-weight:900; padding:5px 16px; border-radius:20px; text-transform:uppercase; letter-spacing:0.5px;">
-                                                ${isTakeaway ? '🛍️ TAKEAWAY / PICKUP' : '🛵 HOME DELIVERY'}
-                                            </span>
+                                    <td style="background:#0f172a; padding:20px 24px; border-bottom:3px solid #ea580c;">
+                                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td>
+                                                    <div style="font-size:11px; font-weight:800; color:#ea580c; text-transform:uppercase; letter-spacing:1px;">LITTIWALE BARBIL</div>
+                                                    <div style="font-size:20px; font-weight:900; color:#ffffff; margin-top:2px;">Order #${String(ord.orderId || ord._id).toUpperCase()}</div>
+                                                </td>
+                                                <td align="right">
+                                                    <div style="font-size:12px; color:#94a3b8; font-weight:500;">${formattedDate}</div>
+                                                    <div style="font-size:18px; font-weight:900; color:#f8fafc; margin-top:2px;">₹${ord.finalTotal || ord.total}</div>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+
+                                <!-- Status Badges Bar -->
+                                <tr>
+                                    <td style="padding:12px 24px; background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+                                        <span style="display:inline-block; background:${isTakeaway ? '#e0f2fe' : '#ffedd5'}; color:${isTakeaway ? '#0369a1' : '#c2410c'}; font-size:11px; font-weight:800; padding:4px 10px; border-radius:6px; text-transform:uppercase; margin-right:8px;">
+                                            ${isTakeaway ? 'Takeaway (Self-Pickup)' : 'Home Delivery'}
+                                        </span>
+                                        <span style="display:inline-block; background:${isCOD ? '#fef3c7' : '#dcfce7'}; color:${isCOD ? '#92400e' : '#15803d'}; font-size:11px; font-weight:800; padding:4px 10px; border-radius:6px; text-transform:uppercase;">
+                                            ${isCOD ? 'Cash on Delivery' : 'Paid Online'}
+                                        </span>
+                                    </td>
+                                </tr>
+
+                                <!-- Customer Details Card -->
+                                <tr>
+                                    <td style="padding:20px 24px 12px;">
+                                        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+                                            <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:#64748b; letter-spacing:0.5px; margin-bottom:4px;">Customer Information</div>
+                                            <div style="font-size:16px; font-weight:800; color:#0f172a;">${ord.customerName || 'Customer'}</div>
+                                            
+                                            <div style="margin-top:8px; display:flex; gap:10px;">
+                                                <a href="tel:+91${cleanPhone}" style="display:inline-block; background:#0f172a; color:#ffffff; font-size:12px; font-weight:700; text-decoration:none; padding:6px 12px; border-radius:6px; margin-right:8px;">
+                                                    Call: +91 ${cleanPhone}
+                                                </a>
+                                                <a href="https://wa.me/91${cleanPhone}?text=Hello%20${encodeURIComponent(ord.customerName || 'Customer')}%2C%20regarding%20your%20Littiwale%20Order%20%23${ord.orderId || ord._id}" style="display:inline-block; background:#16a34a; color:#ffffff; font-size:12px; font-weight:700; text-decoration:none; padding:6px 12px; border-radius:6px;">
+                                                    WhatsApp
+                                                </a>
+                                            </div>
+
+                                            <div style="margin-top:12px; padding-top:10px; border-top:1px dashed #cbd5e1; font-size:13px; color:#334155; line-height:1.4;">
+                                                <strong>Address:</strong> ${isTakeaway ? 'Counter Pickup at Littiwale Kitchen' : (ord.customerAddress || 'Barbil area')}
+                                                ${ord.landmark ? `<br><span style="color:#64748b; font-size:12px;">Landmark: ${ord.landmark}</span>` : ''}
+                                            </div>
+
+                                            ${ord.notes ? `
+                                            <div style="margin-top:10px; padding:8px 12px; background:#fffbeb; border-left:3px solid #f59e0b; font-size:12.5px; color:#92400e;">
+                                                <strong>Note:</strong> ${ord.notes}
+                                            </div>` : ''}
                                         </div>
                                     </td>
                                 </tr>
 
+                                <!-- Items Table -->
                                 <tr>
-                                    <td style="padding:28px 24px;">
-                                        <!-- Customer Details Card -->
-                                        <div style="background:#18181f; border:1px solid #27272a; border-radius:14px; padding:16px; margin-bottom:20px;">
-                                            <div style="font-size:11px; text-transform:uppercase; color:#94a3b8; font-weight:800; letter-spacing:0.5px; margin-bottom:6px;">Customer Details</div>
-                                            <div style="font-size:17px; font-weight:900; color:#ffffff;">${ord.customerName || 'Customer'}</div>
-                                            <div style="margin-top:8px; font-size:14px;">
-                                                <a href="tel:${cleanPhone}" style="display:inline-block; background:#2563eb; color:#ffffff; text-decoration:none; font-weight:800; font-size:12px; padding:6px 12px; border-radius:8px; margin-right:8px;">
-                                                    📞 Call: +91 ${cleanPhone}
-                                                </a>
-                                                <a href="https://wa.me/91${cleanPhone}?text=Hello%20${encodeURIComponent(ord.customerName || 'Customer')}%2C%20we%20have%20received%20your%20order%20%23${ord.orderId || ord._id}%20at%20Littiwale%20Barbil." style="display:inline-block; background:#16a34a; color:#ffffff; text-decoration:none; font-weight:800; font-size:12px; padding:6px 12px; border-radius:8px;">
-                                                    💬 WhatsApp
-                                                </a>
-                                            </div>
-                                            <div style="margin-top:14px; padding:12px; background:${isTakeaway ? 'rgba(56,189,248,0.1)' : 'rgba(249,115,22,0.1)'}; border:1.5px solid ${isTakeaway ? '#38bdf8' : '#f97316'}; border-radius:10px;">
-                                                <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:${isTakeaway ? '#38bdf8' : '#f97316'}; margin-bottom:4px;">
-                                                    ${isTakeaway ? '🛍️ ORDER TYPE: TAKEAWAY (SELF-PICKUP)' : '🛵 ORDER TYPE: HOME DELIVERY'}
-                                                </div>
-                                                <div style="font-size:13.5px; font-weight:700; color:#ffffff; line-height:1.4;">
-                                                    📍 ${isTakeaway ? 'Customer will collect food directly from Littiwale Counter.' : (ord.customerAddress || 'Barbil, Odisha')}${ord.landmark ? ` <span style="color:#fde68a;">(Landmark: ${ord.landmark})</span>` : ''}
-                                                </div>
-                                            </div>
-                                            ${ord.notes ? `<div style="margin-top:10px; padding:8px 12px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3); border-radius:8px; font-size:12.5px; color:#fbbf24;"><strong>📝 Special Instructions:</strong> ${ord.notes}</div>` : ''}
+                                    <td style="padding:12px 24px;">
+                                        <div style="font-size:11px; font-weight:800; text-transform:uppercase; color:#64748b; letter-spacing:0.5px; margin-bottom:8px;">
+                                            Order Items (${itemsList.length})
                                         </div>
-
-                                        <!-- Ordered Items Table -->
-                                        <div style="font-size:11.5px; text-transform:uppercase; color:#94a3b8; font-weight:800; letter-spacing:0.5px; margin-bottom:8px;">
-                                            Ordered Items (${items.length})
-                                        </div>
-                                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:20px;">
+                                        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                            <thead>
+                                                <tr style="border-bottom:2px solid #e2e8f0; font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase;">
+                                                    <th align="left" style="padding:6px 0;">Item</th>
+                                                    <th align="center" style="padding:6px 0; width:40px;">Qty</th>
+                                                    <th align="right" style="padding:6px 0; width:70px;">Price</th>
+                                                </tr>
+                                            </thead>
                                             <tbody>
-                                                ${itemsHtml || '<tr><td style="color:#cbd5e1;">Custom food items</td></tr>'}
+                                                ${itemsHtml || '<tr><td colspan="3" style="padding:10px 0; color:#64748b;">Custom order items</td></tr>'}
                                             </tbody>
                                         </table>
+                                    </td>
+                                </tr>
 
-                                        <!-- Bill Breakdown -->
-                                        <div style="background:#18181f; border-radius:14px; padding:16px; margin-bottom:24px; border:1px solid #27272a;">
-                                            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; color:#94a3b8;">
-                                                <span>Items Subtotal:</span>
-                                                <strong style="color:#ffffff;">₹${ord.subtotal || ord.total}</strong>
-                                            </div>
-                                            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; color:#94a3b8;">
-                                                <span>Delivery Fee:</span>
-                                                <strong style="color:${isTakeaway ? '#22c55e' : '#f97316'};">${isTakeaway ? '₹0 (Takeaway)' : `+₹${ord.deliveryCharge || 0}`}</strong>
-                                            </div>
+                                <!-- Bill Breakdown -->
+                                <tr>
+                                    <td style="padding:12px 24px 20px;">
+                                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px;">
+                                            <tr>
+                                                <td style="font-size:13px; color:#64748b; padding:3px 0;">Subtotal:</td>
+                                                <td align="right" style="font-size:13px; font-weight:700; color:#0f172a; padding:3px 0;">₹${ord.subtotal || ord.total}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="font-size:13px; color:#64748b; padding:3px 0;">Delivery Fee:</td>
+                                                <td align="right" style="font-size:13px; font-weight:700; color:${isTakeaway ? '#16a34a' : '#0f172a'}; padding:3px 0;">
+                                                    ${isTakeaway ? 'Free (Takeaway)' : `+₹${ord.deliveryCharge || 0}`}
+                                                </td>
+                                            </tr>
                                             ${ord.discount > 0 ? `
-                                            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; color:#22c55e;">
-                                                <span>Discount:</span>
-                                                <strong>-₹${ord.discount}</strong>
-                                            </div>` : ''}
-                                            <div style="border-top:1px dashed #3f3f46; margin-top:8px; padding-top:10px; display:flex; justify-content:space-between; align-items:center; font-size:16px;">
-                                                <span style="font-weight:900; color:#ffffff;">GRAND TOTAL:</span>
-                                                <strong style="font-size:22px; color:#f97316;">₹${ord.finalTotal || ord.total}</strong>
-                                            </div>
-                                            <div style="margin-top:8px; font-size:12.5px; color:#94a3b8;">
-                                                Payment Method: <strong style="color:#22c55e;">${ord.paymentMethod || 'COD'}</strong>
-                                            </div>
-                                        </div>
+                                            <tr>
+                                                <td style="font-size:13px; color:#16a34a; padding:3px 0;">Discount:</td>
+                                                <td align="right" style="font-size:13px; font-weight:700; color:#16a34a; padding:3px 0;">-₹${ord.discount}</td>
+                                            </tr>` : ''}
+                                            <tr>
+                                                <td colspan="2" style="border-top:1px solid #e2e8f0; padding-top:8px; margin-top:4px;">
+                                                    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                                                        <tr>
+                                                            <td style="font-size:15px; font-weight:800; color:#0f172a;">Grand Total:</td>
+                                                            <td align="right" style="font-size:18px; font-weight:900; color:#ea580c;">₹${ord.finalTotal || ord.total}</td>
+                                                        </tr>
+                                                    </table>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
 
-                                        <!-- Action Button to Admin Dashboard -->
-                                        <div style="text-align:center;">
-                                            <a href="${adminDashboardUrl}" style="display:inline-block; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); color:#ffffff; font-weight:800; font-size:14.5px; text-decoration:none; padding:15px 32px; border-radius:12px; box-shadow:0 8px 25px rgba(234,88,12,0.45); letter-spacing:0.5px;">
-                                                ⚡ Open Admin Dashboard to Confirm Order →
-                                            </a>
+                                <!-- Action Button -->
+                                <tr>
+                                    <td style="padding:0 24px 24px; text-align:center;">
+                                        <a href="${adminDashboardUrl}" style="display:inline-block; width:100%; box-sizing:border-box; background:#ea580c; color:#ffffff; font-weight:800; font-size:14px; text-decoration:none; padding:13px 20px; border-radius:8px; text-align:center;">
+                                            Open in Kitchen Dashboard →
+                                        </a>
+                                        <div style="margin-top:10px; font-size:11.5px; color:#64748b;">
+                                            <a href="${trackingLink}" style="color:#64748b; text-decoration:underline;">Customer Tracking Link</a>
                                         </div>
                                     </td>
                                 </tr>
 
                                 <!-- Footer -->
                                 <tr>
-                                    <td style="background:#0c0c10; padding:18px; text-align:center; font-size:11.5px; color:#64748b; border-top:1px solid #27272a; line-height:1.5;">
-                                        <strong style="color:#f97316;">Littiwale Barbil</strong> • Admin Kitchen Notification System<br>
-                                        <span style="font-size:10.5px; color:#71717a; font-style:italic;">This is an automated system-generated notification for Admin.</span>
+                                    <td style="background:#f8fafc; padding:14px 24px; text-align:center; font-size:11px; color:#94a3b8; border-top:1px solid #e2e8f0;">
+                                        Littiwale Barbil • Cloud Kitchen & Food Delivery<br>
+                                        Automated Kitchen Order Dispatch System
                                     </td>
                                 </tr>
+
                             </table>
                         </td>
                     </tr>
@@ -2161,6 +2216,9 @@ async function sendNewOrderResendEmail(ord) {
         if (res.ok) {
             const data = await res.json();
             console.log(`📧 Resend new order alert email successfully dispatched to Admin (${adminEmail}) for Order #${ord.orderId || ord._id}! Email ID:`, data.id);
+        } else {
+            const errData = await res.text();
+            console.error(`❌ Resend email dispatch returned error (${res.status}):`, errData);
         }
     } catch (e) {
         console.error('❌ Resend admin email dispatch failed:', e.message);
@@ -2201,7 +2259,9 @@ router.post('/orders', async (req, res) => {
 
         console.log(`✅ Order "${orderId}" successfully placed in Supabase PostgreSQL!`);
         
-        // Smart Customer Profile Sync (Upsert phone, email, name, address — NO temp password emails)
+        // Automatic Customer Account Setup & Temporary Password Generation
+        let autoGeneratedTempPassword = generate4CharTempPassword();
+
         if (customerPhone && customerPhone.length >= 10) {
             const cleanP = String(customerPhone).replace(/\D/g, '').slice(-10);
             try {
@@ -2211,17 +2271,34 @@ router.post('/orders', async (req, res) => {
 
                 if (existingCust.rows.length === 0) {
                     await supabaseDb.query(
-                        `INSERT INTO customers (phone, email, name, addresses, updated_at)
-                         VALUES ($1, $2, $3, $4, NOW())`,
-                        [cleanP, cleanEmail || '', customerName || 'Customer', JSON.stringify(initAddr)]
+                        `INSERT INTO customers (phone, email, name, temp_password, password_hash, addresses, updated_at)
+                         VALUES ($1, $2, $3, $4, $4, $5, NOW())`,
+                        [cleanP, cleanEmail || '', customerName || 'Customer', autoGeneratedTempPassword, JSON.stringify(initAddr)]
                     );
+                    if (cleanEmail && cleanEmail.includes('@')) {
+                        sendCustomerTempPasswordEmail(cleanEmail, customerName, autoGeneratedTempPassword, false).catch(() => {});
+                    }
                 } else {
                     const row = existingCust.rows[0];
+                    if (row.temp_password) {
+                        autoGeneratedTempPassword = row.temp_password;
+                    } else if (row.password_hash) {
+                        autoGeneratedTempPassword = row.password_hash;
+                    } else {
+                        await supabaseDb.query(
+                            `UPDATE customers SET temp_password = $1, password_hash = $1, updated_at = NOW() WHERE id = $2`,
+                            [autoGeneratedTempPassword, row.id]
+                        );
+                    }
+
                     if (cleanEmail && cleanEmail.includes('@') && !row.email) {
                         await supabaseDb.query(
                             `UPDATE customers SET email = $1, updated_at = NOW() WHERE id = $2`,
                             [cleanEmail, row.id]
                         );
+                        if (!row.password_hash) {
+                            sendCustomerTempPasswordEmail(cleanEmail, customerName, autoGeneratedTempPassword, false).catch(() => {});
+                        }
                     }
                 }
             } catch(custErr) {
@@ -2229,7 +2306,7 @@ router.post('/orders', async (req, res) => {
             }
         }
 
-        // Trigger Resend email notification ONLY to Admin asynchronously (with PDF invoice + WhatsApp link)
+        // Trigger Resend email notification to Admin asynchronously (with details & temp password)
         sendNewOrderResendEmail({
             orderId, customerName, customerPhone, customerAddress, customerEmail,
             items: payload.items || [], total, finalTotal, subtotal,

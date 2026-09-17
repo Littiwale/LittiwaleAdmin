@@ -302,27 +302,28 @@ window.handleGlobalSearch = function(e) {
         }
     });
 
-    // 2. Search Dishes
-    const dishes = window.cachedMenuItems || [];
-    dishes.forEach(dish => {
+    // 2. Search Dishes (Smart Search with Synonyms & Typos)
+    const matchedDishes = typeof window.smartMenuSearchEngine === 'function'
+        ? window.smartMenuSearchEngine(window.cachedMenuItems || [], query)
+        : (window.cachedMenuItems || []).filter(d => (d.name && d.name.toLowerCase().includes(query)) || (d.category && d.category.toLowerCase().includes(query)));
+    
+    matchedDishes.slice(0, 8).forEach(dish => {
         const dishName = dish.name || '';
         const category = dish.category || '';
-        if (dishName.toLowerCase().includes(query) || category.toLowerCase().includes(query)) {
-            results.push({
-                type: 'Dish',
-                title: dishName,
-                subtitle: `₹${dish.price} • ${category} • ${dish.isPureVeg ? '🟢 Veg' : '🔴 Non-Veg'}`,
-                icon: '🍲',
-                action: () => {
-                    window.switchSection('menu-section');
-                    if (typeof openMenuModal === 'function') {
-                        openMenuModal(dish._id);
-                    }
-                    dropdown.style.display = 'none';
-                    e.target.value = '';
+        results.push({
+            type: 'Dish',
+            title: dishName,
+            subtitle: `₹${dish.price} • ${category} • ${dish.isPureVeg ? '🟢 Veg' : '🔴 Non-Veg'}`,
+            icon: '🍲',
+            action: () => {
+                window.switchSection('menu-section');
+                if (typeof openMenuModal === 'function') {
+                    openMenuModal(dish._id || dish.id);
                 }
-            });
-        }
+                dropdown.style.display = 'none';
+                e.target.value = '';
+            }
+        });
     });
 
     // 3. Search Coupons
@@ -601,6 +602,9 @@ function showLogin() {
 function showDashboard() {
     loginScreen.classList.add('hidden');
     dashboardScreen.classList.remove('hidden');
+    if (typeof window.applyRoleBasedUI === 'function') {
+        window.applyRoleBasedUI();
+    }
 }
 
 // =======================
@@ -776,6 +780,7 @@ window.fetchAndRenderOrders = async function() {
             if (typeof renderOrderNotifications === 'function') renderOrderNotifications();
             if (typeof renderWebsiteRevenue === 'function') renderWebsiteRevenue();
             if (typeof renderDynamicDashboard === 'function') renderDynamicDashboard();
+            if (typeof window.updateStaffOperationalKPIs === 'function') window.updateStaffOperationalKPIs();
         }
     } catch(e) {
         console.error('Failed to load orders:', e);
@@ -1589,6 +1594,9 @@ function renderOrdersTable(filterQuery = '') {
                             <button type="button" class="btn btn-sm btn-primary" style="padding:6px 12px; font-size:11.5px; font-weight:800; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')" title="Open Order Details">
                                 <span>👁️ Manage</span>
                             </button>
+                            <button type="button" class="btn btn-sm" style="padding:6px 8px; font-size:11px; background:rgba(234,88,12,0.18); border:1px solid rgba(234,88,12,0.4); color:#ea580c; font-weight:800;" onclick="window.printThermalReceipt('${ord._id}')" title="Print Bluetooth Thermal Bill (58mm/80mm)">
+                                🖨️ Thermal
+                            </button>
                             <button type="button" class="btn btn-sm btn-secondary" style="padding:6px 8px; font-size:11px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="View & Print Official Bill (A4 PDF)">
                                 📄
                             </button>
@@ -1662,6 +1670,9 @@ function renderOrdersTable(filterQuery = '') {
                         <div class="mobile-order-actions-group">
                             <button type="button" class="btn btn-sm btn-primary" style="padding:7px 14px; font-size:12px; font-weight:800; background:var(--brand-orange); color:#000;" onclick="window.openOrderQuickModal('${ord._id}')">
                                 👁️ Manage
+                            </button>
+                            <button type="button" class="btn btn-sm" style="padding:7px 11px; font-size:12px; font-weight:800; background:rgba(234,88,12,0.18); border:1px solid rgba(234,88,12,0.4); color:#ea580c;" onclick="window.printThermalReceipt('${ord._id}')" title="Print Bluetooth Thermal Bill">
+                                🖨️
                             </button>
                             <button type="button" class="btn btn-sm btn-secondary" style="padding:7px 9px; font-size:12px;" onclick="window.openA4InvoiceModal('${ord._id}')" title="Print Bill">
                                 📄
@@ -2074,6 +2085,19 @@ window.navigateAdminBack = function() {
 window.switchSection = function(targetId) {
     if (!targetId) targetId = 'dashboard-section';
 
+    // Role guard for Order Manager: can only access dashboard, orders, and menu
+    let user = {};
+    try {
+        user = JSON.parse(localStorage.getItem('adminUser') || sessionStorage.getItem('adminUser') || '{}');
+    } catch(e) {}
+    const isOrderManager = (user.role === 'order_manager' || (user.email && user.email.toLowerCase().includes('orders@')));
+    if (isOrderManager && !['dashboard-section', 'orders-section', 'menu-section', 'billing-section'].includes(targetId)) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('🔒 Section restricted for Orders & Kitchen Desk', 'warning');
+        }
+        targetId = 'dashboard-section';
+    }
+
     // Persist current active section across page refreshes
     try {
         sessionStorage.setItem('lw_admin_active_section', targetId);
@@ -2139,6 +2163,9 @@ window.switchSection = function(targetId) {
     if (targetId === 'analytics-section') window.renderAnalyticsData();
     if (targetId === 'finance-section') window.loadFinanceData();
     if (targetId === 'orders-section') window.fetchAndRenderOrders();
+    if (targetId === 'billing-section') {
+        if (typeof window.renderBillingTab === 'function') window.renderBillingTab();
+    }
     if (targetId === 'seo-section') window.loadSeoSettings();
     if (targetId === 'media-library-section') window.renderMediaLibrary();
 
@@ -3203,16 +3230,21 @@ function renderMenuGrid(searchQuery = '') {
     const dietFilter = document.getElementById('menu-filter-diet')?.value || 'all';
     const q = (searchQuery || '').toLowerCase().trim();
 
-    // Filter items
+    // Filter items by location, category and diet
     let filteredMenus = window.cachedMenuItems.filter(item => {
         // Exclude Craziest Deals from standard Menu Tab (they belong exclusively to Media & Content -> Craziest Deals)
         if (item.category === 'Craziest Deals of the Hour' || (item.category && item.category.toLowerCase().includes('craziest deal')) || item.isCraziestDeal === true) return false;
         let matchLoc = (locFilter === 'all' || item.locationAvailability === locFilter || item.locationAvailability === 'both');
         let matchCat = (catFilter === 'all' || item.category === catFilter || (!item.category && catFilter === 'Uncategorized'));
         let matchDiet = (dietFilter === 'all' || (dietFilter === 'veg' && item.isVeg) || (dietFilter === 'non-veg' && !item.isVeg));
-        let matchQuery = !q || (item.name && item.name.toLowerCase().includes(q)) || (item.category && item.category.toLowerCase().includes(q));
-        return matchLoc && matchCat && matchDiet && matchQuery;
+        return matchLoc && matchCat && matchDiet;
     });
+
+    if (q && typeof window.smartMenuSearchEngine === 'function') {
+        filteredMenus = window.smartMenuSearchEngine(filteredMenus, q);
+    } else if (q) {
+        filteredMenus = filteredMenus.filter(item => (item.name && item.name.toLowerCase().includes(q)) || (item.category && item.category.toLowerCase().includes(q)));
+    }
 
     if (filteredMenus.length === 0) {
         container.innerHTML = `<div style="color:#6b7280; text-align:center; padding:40px;">${q ? `No dishes matching "${q}" found.` : 'No items match the selected filters.'}</div>`;
@@ -7018,3 +7050,1528 @@ window.addEventListener('appinstalled', () => {
     console.log('✅ Littiwale Admin PWA Installed Successfully');
     window.showAdminToast('Admin App Installed on Device! 📲', 'success');
 });
+
+// ==========================================================================
+// ADMIN DIRECT / POS ORDER CREATION CONTROLLER
+// ==========================================================================
+let adminOrderSelectedItems = [];
+let adminOrderPhoneDebounceTimer = null;
+let currentAdminOrderType = 'delivery';
+let currentAdminOrderPayment = 'COD';
+
+window.openCreateOrderModal = async function() {
+    // 1. Reset state
+    adminOrderSelectedItems = [];
+    currentAdminOrderType = 'delivery';
+    currentAdminOrderPayment = 'COD';
+    
+    // 2. Reset fields
+    const phoneInput = document.getElementById('create-order-phone');
+    const nameInput = document.getElementById('create-order-name');
+    const emailInput = document.getElementById('create-order-email');
+    const addressInput = document.getElementById('create-order-address');
+    const landmarkInput = document.getElementById('create-order-landmark');
+    const notesInput = document.getElementById('create-order-notes');
+    const phoneStatus = document.getElementById('create-order-phone-status');
+    const searchDishInput = document.getElementById('admin-order-search-dish');
+    const deliveryFeeInput = document.getElementById('admin-order-delivery-fee');
+    const discountInput = document.getElementById('admin-order-discount');
+
+    if (phoneInput) phoneInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (emailInput) emailInput.value = '';
+    if (addressInput) addressInput.value = '';
+    if (landmarkInput) landmarkInput.value = '';
+    if (notesInput) notesInput.value = '';
+    if (searchDishInput) searchDishInput.value = '';
+    if (deliveryFeeInput) deliveryFeeInput.value = '30';
+    if (discountInput) discountInput.value = '0';
+    if (phoneStatus) {
+        phoneStatus.textContent = 'Enter 10-digit number';
+        phoneStatus.style.color = '#94a3b8';
+    }
+
+    // Reset switches
+    window.setAdminOrderType('delivery');
+    window.setAdminOrderPayment('COD');
+
+    // Ensure menu dishes loaded
+    if (!window.cachedMenuItems || window.cachedMenuItems.length === 0) {
+        try {
+            const res = await fetch(`${API_URL}/menu`);
+            const data = await res.json();
+            window.cachedMenuItems = Array.isArray(data) ? data : (data.items || []);
+        } catch(e) {
+            console.warn('Failed to pre-fetch menu for order modal:', e);
+        }
+    }
+
+    // Populate initial dishes list (first 15 dishes)
+    window.renderAdminOrderDishResults(window.cachedMenuItems || []);
+    window.renderAdminOrderSelectedItems();
+    window.recalcAdminOrderBill();
+
+    // Show modal
+    window.openModal('modal-create-order');
+};
+
+window.handleAdminOrderPhoneLookup = function(phoneVal) {
+    const cleanP = String(phoneVal || '').replace(/\D/g, '').slice(-10);
+    const phoneStatus = document.getElementById('create-order-phone-status');
+    const spinner = document.getElementById('create-order-phone-spinner');
+    
+    if (adminOrderPhoneDebounceTimer) clearTimeout(adminOrderPhoneDebounceTimer);
+
+    if (cleanP.length < 10) {
+        if (phoneStatus) {
+            phoneStatus.textContent = cleanP.length === 0 ? 'Enter 10-digit number' : `Typing (${cleanP.length}/10 digits)...`;
+            phoneStatus.style.color = '#94a3b8';
+        }
+        if (spinner) spinner.style.display = 'none';
+        return;
+    }
+
+    if (spinner) spinner.style.display = 'block';
+    if (phoneStatus) {
+        phoneStatus.textContent = '🔍 Checking database...';
+        phoneStatus.style.color = '#38bdf8';
+    }
+
+    adminOrderPhoneDebounceTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(`${API_URL}/customers/${cleanP}`);
+            const data = await res.json();
+            if (spinner) spinner.style.display = 'none';
+
+            if (data && data.exists) {
+                if (phoneStatus) {
+                    phoneStatus.innerHTML = `✅ Returning Customer: <strong style="color:#4ade80;">${data.name || 'Verified'}</strong>`;
+                    phoneStatus.style.color = '#4ade80';
+                }
+                const nameInput = document.getElementById('create-order-name');
+                const emailInput = document.getElementById('create-order-email');
+                const addrInput = document.getElementById('create-order-address');
+                const lmarkInput = document.getElementById('create-order-landmark');
+
+                if (nameInput && (!nameInput.value || nameInput.value.trim() === '')) {
+                    nameInput.value = data.name || '';
+                }
+                if (emailInput && (!emailInput.value || emailInput.value.trim() === '')) {
+                    emailInput.value = data.email || '';
+                }
+                if (Array.isArray(data.addresses) && data.addresses.length > 0) {
+                    const defaultAddr = data.addresses.find(a => a.isDefault) || data.addresses[0];
+                    if (addrInput && !addrInput.value) addrInput.value = defaultAddr.address || '';
+                    if (lmarkInput && !lmarkInput.value) lmarkInput.value = defaultAddr.landmark || '';
+                }
+            } else {
+                if (phoneStatus) {
+                    phoneStatus.textContent = '✨ New Customer (Account will be auto-created)';
+                    phoneStatus.style.color = '#fbbf24';
+                }
+            }
+        } catch(err) {
+            if (spinner) spinner.style.display = 'none';
+            if (phoneStatus) {
+                phoneStatus.textContent = '✓ Ready to create';
+                phoneStatus.style.color = '#94a3b8';
+            }
+        }
+    }, 350);
+};
+
+window.setAdminOrderType = function(type) {
+    currentAdminOrderType = type;
+    const addrGroup = document.getElementById('admin-order-address-group');
+    const labelDelivery = document.getElementById('label-type-delivery');
+    const labelTakeaway = document.getElementById('label-type-takeaway');
+    const deliveryFeeInput = document.getElementById('admin-order-delivery-fee');
+
+    if (type === 'delivery') {
+        if (addrGroup) addrGroup.style.display = 'flex';
+        if (labelDelivery) {
+            labelDelivery.style.background = 'rgba(234,88,12,0.18)';
+            labelDelivery.style.borderColor = '#ea580c';
+            labelDelivery.style.color = '#fff';
+        }
+        if (labelTakeaway) {
+            labelTakeaway.style.background = 'rgba(255,255,255,0.03)';
+            labelTakeaway.style.borderColor = 'rgba(255,255,255,0.12)';
+            labelTakeaway.style.color = '#94a3b8';
+        }
+        if (deliveryFeeInput && Number(deliveryFeeInput.value) === 0) {
+            deliveryFeeInput.value = '30';
+        }
+    } else {
+        if (addrGroup) addrGroup.style.display = 'none';
+        if (labelTakeaway) {
+            labelTakeaway.style.background = 'rgba(234,88,12,0.18)';
+            labelTakeaway.style.borderColor = '#ea580c';
+            labelTakeaway.style.color = '#fff';
+        }
+        if (labelDelivery) {
+            labelDelivery.style.background = 'rgba(255,255,255,0.03)';
+            labelDelivery.style.borderColor = 'rgba(255,255,255,0.12)';
+            labelDelivery.style.color = '#94a3b8';
+        }
+        if (deliveryFeeInput) {
+            deliveryFeeInput.value = '0';
+        }
+    }
+    window.recalcAdminOrderBill();
+};
+
+window.setAdminOrderPayment = function(method) {
+    currentAdminOrderPayment = method;
+    const labelCod = document.getElementById('label-pay-cod');
+    const labelOnline = document.getElementById('label-pay-online');
+
+    if (method === 'COD') {
+        if (labelCod) {
+            labelCod.style.background = 'rgba(245,158,11,0.18)';
+            labelCod.style.borderColor = '#f59e0b';
+            labelCod.style.color = '#fbbf24';
+        }
+        if (labelOnline) {
+            labelOnline.style.background = 'rgba(255,255,255,0.03)';
+            labelOnline.style.borderColor = 'rgba(255,255,255,0.12)';
+            labelOnline.style.color = '#94a3b8';
+        }
+    } else {
+        if (labelOnline) {
+            labelOnline.style.background = 'rgba(59,130,246,0.18)';
+            labelOnline.style.borderColor = '#3b82f6';
+            labelOnline.style.color = '#60a5fa';
+        }
+        if (labelCod) {
+            labelCod.style.background = 'rgba(255,255,255,0.03)';
+            labelCod.style.borderColor = 'rgba(255,255,255,0.12)';
+            labelCod.style.color = '#94a3b8';
+        }
+    }
+};
+
+// ==========================================================================
+// INTELLIGENT MENU SEARCH ENGINE (SYNONYMS, MULTI-TOKEN & TYPO TOLERANCE)
+// ==========================================================================
+const MENU_SYNONYMS = {
+    'rice': ['rice', 'chawal', 'bhat', 'basmati', 'fried rice', 'pulao', 'khichdi'],
+    'chawal': ['rice', 'chawal', 'bhat', 'basmati'],
+    'bhat': ['rice', 'chawal', 'bhat'],
+    'extra': ['extra', 'extras', 'addon', 'add-on', 'side', 'sides'],
+    'extras': ['extra', 'extras', 'addon', 'add-on', 'side', 'sides'],
+    'roti': ['roti', 'chapati', 'paratha', 'naan', 'phulka', 'bread', 'laccha', 'chakuli'],
+    'chapati': ['roti', 'chapati', 'paratha', 'phulka'],
+    'paratha': ['paratha', 'roti', 'laccha', 'lacha'],
+    'pitha': ['pitha', 'chakuli'],
+    'dahi': ['dahi', 'curd', 'raita', 'yogurt'],
+    'curd': ['dahi', 'curd', 'raita', 'yogurt'],
+    'sabzi': ['sabzi', 'curry', 'bhaji', 'tarkari', 'gravy'],
+    'paneer': ['paneer', 'panir', 'cheese', 'cottage cheese'],
+    'chicken': ['chicken', 'chiken', 'chikn', 'murgh', 'murg', 'nonveg', 'non-veg'],
+    'egg': ['egg', 'anda', 'ande', 'omlet', 'omelette', 'nonveg'],
+    'litti': ['litti', 'liti', 'sattu', 'chokha'],
+    'chokha': ['chokha', 'bharta', 'aloo', 'baingan'],
+    'noodles': ['noodles', 'noodle', 'nodles', 'hakka', 'chowmein', 'chow'],
+    'drink': ['drink', 'drinks', 'cold drink', 'pepsi', 'coke', 'beverage', 'water'],
+    'sweet': ['sweet', 'sweets', 'mithai', 'dessert', 'gulab jamun']
+};
+
+function fastLevenshtein(a, b) {
+    if (a === b) return 0;
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
+window.scoreMenuDish = function(dish, query) {
+    if (!query) return 1;
+    const q = query.trim().toLowerCase();
+    if (!q) return 1;
+
+    const name = (dish.name || '').toLowerCase();
+    const cat = (dish.category || '').toLowerCase();
+    const desc = (dish.description || '').toLowerCase();
+    const kw = (dish.keywords || '').toLowerCase();
+
+    let score = 0;
+
+    // 1. Exact Name match
+    if (name === q) score += 200;
+    else if (name.startsWith(q)) score += 120;
+    else if (name.includes(q)) score += 80;
+    else if (fastLevenshtein(name, q) <= (q.length <= 4 ? 1 : 2)) score += 140;
+
+    // 2. Category Match
+    if (cat === q) score += 50;
+    else if (cat.includes(q)) score += 30;
+
+    // 3. Database Keywords direct match
+    if (kw && kw.includes(q)) score += 70;
+
+    const tokens = q.split(/\s+/).filter(Boolean);
+    let allTokensMatched = true;
+
+    tokens.forEach(token => {
+        let tokenMatched = false;
+        if (name.includes(token)) { score += 30; tokenMatched = true; }
+        if (cat.includes(token)) { score += 18; tokenMatched = true; }
+        if (kw.includes(token)) { score += 25; tokenMatched = true; }
+        if (desc.includes(token)) { score += 6; tokenMatched = true; }
+
+        let synList = MENU_SYNONYMS[token] || [];
+        if (!synList.length) {
+            for (const [k, v] of Object.entries(MENU_SYNONYMS)) {
+                if (fastLevenshtein(token, k) <= (token.length <= 4 ? 1 : 2)) {
+                    synList = v;
+                    score += 15;
+                    break;
+                }
+            }
+        }
+        for (const s of synList) {
+            if (name === s) { score += 60; tokenMatched = true; }
+            else if (name.includes(s)) { score += 20; tokenMatched = true; }
+            if (kw.includes(s)) { score += 20; tokenMatched = true; }
+            if (cat.includes(s)) { score += 12; tokenMatched = true; }
+            if (desc.includes(s)) { score += 4; tokenMatched = true; }
+        }
+
+        if (!tokenMatched) {
+            const hayWords = (name + ' ' + cat + ' ' + desc + ' ' + kw).split(/[\s,()•+\\/-]+/).filter(Boolean);
+            const maxDist = token.length <= 4 ? 1 : 2;
+            const fuzzy = hayWords.some(w => fastLevenshtein(token, w) <= maxDist);
+            if (fuzzy) { score += 12; tokenMatched = true; }
+        }
+
+        if (!tokenMatched) allTokensMatched = false;
+    });
+
+    return allTokensMatched ? score : 0;
+};
+
+window.smartMenuSearchEngine = function(dishes, query) {
+    if (!query || !query.trim()) return dishes || [];
+    const q = query.trim();
+    const scored = (dishes || [])
+        .map(d => ({ dish: d, score: window.scoreMenuDish(d, q) }))
+        .filter(s => s.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(s => s.dish);
+    return scored;
+};
+
+window.filterAdminOrderDishes = function(query) {
+    const q = (query || '').trim();
+    const allDishes = window.cachedMenuItems || [];
+    if (!q) {
+        window.renderAdminOrderDishResults(allDishes.slice(0, 15));
+        return;
+    }
+    const filtered = window.smartMenuSearchEngine(allDishes, q);
+    window.renderAdminOrderDishResults(filtered);
+};
+
+window.renderAdminOrderDishResults = function(dishes) {
+    const container = document.getElementById('admin-order-dish-results');
+    if (!container) return;
+
+    if (!dishes || dishes.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:12px; font-size:12px; color:#64748b;">No dishes found matching search</div>`;
+        return;
+    }
+
+    container.innerHTML = dishes.map(d => {
+        const dishId = d._id || d.id;
+        const price = Number(d.price || 0);
+        const isVeg = d.dietaryPreference === 'veg' || (!d.dietaryPreference && !d.diet && !d.isNonVeg);
+        const icon = isVeg ? '🟢' : '🔴';
+        const nameEscaped = (d.name || 'Dish').replace(/'/g, "\\'");
+        
+        return `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; gap:8px; min-width:0; box-sizing:border-box;">
+                <div style="display:flex; align-items:center; gap:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0;">
+                    <span style="font-size:11px; flex-shrink:0;">${icon}</span>
+                    <strong style="font-size:12.5px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1;">${d.name}</strong>
+                    <span style="font-size:11.5px; color:#94a3b8; font-weight:600; flex-shrink:0;">₹${price}</span>
+                </div>
+                <button type="button" class="btn btn-sm" onclick="window.addAdminOrderItem('${dishId}', '${nameEscaped}', ${price})" 
+                    style="padding:4px 12px; font-size:12px; font-weight:800; background:rgba(234,88,12,0.2); color:#ea580c; border:1px solid rgba(234,88,12,0.4); border-radius:6px; cursor:pointer; flex-shrink:0;">
+                    + Add
+                </button>
+            </div>
+        `;
+    }).join('');
+};
+
+window.addAdminOrderItem = function(id, name, price) {
+    const existing = adminOrderSelectedItems.find(item => item.id === id);
+    if (existing) {
+        existing.quantity += 1;
+    } else {
+        adminOrderSelectedItems.push({
+            id,
+            name,
+            price: Number(price || 0),
+            quantity: 1
+        });
+    }
+    window.renderAdminOrderSelectedItems();
+    window.recalcAdminOrderBill();
+};
+
+window.updateAdminOrderItemQty = function(index, delta) {
+    if (!adminOrderSelectedItems[index]) return;
+    adminOrderSelectedItems[index].quantity += delta;
+    if (adminOrderSelectedItems[index].quantity <= 0) {
+        adminOrderSelectedItems.splice(index, 1);
+    }
+    window.renderAdminOrderSelectedItems();
+    window.recalcAdminOrderBill();
+};
+
+window.removeAdminOrderItem = function(index) {
+    if (!adminOrderSelectedItems[index]) return;
+    adminOrderSelectedItems.splice(index, 1);
+    window.renderAdminOrderSelectedItems();
+    window.recalcAdminOrderBill();
+};
+
+window.renderAdminOrderSelectedItems = function() {
+    const container = document.getElementById('admin-order-selected-list');
+    const countEl = document.getElementById('admin-order-items-count');
+    if (!container) return;
+
+    if (countEl) {
+        const totalItemsCount = adminOrderSelectedItems.reduce((acc, it) => acc + it.quantity, 0);
+        countEl.textContent = `${totalItemsCount} item${totalItemsCount === 1 ? '' : 's'}`;
+    }
+
+    if (adminOrderSelectedItems.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:20px; color:#64748b; font-size:12.5px;">
+                No dishes selected yet. Search and click "+ Add" above.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = adminOrderSelectedItems.map((item, idx) => `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid rgba(255,255,255,0.04); gap:8px; min-width:0; box-sizing:border-box;">
+            <div style="flex:1; min-width:0; overflow:hidden;">
+                <div style="font-size:12.5px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${item.name}
+                </div>
+                <div style="font-size:11px; color:#94a3b8;">
+                    ₹${item.price} each × ${item.quantity} = <strong style="color:#fbbf24;">₹${item.price * item.quantity}</strong>
+                </div>
+            </div>
+            
+            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                <button type="button" onclick="window.updateAdminOrderItemQty(${idx}, -1)" 
+                    style="width:24px; height:24px; border-radius:5px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); color:#fff; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                    -
+                </button>
+                <span style="font-size:13px; font-weight:800; color:#fff; min-width:18px; text-align:center;">
+                    ${item.quantity}
+                </span>
+                <button type="button" onclick="window.updateAdminOrderItemQty(${idx}, 1)" 
+                    style="width:24px; height:24px; border-radius:5px; background:rgba(234,88,12,0.2); border:1px solid rgba(234,88,12,0.3); color:#ea580c; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                    +
+                </button>
+                <button type="button" onclick="window.removeAdminOrderItem(${idx})" title="Remove item" 
+                    style="background:none; border:none; color:#ef4444; font-size:14px; cursor:pointer; padding:2px 4px; margin-left:4px;">
+                    🗑️
+                </button>
+            </div>
+        </div>
+    `).join('');
+};
+
+window.recalcAdminOrderBill = function() {
+    const subtotalEl = document.getElementById('admin-order-subtotal');
+    const grandTotalEl = document.getElementById('admin-order-grand-total');
+    const deliveryFeeInput = document.getElementById('admin-order-delivery-fee');
+    const discountInput = document.getElementById('admin-order-discount');
+
+    const subtotal = adminOrderSelectedItems.reduce((acc, it) => acc + (it.price * it.quantity), 0);
+    const deliveryFee = currentAdminOrderType === 'delivery' ? Math.max(0, Number(deliveryFeeInput?.value || 0)) : 0;
+    const discount = Math.max(0, Number(discountInput?.value || 0));
+    const grandTotal = Math.max(0, subtotal + deliveryFee - discount);
+
+    if (subtotalEl) subtotalEl.textContent = `₹${subtotal}`;
+    if (grandTotalEl) grandTotalEl.textContent = `₹${grandTotal}`;
+};
+
+window.submitAdminOrder = async function() {
+    const phoneInput = document.getElementById('create-order-phone');
+    const nameInput = document.getElementById('create-order-name');
+    const emailInput = document.getElementById('create-order-email');
+    const addressInput = document.getElementById('create-order-address');
+    const landmarkInput = document.getElementById('create-order-landmark');
+    const notesInput = document.getElementById('create-order-notes');
+    const deliveryFeeInput = document.getElementById('admin-order-delivery-fee');
+    const discountInput = document.getElementById('admin-order-discount');
+    const submitBtn = document.getElementById('admin-create-order-submit-btn');
+
+    const phone = String(phoneInput?.value || '').replace(/\D/g, '').slice(-10);
+    const name = (nameInput?.value || '').trim();
+    const email = (emailInput?.value || '').trim();
+    const address = (addressInput?.value || '').trim();
+    const landmark = (landmarkInput?.value || '').trim();
+    const notes = (notesInput?.value || '').trim();
+
+    // Validations
+    if (phone.length !== 10) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Please enter a valid 10-digit mobile number', 'error');
+        } else {
+            alert('Please enter a valid 10-digit mobile number');
+        }
+        phoneInput?.focus();
+        return;
+    }
+
+    if (!name) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Please enter customer name', 'error');
+        } else {
+            alert('Please enter customer name');
+        }
+        nameInput?.focus();
+        return;
+    }
+
+    if (currentAdminOrderType === 'delivery' && !address) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Please enter delivery address for Home Delivery', 'error');
+        } else {
+            alert('Please enter delivery address for Home Delivery');
+        }
+        addressInput?.focus();
+        return;
+    }
+
+    if (adminOrderSelectedItems.length === 0) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Please add at least one dish to the order', 'error');
+        } else {
+            alert('Please add at least one dish to the order');
+        }
+        return;
+    }
+
+    const subtotal = adminOrderSelectedItems.reduce((acc, it) => acc + (it.price * it.quantity), 0);
+    const deliveryCharge = currentAdminOrderType === 'delivery' ? Math.max(0, Number(deliveryFeeInput?.value || 0)) : 0;
+    const discount = Math.max(0, Number(discountInput?.value || 0));
+    const grandTotal = Math.max(0, subtotal + deliveryCharge - discount);
+
+    const fullAddress = currentAdminOrderType === 'delivery' 
+        ? (landmark ? `${address}, Near: ${landmark}` : address) 
+        : 'Takeaway / Store Pickup';
+
+    const orderPayload = {
+        customerName: name,
+        customerPhone: phone,
+        customerEmail: email,
+        customerAddress: fullAddress,
+        items: adminOrderSelectedItems.map(it => ({
+            id: it.id,
+            name: it.name,
+            price: it.price,
+            quantity: it.quantity
+        })),
+        subtotal: subtotal,
+        deliveryCharge: deliveryCharge,
+        discount: discount,
+        total: grandTotal,
+        finalTotal: grandTotal,
+        orderType: currentAdminOrderType,
+        paymentMethod: currentAdminOrderPayment, // Strictly 'COD' or 'Online'
+        notes: notes,
+        status: 'accepted'
+    };
+
+    // UI Loading state
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Creating Order...';
+    }
+
+    try {
+        const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+        const res = await fetch(`${API_URL}/orders`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify(orderPayload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+            const placedId = data.orderId || data._id || data.id || 'LW-New';
+            if (typeof window.showAdminToast === 'function') {
+                window.showAdminToast(`✅ Order ${placedId} created successfully! Synced to customer profile.`, 'success');
+            } else {
+                alert(`Order ${placedId} created successfully!`);
+            }
+
+            // Close modal
+            window.closeModal('modal-create-order');
+
+            // Refresh orders view
+            if (typeof window.fetchAndRenderOrders === 'function') {
+                window.fetchAndRenderOrders();
+            } else if (typeof refreshOrders === 'function') {
+                refreshOrders();
+            }
+        } else {
+            const err = data.error || 'Failed to create order';
+            if (typeof window.showAdminToast === 'function') {
+                window.showAdminToast(`Error: ${err}`, 'error');
+            } else {
+                alert(`Error: ${err}`);
+            }
+        }
+    } catch(err) {
+        console.error('Order creation error:', err);
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Server error while creating order', 'error');
+        } else {
+            alert('Server error while creating order');
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '⚡ Confirm & Place Order';
+        }
+    }
+};
+
+// ==========================================================================
+// ROLE-BASED ACCESS CONTROL (RBAC) CONTROLLER
+// ==========================================================================
+window.applyRoleBasedUI = function() {
+    let user = {};
+    try {
+        user = JSON.parse(localStorage.getItem('adminUser') || sessionStorage.getItem('adminUser') || '{}');
+    } catch(e) {}
+    
+    const role = user.role || 'superadmin';
+    const isOrderManager = (role === 'order_manager' || (user.email && user.email.toLowerCase().includes('orders@')));
+
+    const staffHub = document.getElementById('staff-dashboard-hub');
+    const superadminView = document.getElementById('superadmin-dashboard-view');
+    const superadminBanner = document.getElementById('superadmin-welcome-banner');
+    const navContentGroup = document.getElementById('nav-group-content');
+    const navInsightsLabel = document.getElementById('nav-label-insights');
+    const profileRoleBadge = document.querySelector('.header-profile-role');
+    const profileMenu = document.querySelector('.header-profile-menu');
+
+    // Sidebar selectors restricted for Order Manager
+    const restrictedNavSelectors = [
+        'button[data-target="finance-section"]',
+        'button[data-target="analytics-section"]',
+        'button[data-target="seo-section"]',
+        'button[data-target="settings-section"]',
+        'button[data-target="coupons-section"]',
+        'button[data-target="media-library-section"]'
+    ];
+
+    if (isOrderManager) {
+        if (staffHub) staffHub.style.display = 'block';
+        if (superadminView) superadminView.style.display = 'none';
+        if (superadminBanner) superadminBanner.style.display = 'none';
+        if (navContentGroup) navContentGroup.style.display = 'none';
+        if (navInsightsLabel) navInsightsLabel.style.display = 'none';
+        if (profileRoleBadge) profileRoleBadge.textContent = 'Orders & Kitchen Desk';
+        if (profileMenu) {
+            profileMenu.onclick = null;
+            profileMenu.style.cursor = 'default';
+            profileMenu.title = 'Orders & Kitchen Desk';
+        }
+
+        restrictedNavSelectors.forEach(selector => {
+            document.querySelectorAll(selector).forEach(el => {
+                el.style.display = 'none';
+            });
+        });
+
+        // Update staff operational KPIs and render live queue
+        window.updateStaffOperationalKPIs();
+    } else {
+        if (staffHub) staffHub.style.display = 'block';
+        if (superadminView) superadminView.style.display = 'block';
+        if (superadminBanner) superadminBanner.style.display = 'block';
+        if (navContentGroup) navContentGroup.style.display = 'block';
+        if (navInsightsLabel) navInsightsLabel.style.display = 'block';
+        if (profileRoleBadge) profileRoleBadge.textContent = 'Master SuperAdmin';
+        if (profileMenu) {
+            profileMenu.onclick = () => window.switchSection('settings-section');
+            profileMenu.style.cursor = 'pointer';
+            profileMenu.title = 'Admin Settings';
+        }
+
+        restrictedNavSelectors.forEach(selector => {
+            document.querySelectorAll(selector).forEach(el => {
+                el.style.display = 'flex';
+            });
+        });
+
+        window.updateStaffOperationalKPIs();
+    }
+};
+
+window.renderStaffLiveQueue = function() {
+    const container = document.getElementById('staff-live-orders-container');
+    if (!container) return;
+
+    const orders = window.cachedOrders || [];
+    const activeOrders = orders.filter(o => {
+        const s = String(o.status || '').toLowerCase();
+        return s === 'pending' || s === 'new' || s === 'confirmed' || s === 'cooking' || s === 'preparing' || s === 'dispatched';
+    });
+    
+    const displayOrders = activeOrders.length > 0 ? activeOrders : orders.slice(0, 8);
+
+    if (displayOrders.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:32px 16px; background:#12131b; border-radius:12px; border:1px dashed rgba(255,255,255,0.1);">
+                <div style="font-size:32px; margin-bottom:8px;">🍳</div>
+                <div style="font-size:14px; font-weight:800; color:#fff;">No Live Orders in Kitchen</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:4px;">Incoming customer orders will alert and appear here automatically.</div>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = displayOrders.map(ord => {
+        const shortId = (ord.orderId || ord._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+        const status = String(ord.status || 'pending').toLowerCase();
+        const isTakeaway = String(ord.orderType || '').toLowerCase() === 'takeaway';
+        const grandTotal = Number(ord.finalTotal || ord.total || 0);
+        const payment = String(ord.paymentMethod || 'COD').toUpperCase();
+        const items = Array.isArray(ord.items) ? ord.items : [];
+        const itemsSummary = items.map(it => `
+            <span style="display:inline-flex; align-items:center; background:rgba(255,255,255,0.06); padding:3px 8px; border-radius:6px; font-size:12px; color:#f1f5f9; border:1px solid rgba(255,255,255,0.08);">
+                <strong style="color:#fb923c; margin-right:4px;">${it.quantity || 1}x</strong> ${it.name}
+            </span>
+        `).join(' ');
+
+        let statusBadge = `<span style="background:rgba(245,158,11,0.2); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); padding:3px 10px; border-radius:12px; font-size:11.5px; font-weight:800;">Pending</span>`;
+        if (status === 'confirmed' || status === 'cooking' || status === 'preparing') {
+            statusBadge = `<span style="background:rgba(59,130,246,0.2); color:#60a5fa; border:1px solid rgba(59,130,246,0.4); padding:3px 10px; border-radius:12px; font-size:11.5px; font-weight:800;">👨‍🍳 Cooking</span>`;
+        } else if (status === 'dispatched') {
+            statusBadge = `<span style="background:rgba(168,85,247,0.2); color:#c084fc; border:1px solid rgba(168,85,247,0.4); padding:3px 10px; border-radius:12px; font-size:11.5px; font-weight:800;">🛵 Out for Delivery</span>`;
+        } else if (status === 'delivered') {
+            statusBadge = `<span style="background:rgba(34,197,94,0.2); color:#4ade80; border:1px solid rgba(34,197,94,0.4); padding:3px 10px; border-radius:12px; font-size:11.5px; font-weight:800;">✅ Delivered</span>`;
+        }
+
+        const dateStr = ord.createdAt 
+            ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Just now';
+
+        return `
+            <div style="background:#151621; border:1.5px solid rgba(255,255,255,0.08); border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:12px; transition:border-color 0.2s;">
+                <!-- Header: ID, Type, Time, Status -->
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-family:monospace; font-size:13.5px; font-weight:900; color:#fff; background:rgba(255,255,255,0.08); padding:3px 8px; border-radius:6px;">
+                            #${shortId}
+                        </span>
+                        <span style="font-size:12px; font-weight:700; color:${isTakeaway ? '#38bdf8' : '#a78bfa'};">
+                            ${isTakeaway ? '🥡 Takeaway' : '🛵 Delivery'}
+                        </span>
+                        <span style="font-size:11.5px; color:#94a3b8;">${dateStr}</span>
+                    </div>
+                    <div>
+                        ${statusBadge}
+                    </div>
+                </div>
+
+                <!-- Customer Details -->
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; font-size:13px;">
+                    <div>
+                        <strong style="color:#fff;">${ord.customerName || 'Walk-in / Customer'}</strong>
+                        <span style="color:#94a3b8; margin-left:6px;">
+                            📞 <a href="tel:${ord.customerPhone}" style="color:#38bdf8; text-decoration:none; font-weight:700;">${ord.customerPhone || 'N/A'}</a>
+                        </span>
+                        ${!isTakeaway && ord.customerAddress ? `<div style="font-size:12px; color:#cbd5e1; margin-top:2px;">📍 ${ord.customerAddress}</div>` : ''}
+                        ${ord.notes || ord.deliveryNotes ? `<div style="font-size:11.5px; color:#fbbf24; font-style:italic; margin-top:2px;">📝 Note: ${ord.notes || ord.deliveryNotes}</div>` : ''}
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:15px; font-weight:900; color:#fff;">₹${grandTotal}</div>
+                        <span style="font-size:11px; font-weight:700; color:${payment === 'COD' ? '#fbbf24' : '#4ade80'};">
+                            ${payment === 'COD' ? '💵 COD' : '💳 Paid Online'}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Ordered Items -->
+                <div style="display:flex; flex-wrap:wrap; gap:6px; background:#0d0e14; padding:8px 10px; border-radius:8px;">
+                    ${itemsSummary}
+                </div>
+
+                <!-- Actions Bar: 🖨️ Thermal Bill + Manage Actions -->
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.06); flex-wrap:wrap;">
+                    <button type="button" class="btn btn-sm" onclick="window.printThermalReceipt('${ord._id || ord.id}')"
+                        style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color:#fff; font-weight:800; font-size:12px; padding:6px 14px; border-radius:8px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                        <span>🖨️ Thermal Bill</span>
+                    </button>
+                    
+                    <div style="display:flex; gap:6px;">
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="openOrderQuickModal('${ord._id || ord.id}')"
+                            style="font-size:12px; padding:6px 12px; font-weight:700;">
+                            ⚡ Update Status / Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+};
+
+window.updateStaffOperationalKPIs = function() {
+    const orders = window.cachedOrders || [];
+    const menu = window.cachedMenuItems || [];
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayOrders = orders.filter(o => o.createdAt && o.createdAt.startsWith(todayStr));
+    const pendingOrders = orders.filter(o => {
+        const st = String(o.status || 'pending').toLowerCase();
+        return st === 'pending' || st === 'new';
+    });
+    const deliveredToday = todayOrders.filter(o => String(o.status || '').toLowerCase() === 'delivered');
+    const outOfStockDishes = menu.filter(m => m.isAvailable === false);
+
+    const elToday = document.getElementById('staff-kpi-today-orders');
+    const elPending = document.getElementById('staff-kpi-pending-orders');
+    const elPendingText = document.getElementById('staff-pending-count-text');
+    const elDelivered = document.getElementById('staff-kpi-delivered-orders');
+    const elOutStock = document.getElementById('staff-kpi-out-stock');
+
+    if (elToday) elToday.textContent = todayOrders.length || orders.length;
+    if (elPending) elPending.textContent = pendingOrders.length;
+    if (elPendingText) elPendingText.textContent = `${pendingOrders.length} Pending Orders`;
+    if (elDelivered) elDelivered.textContent = deliveredToday.length;
+    if (elOutStock) elOutStock.textContent = outOfStockDishes.length;
+
+    // Also update the live kitchen queue
+    window.renderStaffLiveQueue();
+};
+
+// ==========================================================================
+// 1-CLICK THERMAL RECEIPT BUILDER & PRINTER (ESC/POS 58mm / 80mm BLUETOOTH)
+// ==========================================================================
+window.currentSelectedStationOrderId = null;
+
+window.buildThermalReceiptHTML = function(order, isPrintIframe = false) {
+    if (!order) return '<div style="text-align:center; padding:30px; color:#000000; font-weight:800;">No order data</div>';
+
+    const shortId = (order.orderId || order._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+    const formattedDate = order.createdAt 
+        ? new Date(order.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })
+        : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' });
+    
+    const isTakeaway = (order.orderType === 'takeaway' || order.orderType === 'pickup' || (order.customerAddress && /takeaway|self-pickup|pickup/i.test(order.customerAddress)));
+    const cleanPhone = String(order.customerPhone || '').replace(/\D/g, '').slice(-10);
+    const items = Array.isArray(order.items) ? order.items : [];
+    const subtotal = Number(order.subtotal || order.total || 0);
+    const deliveryCharge = isTakeaway ? 0 : Number(order.deliveryCharge || 0);
+    const discount = Number(order.discount || 0);
+    const grandTotal = Number(order.finalTotal || order.total || 0);
+    const payment = String(order.paymentMethod || 'COD').toUpperCase();
+
+    const itemsHtml = items.map(it => `
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; font-size:12px; color:#000000 !important; font-weight:800; margin-bottom:6px;">
+            <div style="display:flex; align-items:flex-start; gap:6px; max-width:76%;">
+                <span style="font-weight:900; color:#000000 !important; border:1px solid #000000; padding:1px 5px; border-radius:4px; font-size:10.5px; background:#fff; flex-shrink:0;">${it.quantity || 1}x</span>
+                <span style="font-weight:800; line-height:1.3; color:#000000 !important; word-break:break-word;">${it.name}</span>
+            </div>
+            <span style="font-weight:900; color:#000000 !important; font-size:12.5px; flex-shrink:0; margin-left:6px;">₹${it.subtotal || ((Number(it.price || 0)) * (Number(it.quantity || 1)))}</span>
+        </div>
+    `).join('') || '<div style="color:#000000; font-size:12px; text-align:center; font-weight:700;">Items list unavailable</div>';
+
+    const innerTicket = `
+        <!-- Header with Logo (Identical to Customer Tracking Slip) -->
+        <div style="text-align:center; color:#000000 !important;">
+            <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:6px;">
+                <img src="images/logo.png" onerror="this.src='/images/logo.png'" alt="Littiwale" style="width:38px; height:38px; object-fit:contain; border-radius:8px;">
+                <div style="text-align:left;">
+                    <div style="font-size:19px; font-weight:900; color:#000000 !important; letter-spacing:-0.5px; line-height:1.1;">LITTIWALE</div>
+                    <div style="font-size:10px; font-weight:900; color:#000000 !important; letter-spacing:0.8px; text-transform:uppercase;">Taste of Desi Swag</div>
+                </div>
+            </div>
+            <div style="font-size:10.5px; color:#000000 !important; line-height:1.4; margin-top:3px; font-weight:800;">
+                Ward No. 7, Punjabi Para, Barbil, Odisha - 758035<br>
+                Ph / WhatsApp: +91 63706 80744<br>
+                Instagram: @littiwaleofficial | Website: www.littiwale.co.in
+            </div>
+            
+            <div style="height:1px; border-bottom:1.5px dashed #000000; margin:9px 0;"></div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:900; color:#000000 !important;">
+                <span>ORDER: <strong>#${shortId}</strong></span>
+                <span>${formattedDate}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; font-weight:900; color:#000000 !important; margin-top:3px;">
+                <span>TYPE: ${isTakeaway ? 'TAKEAWAY (SELF PICKUP)' : 'HOME DELIVERY / KOT'}</span>
+                <span>${payment === 'COD' ? '💵 COD' : '💳 ONLINE'}</span>
+            </div>
+
+            <div style="height:1px; border-bottom:1.5px dashed #000000; margin:9px 0;"></div>
+        </div>
+
+        <!-- Ordered Items (Matching Tracking Page Style) -->
+        <div style="display:flex; flex-direction:column; margin-bottom:6px;">
+            ${itemsHtml}
+        </div>
+
+        <div style="height:1px; border-bottom:1.5px dashed #000000; margin:8px 0;"></div>
+
+        <!-- Billing Breakdown -->
+        <div style="display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:#000000 !important; font-weight:700;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Food Subtotal</span>
+                <span style="font-weight:900; color:#000000 !important;">₹${subtotal}</span>
+            </div>
+            ${discount > 0 ? `
+            <div style="display:flex; justify-content:space-between; align-items:center; font-weight:800;">
+                <span>Coupon Discount</span>
+                <span style="font-weight:900; color:#000000 !important;">-₹${discount}</span>
+            </div>` : ''}
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Delivery Fee</span>
+                <span style="font-weight:900; color:#000000 !important;">${isTakeaway ? 'FREE' : (deliveryCharge > 0 ? `₹${deliveryCharge}` : 'FREE')}</span>
+            </div>
+        </div>
+
+        <div style="height:3px; border-top:1.5px dashed #000000; border-bottom:1.5px dashed #000000; margin:8px 0;"></div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:15px; font-weight:900; color:#000000 !important; padding:2px 0;">
+            <span>TOTAL PAYABLE</span>
+            <span style="font-size:16px; font-weight:900; color:#000000 !important;">₹${grandTotal}</span>
+        </div>
+
+        <div style="height:3px; border-top:1.5px dashed #000000; border-bottom:1.5px dashed #000000; margin:8px 0;"></div>
+
+        <!-- Customer Delivery Info -->
+        <div style="font-size:11px; color:#000000 !important; line-height:1.45; background:#f4f4f5; padding:8px 10px; border-radius:6px; border:1px solid #000000; font-weight:800; margin:8px 0;">
+            <div><strong>Deliver To:</strong> ${order.customerName || 'Customer'} (${cleanPhone ? '+91 ' + cleanPhone : 'N/A'})</div>
+            ${!isTakeaway && order.customerAddress ? `<div><strong>Address:</strong> ${order.customerAddress}</div>` : (isTakeaway ? '<div><strong>Mode:</strong> Counter Self Pickup</div>' : '')}
+            <div><strong>Payment:</strong> ${payment === 'COD' ? 'Cash on Delivery (COD)' : 'Paid Online (UPI / Card)'}</div>
+            ${order.deliveryNotes || order.notes ? `<div style="margin-top:2px;"><strong>Note:</strong> ${order.deliveryNotes || order.notes}</div>` : ''}
+        </div>
+
+        <!-- Barcode & Tracking Footer -->
+        <div style="text-align:center; margin-top:8px; padding-top:6px; border-top:1.5px dashed #000000; color:#000000 !important;">
+            <div style="height:22px; margin:0 auto 3px; max-width:180px; background:repeating-linear-gradient(90deg, #000 0px, #000 2px, transparent 2px, transparent 4px, #000 4px, #000 7px, transparent 7px, transparent 9px, #000 9px, #000 10px, transparent 10px, transparent 13px, #000 13px, #000 16px, transparent 16px, transparent 17px);"></div>
+            <div style="font-size:10px; font-weight:900; letter-spacing:2px; color:#000000 !important;">* ${shortId} *</div>
+            <div style="font-size:9.5px; font-weight:800; line-height:1.45; margin-top:5px; color:#000000 !important;">
+                *** THANK YOU FOR ORDERING • LITTIWALE ***<br>
+                Instagram: <strong>@littiwaleofficial</strong> • <strong>www.littiwale.co.in</strong><br>
+                Party & Bulk Orders: <strong>+91 6370680744</strong>
+            </div>
+        </div>
+    `;
+
+    if (isPrintIframe) {
+        return `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Thermal Receipt - #${shortId}</title>
+                <style>
+                    @page {
+                        size: 80mm auto;
+                        margin: 0;
+                    }
+                    * {
+                        box-sizing: border-box;
+                        color: #000000 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        margin: 0;
+                        padding: 6px 10px;
+                        width: 74mm;
+                        color: #000000 !important;
+                        background: #ffffff !important;
+                        font-size: 12px;
+                        font-weight: 800;
+                        line-height: 1.35;
+                    }
+                </style>
+            </head>
+            <body>
+                ${innerTicket}
+            </body>
+            </html>
+        `;
+    }
+
+    return `
+        <div style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size:11.5px; line-height:1.35; color:#000000 !important; background:#ffffff; padding:10px 8px; max-width:320px; margin:0 auto; font-weight:700;">
+            ${innerTicket}
+        </div>
+    `;
+};
+
+window.printThermalReceipt = async function(orderId) {
+    let order = (window.cachedOrders || []).find(o => String(o._id) === String(orderId) || String(o.orderId) === String(orderId));
+    if (!order) {
+        try {
+            const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+            const res = await fetch(`${API_URL}/orders/${orderId}`, {
+                headers: { 'x-admin-pin': authPin, 'x-pin': authPin }
+            });
+            const data = await res.json();
+            order = data.order || data;
+        } catch(e) {
+            console.error('Failed to load order for thermal print:', e);
+        }
+    }
+    if (!order) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Could not load order for printing', 'error');
+        } else {
+            alert('Could not load order for printing');
+        }
+        return;
+    }
+
+    const shortId = (order.orderId || order._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+    const printHtml = window.buildThermalReceiptHTML(order, true);
+
+    // Hidden iframe for printing without UI reload
+    let printFrame = document.getElementById('thermal-print-frame');
+    if (!printFrame) {
+        printFrame = document.createElement('iframe');
+        printFrame.id = 'thermal-print-frame';
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = 'none';
+        document.body.appendChild(printFrame);
+    }
+
+    const doc = printFrame.contentWindow.document;
+    doc.open();
+    doc.write(printHtml);
+    doc.close();
+
+    setTimeout(() => {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast(`🖨️ Thermal receipt sent to printer for #${shortId}!`, 'info');
+        }
+    }, 250);
+};
+
+// ==========================================================================
+// THERMAL BILLING & PRINT STATION (SPLIT-VIEW HUB CONTROLLER)
+// ==========================================================================
+window.openThermalBillingStation = async function(orderIdToSelect = null) {
+    // Open modal
+    window.openModal('modal-thermal-billing-hub');
+
+    // Reset search input
+    const searchInput = document.getElementById('thermal-station-search-input');
+    if (searchInput) searchInput.value = '';
+
+    // If cached orders empty, try fetching live orders
+    if (!window.cachedOrders || window.cachedOrders.length === 0) {
+        try {
+            const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+            const res = await fetch(`${API_URL}/orders`, {
+                headers: { 'x-admin-pin': authPin, 'x-pin': authPin }
+            });
+            const data = await res.json();
+            window.cachedOrders = data.orders || (Array.isArray(data) ? data : []);
+        } catch(e) {
+            console.warn('Could not refresh orders for thermal station:', e);
+        }
+    }
+
+    const orders = window.cachedOrders || [];
+    window.renderThermalStationOrdersList(orders);
+
+    // Auto-select requested order or the top latest order
+    let targetId = orderIdToSelect;
+    if (!targetId && orders.length > 0) {
+        targetId = orders[0]._id || orders[0].orderId;
+    }
+
+    if (targetId) {
+        window.selectThermalStationOrder(targetId);
+    } else {
+        const previewContainer = document.getElementById('thermal-station-receipt-container');
+        if (previewContainer) {
+            previewContainer.innerHTML = `
+                <div style="text-align:center; padding:40px 10px; color:#64748b; font-size:13px; font-family:sans-serif;">
+                    No orders available to print. Create an order or wait for customer checkout.
+                </div>
+            `;
+        }
+        const printBtn = document.getElementById('thermal-station-print-btn');
+        if (printBtn) printBtn.disabled = true;
+    }
+};
+
+window.renderThermalStationOrdersList = function(ordersList = null) {
+    const container = document.getElementById('thermal-station-orders-list');
+    const countLabel = document.getElementById('thermal-station-count-label');
+    if (!container) return;
+
+    const orders = ordersList !== null ? ordersList : (window.cachedOrders || []);
+    if (countLabel) {
+        countLabel.textContent = `Orders (${orders.length})`;
+    }
+
+    if (orders.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:30px 10px; color:#64748b; font-size:13px;">
+                🔍 No orders found matching your search.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = orders.map(ord => {
+        const ordId = String(ord._id || ord.orderId || '');
+        const shortId = (ord.orderId || ord._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+        const isSelected = String(window.currentSelectedStationOrderId) === ordId;
+        const isTakeaway = String(ord.orderType || '').toLowerCase() === 'takeaway';
+        const cleanPhone = String(ord.customerPhone || '').replace(/\D/g, '').slice(-10);
+        const grandTotal = Number(ord.finalTotal || ord.total || 0);
+        const payment = String(ord.paymentMethod || 'COD').toUpperCase();
+        const status = String(ord.status || 'pending').toLowerCase();
+        const items = Array.isArray(ord.items) ? ord.items : [];
+        const itemsCount = items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+        const dateStr = ord.createdAt 
+            ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '';
+
+        let statusBg = 'rgba(245,158,11,0.2)';
+        let statusColor = '#fbbf24';
+        let statusText = 'Pending';
+        if (status === 'confirmed' || status === 'cooking' || status === 'preparing') {
+            statusBg = 'rgba(59,130,246,0.2)'; statusColor = '#60a5fa'; statusText = 'Cooking';
+        } else if (status === 'dispatched') {
+            statusBg = 'rgba(168,85,247,0.2)'; statusColor = '#c084fc'; statusText = 'Dispatched';
+        } else if (status === 'delivered') {
+            statusBg = 'rgba(34,197,94,0.2)'; statusColor = '#4ade80'; statusText = 'Delivered';
+        } else if (status === 'cancelled') {
+            statusBg = 'rgba(239,68,68,0.2)'; statusColor = '#f87171'; statusText = 'Cancelled';
+        }
+
+        const borderStyle = isSelected 
+            ? 'border: 2px solid #ea580c; background: rgba(234,88,12,0.12); box-shadow: 0 0 12px rgba(234,88,12,0.25);'
+            : 'border: 1px solid rgba(255,255,255,0.08); background: #12131b;';
+
+        return `
+            <div onclick="window.selectThermalStationOrder('${ordId}')" 
+                style="${borderStyle} border-radius:12px; padding:12px 14px; cursor:pointer; transition:all 0.15s ease; display:flex; flex-direction:column; gap:8px;">
+                
+                <!-- Row 1: ID, Type, Time, Status -->
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-family:monospace; font-weight:900; font-size:13px; color:#fff; background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:5px;">
+                            #${shortId}
+                        </span>
+                        <span style="font-size:11px; font-weight:700; color:${isTakeaway ? '#38bdf8' : '#a78bfa'};">
+                            ${isTakeaway ? '🥡 Takeaway' : '🛵 Delivery'}
+                        </span>
+                        ${dateStr ? `<span style="font-size:10.5px; color:#94a3b8;">${dateStr}</span>` : ''}
+                    </div>
+                    <span style="background:${statusBg}; color:${statusColor}; font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:8px;">
+                        ${statusText}
+                    </span>
+                </div>
+
+                <!-- Row 2: Customer Name & Phone -->
+                <div style="display:flex; justify-content:space-between; align-items:baseline; font-size:12.5px;">
+                    <div style="font-weight:700; color:#f1f5f9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">
+                        👤 ${ord.customerName || 'Walk-in Customer'}
+                    </div>
+                    <div style="font-size:11.5px; color:#94a3b8; font-family:monospace;">
+                        📞 ${cleanPhone || 'N/A'}
+                    </div>
+                </div>
+
+                <!-- Row 3: Items Count, Grand Total & Direct Print Button -->
+                <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed rgba(255,255,255,0.06); padding-top:6px; margin-top:2px;">
+                    <div style="font-size:11.5px; color:#94a3b8;">
+                        <span style="color:#fb923c; font-weight:700;">${itemsCount} items</span> • <strong style="color:#fff;">₹${grandTotal}</strong> (${payment})
+                    </div>
+                    <button type="button" onclick="event.stopPropagation(); window.printThermalReceipt('${ordId}')"
+                        style="background:rgba(59,130,246,0.22); color:#60a5fa; border:1px solid rgba(59,130,246,0.4); padding:3px 10px; border-radius:6px; font-size:11px; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:background 0.15s;">
+                        <span>🖨️ Print</span>
+                    </button>
+                </div>
+
+            </div>
+        `;
+    }).join('');
+};
+
+window.selectThermalStationOrder = function(orderId) {
+    window.currentSelectedStationOrderId = String(orderId);
+
+    // Re-render list to reflect selection state
+    const searchInput = document.getElementById('thermal-station-search-input');
+    const query = searchInput ? searchInput.value : '';
+    if (query) {
+        window.filterThermalStationOrders(query, false);
+    } else {
+        window.renderThermalStationOrdersList();
+    }
+
+    const order = (window.cachedOrders || []).find(o => String(o._id) === String(orderId) || String(o.orderId) === String(orderId));
+    const previewContainer = document.getElementById('thermal-station-receipt-container');
+    const printBtn = document.getElementById('thermal-station-print-btn');
+
+    if (order && previewContainer) {
+        previewContainer.innerHTML = window.buildThermalReceiptHTML(order, false);
+        if (printBtn) {
+            const shortId = (order.orderId || order._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+            printBtn.disabled = false;
+            printBtn.innerHTML = `<span>⚡ 🖨️ Print Receipt #${shortId}</span>`;
+        }
+    } else if (previewContainer) {
+        previewContainer.innerHTML = `
+            <div style="text-align:center; padding:40px 10px; color:#64748b; font-size:13px; font-family:sans-serif;">
+                Order details could not be loaded for preview.
+            </div>
+        `;
+        if (printBtn) printBtn.disabled = true;
+    }
+};
+
+window.filterThermalStationOrders = function(query, autoSelectFirst = true) {
+    const q = String(query || '').trim().toLowerCase();
+    const allOrders = window.cachedOrders || [];
+
+    if (!q) {
+        window.renderThermalStationOrdersList(allOrders);
+        return;
+    }
+
+    const filtered = allOrders.filter(ord => {
+        const idStr = String(ord.orderId || ord._id || '').toLowerCase();
+        const shortId = idStr.slice(-6);
+        const name = String(ord.customerName || '').toLowerCase();
+        const phone = String(ord.customerPhone || '').toLowerCase();
+        const address = String(ord.customerAddress || '').toLowerCase();
+        const items = Array.isArray(ord.items) ? ord.items.map(it => String(it.name || '').toLowerCase()).join(' ') : '';
+
+        return idStr.includes(q) || shortId.includes(q) || name.includes(q) || phone.includes(q) || address.includes(q) || items.includes(q);
+    });
+
+    window.renderThermalStationOrdersList(filtered);
+
+    // If selected order not in filtered list, pick the first filtered order
+    if (autoSelectFirst && filtered.length > 0) {
+        const stillInList = filtered.some(o => String(o._id || o.orderId) === String(window.currentSelectedStationOrderId));
+        if (!stillInList) {
+            window.selectThermalStationOrder(filtered[0]._id || filtered[0].orderId);
+        }
+    }
+};
+
+window.printCurrentStationOrder = function() {
+    if (!window.currentSelectedStationOrderId) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Please select an order from the list to print', 'warning');
+        } else {
+            alert('Please select an order from the list to print');
+        }
+        return;
+    }
+    window.printThermalReceipt(window.currentSelectedStationOrderId);
+};
+
+window.printLatestThermalReceipt = function() {
+    // Open the thermal billing station directly so user can review details and print
+    window.openThermalBillingStation();
+};
+
+// ==========================================================================
+// DEDICATED PRINT BILLS & THERMAL HUB CONTROLLER (TAB SECTION)
+// ==========================================================================
+window.currentSelectedBillingOrderId = null;
+window.currentBillingStatusFilter = 'all';
+
+window.renderBillingTab = async function() {
+    // If cached orders empty, fetch live orders
+    if (!window.cachedOrders || window.cachedOrders.length === 0) {
+        try {
+            const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+            const res = await fetch(`${API_URL}/orders`, {
+                headers: { 'x-admin-pin': authPin, 'x-pin': authPin }
+            });
+            const data = await res.json();
+            window.cachedOrders = data.orders || (Array.isArray(data) ? data : []);
+        } catch(e) {
+            console.warn('Could not load orders for billing tab:', e);
+        }
+    }
+
+    const allOrders = window.cachedOrders || [];
+    const searchInput = document.getElementById('billing-tab-search-input');
+    const q = String(searchInput?.value || '').trim().toLowerCase();
+
+    let filtered = allOrders;
+
+    // Apply status filter
+    if (window.currentBillingStatusFilter && window.currentBillingStatusFilter !== 'all') {
+        filtered = filtered.filter(o => {
+            const st = String(o.status || 'pending').toLowerCase();
+            if (window.currentBillingStatusFilter === 'cooking') {
+                return st === 'cooking' || st === 'preparing' || st === 'confirmed';
+            }
+            return st === window.currentBillingStatusFilter;
+        });
+    }
+
+    // Apply search query filter
+    if (q) {
+        filtered = filtered.filter(ord => {
+            const idStr = String(ord.orderId || ord._id || '').toLowerCase();
+            const shortId = idStr.slice(-6);
+            const name = String(ord.customerName || '').toLowerCase();
+            const phone = String(ord.customerPhone || '').toLowerCase();
+            const address = String(ord.customerAddress || '').toLowerCase();
+            const items = Array.isArray(ord.items) ? ord.items.map(it => String(it.name || '').toLowerCase()).join(' ') : '';
+            return idStr.includes(q) || shortId.includes(q) || name.includes(q) || phone.includes(q) || address.includes(q) || items.includes(q);
+        });
+    }
+
+    const countLabel = document.getElementById('billing-tab-count-label');
+    if (countLabel) {
+        countLabel.textContent = `Recent Orders (${filtered.length})`;
+    }
+
+    const listContainer = document.getElementById('billing-tab-orders-list');
+    if (!listContainer) return;
+
+    if (filtered.length === 0) {
+        listContainer.innerHTML = `
+            <div style="text-align:center; padding:36px 16px; background:#141520; border-radius:14px; border:1px dashed rgba(255,255,255,0.1);">
+                <div style="font-size:32px; margin-bottom:8px;">🔍</div>
+                <div style="font-size:14px; font-weight:800; color:#fff;">No Orders Found</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:4px;">No matching orders found under current filter.</div>
+            </div>
+        `;
+        const previewContainer = document.getElementById('billing-tab-receipt-container');
+        if (previewContainer) {
+            previewContainer.innerHTML = `
+                <div style="text-align:center; padding:40px 10px; color:#64748b; font-size:13px; font-family:sans-serif;">
+                    No orders matching search to preview
+                </div>
+            `;
+        }
+        const printBtn = document.getElementById('billing-tab-print-btn');
+        if (printBtn) printBtn.disabled = true;
+        return;
+    }
+
+    // Determine currently selected order
+    if (!window.currentSelectedBillingOrderId || !filtered.some(o => String(o._id || o.orderId) === String(window.currentSelectedBillingOrderId))) {
+        window.currentSelectedBillingOrderId = String(filtered[0]._id || filtered[0].orderId);
+    }
+
+    listContainer.innerHTML = filtered.map(ord => {
+        const ordId = String(ord._id || ord.orderId || '');
+        const shortId = (ord.orderId || ord._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+        const isSelected = String(window.currentSelectedBillingOrderId) === ordId;
+        const isTakeaway = String(ord.orderType || '').toLowerCase() === 'takeaway';
+        const cleanPhone = String(ord.customerPhone || '').replace(/\D/g, '').slice(-10);
+        const grandTotal = Number(ord.finalTotal || ord.total || 0);
+        const payment = String(ord.paymentMethod || 'COD').toUpperCase();
+        const status = String(ord.status || 'pending').toLowerCase();
+        const items = Array.isArray(ord.items) ? ord.items : [];
+        const dateStr = ord.createdAt 
+            ? new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'Just now';
+
+        let statusBg = 'rgba(245,158,11,0.2)';
+        let statusColor = '#fbbf24';
+        let statusText = 'Pending';
+        if (status === 'confirmed' || status === 'cooking' || status === 'preparing') {
+            statusBg = 'rgba(59,130,246,0.2)'; statusColor = '#60a5fa'; statusText = 'Cooking';
+        } else if (status === 'dispatched') {
+            statusBg = 'rgba(168,85,247,0.2)'; statusColor = '#c084fc'; statusText = 'Dispatched';
+        } else if (status === 'delivered') {
+            statusBg = 'rgba(34,197,94,0.2)'; statusColor = '#4ade80'; statusText = 'Delivered';
+        } else if (status === 'cancelled') {
+            statusBg = 'rgba(239,68,68,0.2)'; statusColor = '#f87171'; statusText = 'Cancelled';
+        }
+
+        const itemsSummary = items.map(it => `
+            <span style="display:inline-flex; align-items:center; background:rgba(255,255,255,0.06); padding:3px 8px; border-radius:6px; font-size:12px; color:#f1f5f9; border:1px solid rgba(255,255,255,0.08);">
+                <strong style="color:#fb923c; margin-right:4px;">${it.quantity || 1}x</strong> ${it.name}
+            </span>
+        `).join(' ');
+
+        return `
+            <div class="billing-order-card ${isSelected ? 'selected' : ''}" onclick="window.selectBillingTabOrder('${ordId}')" style="cursor:pointer;">
+                
+                <!-- Row 1: ID, Type, Time, Status -->
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-family:monospace; font-size:13.5px; font-weight:900; color:#fff; background:rgba(255,255,255,0.08); padding:3px 8px; border-radius:6px;">
+                            #${shortId}
+                        </span>
+                        <span style="font-size:12px; font-weight:700; color:${isTakeaway ? '#38bdf8' : '#a78bfa'};">
+                            ${isTakeaway ? '🥡 Takeaway' : '🛵 Delivery'}
+                        </span>
+                        <span style="font-size:11.5px; color:#94a3b8;">${dateStr}</span>
+                    </div>
+                    <span style="background:${statusBg}; color:${statusColor}; font-size:11.5px; font-weight:800; padding:3px 10px; border-radius:12px; border:1px solid ${statusColor}44;">
+                        ${statusText}
+                    </span>
+                </div>
+
+                <!-- Row 2: Customer Contact & Address -->
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; font-size:13px;">
+                    <div style="min-width:0; flex:1;">
+                        <strong style="color:#fff; font-size:13.5px;">${ord.customerName || 'Customer'}</strong>
+                        <span style="color:#94a3b8; margin-left:8px; font-family:monospace;">
+                            📞 <a href="tel:${cleanPhone}" onclick="event.stopPropagation()" style="color:#38bdf8; text-decoration:none; font-weight:700;">${cleanPhone || 'N/A'}</a>
+                        </span>
+                        ${!isTakeaway && ord.customerAddress ? `<div style="font-size:12px; color:#cbd5e1; margin-top:2px; word-break:break-word;">📍 ${ord.customerAddress}</div>` : ''}
+                        ${ord.notes || ord.deliveryNotes ? `<div style="font-size:11.5px; color:#fbbf24; font-style:italic; margin-top:2px;">📝 Note: ${ord.notes || ord.deliveryNotes}</div>` : ''}
+                    </div>
+                    <div style="text-align:right; flex-shrink:0;">
+                        <div style="font-size:16px; font-weight:900; color:#fff;">₹${grandTotal}</div>
+                        <span style="font-size:11px; font-weight:700; color:${payment === 'COD' ? '#fbbf24' : '#4ade80'};">
+                            ${payment === 'COD' ? '💵 COD' : '💳 Paid Online'}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Row 3: Items Badges -->
+                <div style="display:flex; flex-wrap:wrap; gap:6px; background:#0d0e14; padding:8px 10px; border-radius:8px; box-sizing:border-box; width:100%;">
+                    ${itemsSummary || '<span style="font-size:12px; color:#64748b;">No items listed</span>'}
+                </div>
+
+                <!-- Row 4: 1-Tap Print Button & Preview Button -->
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.06); flex-wrap:wrap;">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="event.stopPropagation(); window.printThermalReceipt('${ordId}')" 
+                        style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-weight:900; font-size:12.5px; padding:7px 18px; border-radius:8px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 3px 12px rgba(37,99,235,0.35);">
+                        <span>🖨️ Print Bill Now</span>
+                    </button>
+
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); window.selectBillingTabOrder('${ordId}')" 
+                        style="font-size:12px; padding:7px 14px; font-weight:700; border-radius:8px; display:inline-flex; align-items:center; gap:4px;">
+                        <span>📄 Preview Receipt →</span>
+                    </button>
+                </div>
+
+            </div>
+        `;
+    }).join('');
+
+    // Update receipt preview for currently selected order
+    const selectedOrder = allOrders.find(o => String(o._id || o.orderId) === String(window.currentSelectedBillingOrderId));
+    const previewContainer = document.getElementById('billing-tab-receipt-container');
+    const printBtn = document.getElementById('billing-tab-print-btn');
+
+    if (selectedOrder && previewContainer) {
+        previewContainer.innerHTML = window.buildThermalReceiptHTML(selectedOrder, false);
+        if (printBtn) {
+            const shortId = (selectedOrder.orderId || selectedOrder._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+            printBtn.disabled = false;
+            printBtn.innerHTML = `<span>⚡ 🖨️ Print Receipt #${shortId}</span>`;
+        }
+    }
+};
+
+window.selectBillingTabOrder = function(orderId) {
+    window.currentSelectedBillingOrderId = String(orderId);
+
+    // Update active highlight on cards without full re-render
+    document.querySelectorAll('.billing-order-card').forEach(c => {
+        c.classList.remove('selected');
+    });
+
+    const allOrders = window.cachedOrders || [];
+    const selectedOrder = allOrders.find(o => String(o._id || o.orderId) === String(orderId));
+    const previewContainer = document.getElementById('billing-tab-receipt-container');
+    const printBtn = document.getElementById('billing-tab-print-btn');
+
+    if (selectedOrder && previewContainer) {
+        previewContainer.innerHTML = window.buildThermalReceiptHTML(selectedOrder, false);
+        if (printBtn) {
+            const shortId = (selectedOrder.orderId || selectedOrder._id || 'LW-ORD').toString().slice(-6).toUpperCase();
+            printBtn.disabled = false;
+            printBtn.innerHTML = `<span>⚡ 🖨️ Print Receipt #${shortId}</span>`;
+        }
+    }
+
+    // Scroll to preview on mobile if user clicked preview button
+    if (window.innerWidth <= 960 && previewContainer) {
+        previewContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+};
+
+window.filterBillingTabOrders = function(query) {
+    window.renderBillingTab();
+};
+
+window.setBillingStatusFilter = function(status, btn) {
+    window.currentBillingStatusFilter = status;
+    const filterContainer = document.getElementById('billing-tab-status-filters');
+    if (filterContainer) {
+        filterContainer.querySelectorAll('.order-filter-pill').forEach(p => p.classList.remove('active'));
+    }
+    if (btn) btn.classList.add('active');
+    window.renderBillingTab();
+};
+
+window.printCurrentBillingOrder = function() {
+    if (!window.currentSelectedBillingOrderId) {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast('Please select an order to print', 'warning');
+        } else {
+            alert('Please select an order to print');
+        }
+        return;
+    }
+    window.printThermalReceipt(window.currentSelectedBillingOrderId);
+};
+
+// Also apply role UI on initial DOM load if already logged in
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        if (typeof window.applyRoleBasedUI === 'function') {
+            window.applyRoleBasedUI();
+        }
+    }, 300);
+});
+
+
+

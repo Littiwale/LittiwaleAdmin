@@ -38,6 +38,10 @@ app.get("/api/health", (req, res) => {
     res.json({ status: "ok", message: "Littiwale Pure Supabase API is running", timestamp: new Date().toISOString() });
 });
 
+app.get("/health", (req, res) => {
+    res.json({ status: "ok", message: "Littiwale Pure Supabase API is running", timestamp: new Date().toISOString() });
+});
+
 if (process.env.NODE_ENV !== "production") {
     app.listen(PORT, () => {
         console.log("⚡ [LITTIWALE] Pure Supabase Server running on http://localhost:" + PORT);
