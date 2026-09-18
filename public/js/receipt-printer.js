@@ -361,57 +361,47 @@
   };
 
   // ─────────────────────────────────────────────
-  // WEB BLUETOOTH ESC/POS THERMAL PRINTER ENGINE
+  // RAWBT ESC/POS THERMAL PRINTER ENGINE
+  // For MPT-11 (Classic BT SPP) via RawBT Android App
   // ─────────────────────────────────────────────
-  let _btDevice = null;
-  let _btCharacteristic = null;
-
-  // ESC/POS service/characteristic UUIDs used by most cheap BLE thermal printers
-  const BLE_PROFILES = [
-    { service: '000018f0-0000-1000-8000-00805f9b34fb', char: '00002af1-0000-1000-8000-00805f9b34fb' },
-    { service: '0000ffe0-0000-1000-8000-00805f9b34fb', char: '0000ffe1-0000-1000-8000-00805f9b34fb' },
-    { service: '0000ff00-0000-1000-8000-00805f9b34fb', char: '0000ff02-0000-1000-8000-00805f9b34fb' },
-    { service: '49535343-fe7d-4ae5-8fa9-9fafd205e455', char: '49535343-8841-43f4-a8d4-ecbe34729bb3' },
-  ];
 
   function _escStr(str) {
-    // Encode string to Uint8Array, replacing ₹ with Rs. for thermal compat
     str = str.replace(/₹/g, 'Rs.');
     const arr = [];
     for (let i = 0; i < str.length; i++) {
       const c = str.charCodeAt(i);
-      arr.push(c < 256 ? c : 63); // '?' fallback for non-latin
+      arr.push(c < 256 ? c : 63);
     }
     return arr;
   }
 
   function _buildEscPosReceipt(orderData) {
     const ESC = 0x1b, GS = 0x1d;
-    const INIT       = [ESC, 0x40];
-    const CENTER     = [ESC, 0x61, 0x01];
-    const LEFT       = [ESC, 0x61, 0x00];
-    const BOLD_ON    = [ESC, 0x45, 0x01];
-    const BOLD_OFF   = [ESC, 0x45, 0x00];
-    const DBLH_ON    = [ESC, 0x21, 0x10];
-    const DBLH_OFF   = [ESC, 0x21, 0x00];
-    const SMALL      = [ESC, 0x21, 0x01];
-    const NORMAL     = [ESC, 0x21, 0x00];
-    const LF         = [0x0a];
-    const DIVIDER    = _escStr('--------------------------------\n');
-    const CUT        = [GS, 0x56, 0x41, 0x00];
+    const INIT    = [ESC, 0x40];
+    const CENTER  = [ESC, 0x61, 0x01];
+    const LEFT    = [ESC, 0x61, 0x00];
+    const BOLD_ON = [ESC, 0x45, 0x01];
+    const BOLD_OFF= [ESC, 0x45, 0x00];
+    const DBLH_ON = [ESC, 0x21, 0x10];
+    const DBLH_OFF= [ESC, 0x21, 0x00];
+    const SMALL   = [ESC, 0x21, 0x01];
+    const NORMAL  = [ESC, 0x21, 0x00];
+    const LF      = [0x0a];
+    const DIVIDER = _escStr('--------------------------------\n');
+    const CUT     = [GS, 0x56, 0x41, 0x00];
 
-    const shortId    = orderData._id ? String(orderData._id).slice(-6).toUpperCase() : (orderData.shortId || 'LW');
-    const dateStr    = orderData.createdAt ? new Date(orderData.createdAt).toLocaleString('en-GB') : new Date().toLocaleString('en-GB');
-    const custName   = orderData.customerName || 'Valued Customer';
-    const custPhone  = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
-    const isTakeaway = orderData.orderType === 'takeaway';
-    const custAddr   = isTakeaway ? 'TAKEAWAY (SELF PICKUP)' : (orderData.deliveryAddress || orderData.address || 'Barbil, Odisha');
-    const payment    = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'COD' : 'ONLINE/UPI');
-    const items      = orderData.items || [];
-    const subtotal   = Number(orderData.subtotal || orderData.finalTotal || 0);
-    const delivery   = isTakeaway ? 0 : Number(orderData.deliveryCharge || orderData.deliveryFee || 0);
-    const discount   = Number(orderData.discount || orderData.couponDiscount || 0);
-    const grandTotal = Number(orderData.finalTotal || (subtotal + delivery - discount));
+    const shortId   = orderData._id ? String(orderData._id).slice(-6).toUpperCase() : (orderData.shortId || 'LW');
+    const dateStr   = orderData.createdAt ? new Date(orderData.createdAt).toLocaleString('en-GB') : new Date().toLocaleString('en-GB');
+    const custName  = orderData.customerName || 'Valued Customer';
+    const custPhone = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
+    const isTakeaway= orderData.orderType === 'takeaway';
+    const custAddr  = isTakeaway ? 'TAKEAWAY (SELF PICKUP)' : (orderData.deliveryAddress || orderData.address || 'Barbil, Odisha');
+    const payment   = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'COD' : 'ONLINE/UPI');
+    const items     = orderData.items || [];
+    const subtotal  = Number(orderData.subtotal || orderData.finalTotal || 0);
+    const delivery  = isTakeaway ? 0 : Number(orderData.deliveryCharge || orderData.deliveryFee || 0);
+    const discount  = Number(orderData.discount || orderData.couponDiscount || 0);
+    const grandTotal= Number(orderData.finalTotal || (subtotal + delivery - discount));
 
     function pad(a, b, width=32) {
       const space = width - a.length - b.length;
@@ -426,17 +416,17 @@
       ..._escStr('Taste of Desi Swag\n'),
       ..._escStr('Cloud Kitchen & Restaurant\n'),
       ...SMALL,
-      ..._escStr('Ward No.7, Punjabi Para, Barbil - 758035\n'),
+      ..._escStr('Ward No.7, Punjabi Para, Barbil-758035\n'),
       ..._escStr('Ph: +91 63706 80744\n'),
-      ..._escStr('@littiwaleofficial | www.littiwale.co.in\n'),
+      ..._escStr('@littiwaleofficial | littiwale.co.in\n'),
       ...NORMAL,
       ...LEFT,
       ...DIVIDER,
       ...BOLD_ON, ..._escStr('ORDER #' + shortId + '\n'), ...BOLD_OFF,
-      ..._escStr('Date  : ' + dateStr + '\n'),
-      ..._escStr('Cust  : ' + custName + ' (' + custPhone + ')\n'),
-      ..._escStr('Addr  : ' + custAddr.substring(0, 32) + '\n'),
-      ..._escStr('Pay   : ' + payment + '\n'),
+      ..._escStr('Date : ' + dateStr + '\n'),
+      ..._escStr('Cust : ' + custName + ' (' + custPhone + ')\n'),
+      ..._escStr('Addr : ' + custAddr.substring(0, 32) + '\n'),
+      ..._escStr('Pay  : ' + payment + '\n'),
       ...DIVIDER,
       ...BOLD_ON, ..._escStr('ITEM                      AMT\n'), ...BOLD_OFF,
       ...DIVIDER,
@@ -474,33 +464,12 @@
     return new Uint8Array(bytes);
   }
 
-  async function _sendChunked(characteristic, data, chunkSize = 512) {
-    for (let i = 0; i < data.length; i += chunkSize) {
-      await characteristic.writeValue(data.slice(i, i + chunkSize));
-      await new Promise(r => setTimeout(r, 30));
+  function _uint8ToBase64(uint8Array) {
+    let binary = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
     }
-  }
-
-  async function _connectBTPrinter() {
-    const serviceUUIDs = BLE_PROFILES.map(p => p.service);
-    _btDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [serviceUUIDs[0]] }, { services: [serviceUUIDs[1]] },
-                { services: [serviceUUIDs[2]] }, { services: [serviceUUIDs[3]] }],
-      optionalServices: serviceUUIDs,
-      acceptAllDevices: false,
-    }).catch(() => navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: serviceUUIDs }));
-
-    const server = await _btDevice.gatt.connect();
-    for (const profile of BLE_PROFILES) {
-      try {
-        const svc  = await server.getPrimaryService(profile.service);
-        const char = await svc.getCharacteristic(profile.char);
-        _btCharacteristic = char;
-        localStorage.setItem('lw_bt_printer_name', _btDevice.name || 'Printer');
-        return true;
-      } catch(e) { /* try next profile */ }
-    }
-    throw new Error('Printer connected but no compatible service found. Try a different printer app.');
+    return btoa(binary);
   }
 
   function _showBtStatus(msg, color = '#f97316') {
@@ -508,60 +477,61 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'lw-bt-status';
-      el.style.cssText = `position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-        padding:10px 20px;border-radius:10px;font-family:'Outfit',sans-serif;font-size:13px;
-        font-weight:700;z-index:999999;box-shadow:0 4px 20px rgba(0,0,0,0.4);
-        transition:opacity 0.5s;max-width:320px;text-align:center;`;
+      el.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+        padding:12px 22px;border-radius:12px;font-family:'Outfit',sans-serif;font-size:14px;
+        font-weight:700;z-index:999999;box-shadow:0 4px 24px rgba(0,0,0,0.5);
+        transition:opacity 0.6s;max-width:340px;text-align:center;pointer-events:none;`;
       document.body.appendChild(el);
     }
-    el.style.background = '#1e293b';
+    el.style.background = '#0f172a';
     el.style.color = color;
-    el.style.border = `1.5px solid ${color}`;
+    el.style.border = `2px solid ${color}`;
     el.style.opacity = '1';
     el.textContent = msg;
     clearTimeout(el._timeout);
-    el._timeout = setTimeout(() => { el.style.opacity = '0'; }, 3500);
+    el._timeout = setTimeout(() => { el.style.opacity = '0'; }, 4000);
   }
 
   // 1-Click Print Thermal Receipt
-  window.printReceiptDirectly = async function() {
+  window.printReceiptDirectly = function() {
     const orderData = window.currentAdminPrintedOrderData;
-    const hasBluetooth = typeof navigator.bluetooth !== 'undefined';
+    const isAndroid = /Android/i.test(navigator.userAgent);
 
-    // Non-Android or no Web Bluetooth → fallback to browser print
-    if (!hasBluetooth || !/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+    // Desktop → browser print
+    if (!isAndroid) {
       window.print();
       return;
     }
 
-    try {
-      // Step 1: Connect if not already connected
-      if (!_btCharacteristic || (_btDevice && !_btDevice.gatt.connected)) {
-        _showBtStatus('🔵 Printer dhundh raha hai...', '#60a5fa');
-        await _connectBTPrinter();
-        const name = localStorage.getItem('lw_bt_printer_name') || 'Printer';
-        _showBtStatus('✅ ' + name + ' connected!', '#34d399');
-        await new Promise(r => setTimeout(r, 800));
-      }
+    // Android → try RawBT first
+    if (!orderData) {
+      _showBtStatus('❌ Order data nahi mila. Dobara try karo.', '#f87171');
+      return;
+    }
 
-      // Step 2: Build & send ESC/POS bytes
-      if (!orderData) { _showBtStatus('❌ Order data nahi mila', '#f87171'); return; }
-      _showBtStatus('🖨️ Print ho raha hai...', '#f97316');
-      const escData = _buildEscPosReceipt(orderData);
-      await _sendChunked(_btCharacteristic, escData);
-      _showBtStatus('✅ Print successful! 🎉', '#34d399');
+    try {
+      const escData   = _buildEscPosReceipt(orderData);
+      const b64       = _uint8ToBase64(escData);
+      const rawbtUrl  = 'rawbt:base64,' + b64;
+
+      _showBtStatus('🖨️ Printer ko bhej raha hai...', '#f97316');
+
+      // Open RawBT intent URL
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = rawbtUrl;
+      document.body.appendChild(iframe);
+      setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 3000);
+
+      // Check if RawBT opened (no reliable way, just show success after short delay)
+      setTimeout(() => {
+        _showBtStatus('✅ RawBT ko bhej diya! Printer pe nikal raha hai 🎉', '#34d399');
+      }, 1200);
 
     } catch(err) {
-      console.error('BT Print error:', err);
-      if (err.name === 'NotFoundError' || err.message.includes('cancelled')) {
-        _showBtStatus('⚠️ Printer select nahi kiya. Dobara try karo.', '#fbbf24');
-      } else if (err.message.includes('compatible')) {
-        _showBtStatus('❌ ' + err.message, '#f87171');
-      } else {
-        // Fallback to browser print if BT fails
-        _showBtStatus('⚠️ BT fail — browser print try kar raha hai...', '#fbbf24');
-        setTimeout(() => window.print(), 1000);
-      }
+      console.error('RawBT print error:', err);
+      _showBtStatus('⚠️ RawBT failed — browser print try ho raha hai...', '#fbbf24');
+      setTimeout(() => window.print(), 800);
     }
   };
 
