@@ -362,7 +362,36 @@
 
   // 1-Click Print Thermal Receipt
   window.printReceiptDirectly = function() {
-    window.print();
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const tipShown = localStorage.getItem('lw_bt_print_tip_shown');
+
+    if (isAndroid && !tipShown) {
+      // Show one-time Bluetooth printer setup tip
+      const tipEl = document.createElement('div');
+      tipEl.id = 'lw-bt-print-tip';
+      tipEl.style.cssText = `
+        position:fixed; bottom:90px; left:50%; transform:translateX(-50%);
+        background:#1e293b; color:#f1f5f9; border:1.5px solid #f97316;
+        border-radius:14px; padding:16px 20px; max-width:340px; width:90%;
+        z-index:999999; font-family:'Outfit',sans-serif; font-size:13.5px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.5); line-height:1.6;
+      `;
+      tipEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:20px;">🖨️</span>
+          <strong style="font-size:14px;color:#f97316;">Bluetooth Printer Setup</strong>
+        </div>
+        <div>Print dialog me <strong style="color:#fbbf24;">"Save as PDF"</strong> dikhega — usse tap karo aur apna <strong style="color:#34d399;">Bluetooth printer select karo</strong>.</div>
+        <div style="margin-top:8px;font-size:12px;color:#94a3b8;">Tip: Pehli baar <b>Mopria Print Service</b> app Play Store se install karo.</div>
+        <button onclick="localStorage.setItem('lw_bt_print_tip_shown','1');document.getElementById('lw-bt-print-tip').remove();window.print();"
+          style="margin-top:12px;width:100%;background:#f97316;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">
+          ✅ Samajh gaya — Print karo
+        </button>
+      `;
+      document.body.appendChild(tipEl);
+    } else {
+      window.print();
+    }
   };
 
   // Dedicated Professional A4 Tax Invoice / PDF Bill Generator for Admin
