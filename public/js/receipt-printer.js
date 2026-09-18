@@ -360,37 +360,208 @@
     }
   };
 
-  // 1-Click Print Thermal Receipt
-  window.printReceiptDirectly = function() {
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const tipShown = localStorage.getItem('lw_bt_print_tip_shown');
+  // ─────────────────────────────────────────────
+  // WEB BLUETOOTH ESC/POS THERMAL PRINTER ENGINE
+  // ─────────────────────────────────────────────
+  let _btDevice = null;
+  let _btCharacteristic = null;
 
-    if (isAndroid && !tipShown) {
-      // Show one-time Bluetooth printer setup tip
-      const tipEl = document.createElement('div');
-      tipEl.id = 'lw-bt-print-tip';
-      tipEl.style.cssText = `
-        position:fixed; bottom:90px; left:50%; transform:translateX(-50%);
-        background:#1e293b; color:#f1f5f9; border:1.5px solid #f97316;
-        border-radius:14px; padding:16px 20px; max-width:340px; width:90%;
-        z-index:999999; font-family:'Outfit',sans-serif; font-size:13.5px;
-        box-shadow:0 8px 32px rgba(0,0,0,0.5); line-height:1.6;
-      `;
-      tipEl.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="font-size:20px;">🖨️</span>
-          <strong style="font-size:14px;color:#f97316;">Bluetooth Printer Setup</strong>
-        </div>
-        <div>Print dialog me <strong style="color:#fbbf24;">"Save as PDF"</strong> dikhega — usse tap karo aur apna <strong style="color:#34d399;">Bluetooth printer select karo</strong>.</div>
-        <div style="margin-top:8px;font-size:12px;color:#94a3b8;">Tip: Pehli baar <b>Mopria Print Service</b> app Play Store se install karo.</div>
-        <button onclick="localStorage.setItem('lw_bt_print_tip_shown','1');document.getElementById('lw-bt-print-tip').remove();window.print();"
-          style="margin-top:12px;width:100%;background:#f97316;color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:700;cursor:pointer;">
-          ✅ Samajh gaya — Print karo
-        </button>
-      `;
-      document.body.appendChild(tipEl);
-    } else {
+  // ESC/POS service/characteristic UUIDs used by most cheap BLE thermal printers
+  const BLE_PROFILES = [
+    { service: '000018f0-0000-1000-8000-00805f9b34fb', char: '00002af1-0000-1000-8000-00805f9b34fb' },
+    { service: '0000ffe0-0000-1000-8000-00805f9b34fb', char: '0000ffe1-0000-1000-8000-00805f9b34fb' },
+    { service: '0000ff00-0000-1000-8000-00805f9b34fb', char: '0000ff02-0000-1000-8000-00805f9b34fb' },
+    { service: '49535343-fe7d-4ae5-8fa9-9fafd205e455', char: '49535343-8841-43f4-a8d4-ecbe34729bb3' },
+  ];
+
+  function _escStr(str) {
+    // Encode string to Uint8Array, replacing ₹ with Rs. for thermal compat
+    str = str.replace(/₹/g, 'Rs.');
+    const arr = [];
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      arr.push(c < 256 ? c : 63); // '?' fallback for non-latin
+    }
+    return arr;
+  }
+
+  function _buildEscPosReceipt(orderData) {
+    const ESC = 0x1b, GS = 0x1d;
+    const INIT       = [ESC, 0x40];
+    const CENTER     = [ESC, 0x61, 0x01];
+    const LEFT       = [ESC, 0x61, 0x00];
+    const BOLD_ON    = [ESC, 0x45, 0x01];
+    const BOLD_OFF   = [ESC, 0x45, 0x00];
+    const DBLH_ON    = [ESC, 0x21, 0x10];
+    const DBLH_OFF   = [ESC, 0x21, 0x00];
+    const SMALL      = [ESC, 0x21, 0x01];
+    const NORMAL     = [ESC, 0x21, 0x00];
+    const LF         = [0x0a];
+    const DIVIDER    = _escStr('--------------------------------\n');
+    const CUT        = [GS, 0x56, 0x41, 0x00];
+
+    const shortId    = orderData._id ? String(orderData._id).slice(-6).toUpperCase() : (orderData.shortId || 'LW');
+    const dateStr    = orderData.createdAt ? new Date(orderData.createdAt).toLocaleString('en-GB') : new Date().toLocaleString('en-GB');
+    const custName   = orderData.customerName || 'Valued Customer';
+    const custPhone  = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
+    const isTakeaway = orderData.orderType === 'takeaway';
+    const custAddr   = isTakeaway ? 'TAKEAWAY (SELF PICKUP)' : (orderData.deliveryAddress || orderData.address || 'Barbil, Odisha');
+    const payment    = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'COD' : 'ONLINE/UPI');
+    const items      = orderData.items || [];
+    const subtotal   = Number(orderData.subtotal || orderData.finalTotal || 0);
+    const delivery   = isTakeaway ? 0 : Number(orderData.deliveryCharge || orderData.deliveryFee || 0);
+    const discount   = Number(orderData.discount || orderData.couponDiscount || 0);
+    const grandTotal = Number(orderData.finalTotal || (subtotal + delivery - discount));
+
+    function pad(a, b, width=32) {
+      const space = width - a.length - b.length;
+      return a + ' '.repeat(Math.max(1, space)) + b + '\n';
+    }
+
+    let bytes = [
+      ...INIT,
+      ...CENTER, ...DBLH_ON, ...BOLD_ON,
+      ..._escStr('LITTIWALE BARBIL\n'),
+      ...DBLH_OFF, ...BOLD_OFF,
+      ..._escStr('Taste of Desi Swag\n'),
+      ..._escStr('Cloud Kitchen & Restaurant\n'),
+      ...SMALL,
+      ..._escStr('Ward No.7, Punjabi Para, Barbil - 758035\n'),
+      ..._escStr('Ph: +91 63706 80744\n'),
+      ..._escStr('@littiwaleofficial | www.littiwale.co.in\n'),
+      ...NORMAL,
+      ...LEFT,
+      ...DIVIDER,
+      ...BOLD_ON, ..._escStr('ORDER #' + shortId + '\n'), ...BOLD_OFF,
+      ..._escStr('Date  : ' + dateStr + '\n'),
+      ..._escStr('Cust  : ' + custName + ' (' + custPhone + ')\n'),
+      ..._escStr('Addr  : ' + custAddr.substring(0, 32) + '\n'),
+      ..._escStr('Pay   : ' + payment + '\n'),
+      ...DIVIDER,
+      ...BOLD_ON, ..._escStr('ITEM                      AMT\n'), ...BOLD_OFF,
+      ...DIVIDER,
+    ];
+
+    for (const item of items) {
+      const name = (item.name || 'Item').substring(0, 18);
+      const qty  = item.quantity || 1;
+      const amt  = 'Rs.' + (Number(item.price || 0) * qty);
+      bytes.push(..._escStr(pad(qty + 'x ' + name, amt)));
+    }
+    if (items.length === 0) {
+      bytes.push(..._escStr(pad('1x Meal Package', 'Rs.' + subtotal)));
+    }
+
+    bytes.push(
+      ...DIVIDER,
+      ..._escStr(pad('Subtotal', 'Rs.' + subtotal)),
+      ..._escStr(pad('Delivery', delivery === 0 ? 'FREE' : 'Rs.' + delivery)),
+    );
+    if (discount > 0) bytes.push(..._escStr(pad('Discount', '-Rs.' + discount)));
+    bytes.push(
+      ...DIVIDER,
+      ...BOLD_ON, ...DBLH_ON,
+      ..._escStr(pad('TOTAL', 'Rs.' + grandTotal)),
+      ...DBLH_OFF, ...BOLD_OFF,
+      ...DIVIDER,
+      ...CENTER,
+      ..._escStr('** THANK YOU! VISIT AGAIN **\n'),
+      ..._escStr('LW-ORD-' + shortId + '\n'),
+      ...LF, ...LF, ...LF,
+      ...CUT,
+    );
+
+    return new Uint8Array(bytes);
+  }
+
+  async function _sendChunked(characteristic, data, chunkSize = 512) {
+    for (let i = 0; i < data.length; i += chunkSize) {
+      await characteristic.writeValue(data.slice(i, i + chunkSize));
+      await new Promise(r => setTimeout(r, 30));
+    }
+  }
+
+  async function _connectBTPrinter() {
+    const serviceUUIDs = BLE_PROFILES.map(p => p.service);
+    _btDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [serviceUUIDs[0]] }, { services: [serviceUUIDs[1]] },
+                { services: [serviceUUIDs[2]] }, { services: [serviceUUIDs[3]] }],
+      optionalServices: serviceUUIDs,
+      acceptAllDevices: false,
+    }).catch(() => navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: serviceUUIDs }));
+
+    const server = await _btDevice.gatt.connect();
+    for (const profile of BLE_PROFILES) {
+      try {
+        const svc  = await server.getPrimaryService(profile.service);
+        const char = await svc.getCharacteristic(profile.char);
+        _btCharacteristic = char;
+        localStorage.setItem('lw_bt_printer_name', _btDevice.name || 'Printer');
+        return true;
+      } catch(e) { /* try next profile */ }
+    }
+    throw new Error('Printer connected but no compatible service found. Try a different printer app.');
+  }
+
+  function _showBtStatus(msg, color = '#f97316') {
+    let el = document.getElementById('lw-bt-status');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'lw-bt-status';
+      el.style.cssText = `position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+        padding:10px 20px;border-radius:10px;font-family:'Outfit',sans-serif;font-size:13px;
+        font-weight:700;z-index:999999;box-shadow:0 4px 20px rgba(0,0,0,0.4);
+        transition:opacity 0.5s;max-width:320px;text-align:center;`;
+      document.body.appendChild(el);
+    }
+    el.style.background = '#1e293b';
+    el.style.color = color;
+    el.style.border = `1.5px solid ${color}`;
+    el.style.opacity = '1';
+    el.textContent = msg;
+    clearTimeout(el._timeout);
+    el._timeout = setTimeout(() => { el.style.opacity = '0'; }, 3500);
+  }
+
+  // 1-Click Print Thermal Receipt
+  window.printReceiptDirectly = async function() {
+    const orderData = window.currentAdminPrintedOrderData;
+    const hasBluetooth = typeof navigator.bluetooth !== 'undefined';
+
+    // Non-Android or no Web Bluetooth → fallback to browser print
+    if (!hasBluetooth || !/Android|iPhone|iPad/i.test(navigator.userAgent)) {
       window.print();
+      return;
+    }
+
+    try {
+      // Step 1: Connect if not already connected
+      if (!_btCharacteristic || (_btDevice && !_btDevice.gatt.connected)) {
+        _showBtStatus('🔵 Printer dhundh raha hai...', '#60a5fa');
+        await _connectBTPrinter();
+        const name = localStorage.getItem('lw_bt_printer_name') || 'Printer';
+        _showBtStatus('✅ ' + name + ' connected!', '#34d399');
+        await new Promise(r => setTimeout(r, 800));
+      }
+
+      // Step 2: Build & send ESC/POS bytes
+      if (!orderData) { _showBtStatus('❌ Order data nahi mila', '#f87171'); return; }
+      _showBtStatus('🖨️ Print ho raha hai...', '#f97316');
+      const escData = _buildEscPosReceipt(orderData);
+      await _sendChunked(_btCharacteristic, escData);
+      _showBtStatus('✅ Print successful! 🎉', '#34d399');
+
+    } catch(err) {
+      console.error('BT Print error:', err);
+      if (err.name === 'NotFoundError' || err.message.includes('cancelled')) {
+        _showBtStatus('⚠️ Printer select nahi kiya. Dobara try karo.', '#fbbf24');
+      } else if (err.message.includes('compatible')) {
+        _showBtStatus('❌ ' + err.message, '#f87171');
+      } else {
+        // Fallback to browser print if BT fails
+        _showBtStatus('⚠️ BT fail — browser print try kar raha hai...', '#fbbf24');
+        setTimeout(() => window.print(), 1000);
+      }
     }
   };
 
