@@ -7641,6 +7641,14 @@ window.submitAdminOrder = async function() {
             } else if (typeof refreshOrders === 'function') {
                 refreshOrders();
             }
+
+            // Fix: Also refresh staff kitchen queue & KPIs so new order appears immediately in print/kitchen section
+            if (typeof window.updateStaffOperationalKPIs === 'function') {
+                window.updateStaffOperationalKPIs();
+            }
+            if (typeof window.renderStaffLiveQueue === 'function') {
+                window.renderStaffLiveQueue();
+            }
         } else {
             const err = data.error || 'Failed to create order';
             if (typeof window.showAdminToast === 'function') {
@@ -7851,8 +7859,12 @@ window.updateStaffOperationalKPIs = function() {
     const orders = window.cachedOrders || [];
     const menu = window.cachedMenuItems || [];
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const todayOrders = orders.filter(o => o.createdAt && o.createdAt.startsWith(todayStr));
+    // Fix: Use IST midnight as the start of "today" (IST = UTC+5:30)
+    const nowIST = new Date(Date.now() + (5.5 * 60 * 60 * 1000));
+    const istMidnight = new Date(nowIST);
+    istMidnight.setUTCHours(0, 0, 0, 0); // midnight in IST = 18:30 UTC previous day
+    const todayOrders = orders.filter(o => o.createdAt && new Date(o.createdAt) >= istMidnight);
+
     const pendingOrders = orders.filter(o => {
         const st = String(o.status || 'pending').toLowerCase();
         return st === 'pending' || st === 'new';
@@ -7866,7 +7878,8 @@ window.updateStaffOperationalKPIs = function() {
     const elDelivered = document.getElementById('staff-kpi-delivered-orders');
     const elOutStock = document.getElementById('staff-kpi-out-stock');
 
-    if (elToday) elToday.textContent = todayOrders.length || orders.length;
+    // Fix: Removed `|| orders.length` fallback — show 0 if no orders today, not total all-time orders
+    if (elToday) elToday.textContent = todayOrders.length;
     if (elPending) elPending.textContent = pendingOrders.length;
     if (elPendingText) elPendingText.textContent = `${pendingOrders.length} Pending Orders`;
     if (elDelivered) elDelivered.textContent = deliveredToday.length;
