@@ -514,19 +514,19 @@
       const b64       = _uint8ToBase64(escData);
       const rawbtUrl  = 'rawbt:base64,' + b64;
 
-      _showBtStatus('🖨️ Printer ko bhej raha hai...', '#f97316');
+      _showBtStatus('🖨️ RawBT ko bhej raha hai...', '#f97316');
 
-      // Open RawBT intent URL
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = rawbtUrl;
-      document.body.appendChild(iframe);
-      setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 3000);
+      // Trigger RawBT Android intent via anchor click (most reliable method)
+      const a = document.createElement('a');
+      a.href = rawbtUrl;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { if (a.parentNode) a.parentNode.removeChild(a); }, 2000);
 
-      // Check if RawBT opened (no reliable way, just show success after short delay)
       setTimeout(() => {
-        _showBtStatus('✅ RawBT ko bhej diya! Printer pe nikal raha hai 🎉', '#34d399');
-      }, 1200);
+        _showBtStatus('✅ RawBT ko bhej diya! Nikal raha hai 🎉', '#34d399');
+      }, 1000);
 
     } catch(err) {
       console.error('RawBT print error:', err);
