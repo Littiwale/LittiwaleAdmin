@@ -34,13 +34,34 @@ app.use(express.static(path.join(__dirname, "public")));
 const apiRoutes = require("./routes/api");
 app.use("/api", apiRoutes);
 
-app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", message: "Littiwale Pure Supabase API is running", timestamp: new Date().toISOString() });
-});
+let supabaseDb = null;
+try {
+    supabaseDb = require("./utils/supabaseDb");
+} catch(e) {
+    console.error("Could not load supabaseDb for health check:", e.message);
+}
 
-app.get("/health", (req, res) => {
-    res.json({ status: "ok", message: "Littiwale Pure Supabase API is running", timestamp: new Date().toISOString() });
-});
+const handleHealthCheck = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    let dbStatus = "skipped";
+    if (supabaseDb && typeof supabaseDb.query === "function") {
+        try {
+            await supabaseDb.query("SELECT 1");
+            dbStatus = "connected";
+        } catch (dbErr) {
+            dbStatus = "error: " + dbErr.message;
+        }
+    }
+    res.json({
+        status: "ok",
+        db: dbStatus,
+        message: "Littiwale Pure Supabase API is warm & running",
+        timestamp: new Date().toISOString()
+    });
+};
+
+app.get("/api/health", handleHealthCheck);
+app.get("/health", handleHealthCheck);
 
 if (process.env.NODE_ENV !== "production") {
     app.listen(PORT, () => {

@@ -4,6 +4,13 @@ let authToken = localStorage.getItem('adminToken') || '';
 var adminReelsList = [];
 var adminDealsList = [];
 
+// Instant background server & DB connection warmup (Eliminates Vercel cold starts)
+(function warmUpBackend() {
+    try {
+        fetch('/api/health', { method: 'GET', keepalive: true }).catch(() => {});
+    } catch(e) {}
+})();
+
 // Instant Fast Cache Restore (0ms)
 try {
     const cm = localStorage.getItem('lw_admin_menu_cache');
