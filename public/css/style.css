@@ -3294,7 +3294,7 @@ td strong {
 }
 
 /* ==========================================================================
-   MOBILE-FIRST CREATE ORDER MODAL FIXES (NO HORIZONTAL SCROLL)
+   MOBILE-FIRST CREATE ORDER MODAL FIXES (PERMANENT STICKY FOOTER & TOUCH SCROLL)
    ========================================================================== */
 #modal-create-order {
   box-sizing: border-box !important;
@@ -3304,14 +3304,41 @@ td strong {
   box-sizing: border-box !important;
   max-width: 860px;
   width: 95%;
-  overflow-x: hidden !important;
+  max-height: 90vh !important;
+  max-height: 90dvh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+#modal-create-order .modal-header {
+  flex-shrink: 0 !important;
 }
 
 .admin-create-order-scrollable {
   box-sizing: border-box !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
   overflow-x: hidden !important;
-  max-height: 82vh;
-  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 18px 20px;
+}
+
+.admin-create-order-footer {
+  flex-shrink: 0 !important;
+  background: #12131a !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 14px 20px !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  z-index: 20 !important;
 }
 
 @media (max-width: 768px) {
@@ -3323,17 +3350,28 @@ td strong {
   #modal-create-order .modal-content {
     width: 100% !important;
     max-width: 100% !important;
-    max-height: 94vh !important;
-    border-radius: 18px 18px 0 0 !important;
+    height: 92vh !important;
+    height: 92dvh !important;
+    max-height: 92vh !important;
+    max-height: 92dvh !important;
+    border-radius: 20px 20px 0 0 !important;
     margin: 0 !important;
     border-left: none !important;
     border-right: none !important;
     border-bottom: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.9) !important;
   }
 
   .admin-create-order-scrollable {
-    padding: 14px 12px !important;
-    max-height: 84vh !important;
+    padding: 14px 14px 24px 14px !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .admin-create-order-grid {
@@ -3369,6 +3407,8 @@ td strong {
   #admin-order-selected-list {
     max-width: 100% !important;
     box-sizing: border-box !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .admin-order-bill-row {
@@ -3389,19 +3429,26 @@ td strong {
 
   .admin-create-order-footer {
     display: flex !important;
-    gap: 8px !important;
+    gap: 10px !important;
     width: 100% !important;
+    background: #14151f !important;
+    border-top: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.7) !important;
+    padding: 12px 14px max(14px, env(safe-area-inset-bottom, 14px)) 14px !important;
+    flex-shrink: 0 !important;
   }
 
   .admin-create-order-footer button:first-child {
     flex: 1 !important;
-    padding: 10px !important;
+    padding: 12px 10px !important;
+    font-size: 13px !important;
   }
 
   .admin-create-order-footer button:last-child {
     flex: 2 !important;
-    padding: 10px 12px !important;
-    font-size: 13px !important;
+    padding: 12px 14px !important;
+    font-size: 13.5px !important;
+    font-weight: 900 !important;
   }
 }
 
