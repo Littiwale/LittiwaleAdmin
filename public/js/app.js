@@ -6440,7 +6440,7 @@ window.openDispatchModal = async function(orderId = null) {
     if (custPhoneEl) custPhoneEl.textContent = `+91 ${order.customerPhone || 'N/A'}`;
 
     const custAddrEl = document.getElementById('dispatch-cust-address');
-    if (custAddrEl) custAddrEl.textContent = order.deliveryAddress || order.customerAddress || order.address || (order.orderType === 'takeaway' ? 'Self Pickup at Kitchen' : 'Barbil');
+    if (custAddrEl) custAddrEl.textContent = order.deliveryAddress || order.customerAddress || order.address || (order.orderType === 'takeaway' ? 'Self Pickup at Kitchen' : 'Address Not Provided');
 
     const totalVal = Number(order.finalTotal || order.subtotal || 0);
     const totalEl = document.getElementById('dispatch-order-total');
@@ -6516,7 +6516,7 @@ window.sendDeliveryBoyDispatchWhatsApp = function() {
                  `*Order ID:* *#${shortId}*\n` +
                  `*Customer Name:* *${order.customerName || 'Customer'}*\n` +
                  `*Customer Phone:* +91 ${order.customerPhone || 'N/A'}\n` +
-                 `*Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'Barbil'}${order.landmark ? ` (Landmark: ${order.landmark})` : ''}${gpsLine}\n\n` +
+                 `*Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}${order.landmark ? ` (Landmark: ${order.landmark})` : ''}${gpsLine}\n\n` +
                  `*📋 Order Items:*\n${itemsList}\n\n` +
                  `*💰 BILL BREAKDOWN:*\n` +
                  `• Food Items: ₹${subtotal}\n` +
@@ -6556,7 +6556,7 @@ window.sendCustomerDispatchWhatsApp = function() {
                 `Great news! Your order *#${shortId}* is freshly packed and has left the kitchen! 💨\n\n` +
                 `*🛵 Delivery Partner:* *${rider.name}*\n` +
                 `*📞 Rider Contact:* +91 ${rider.phone}\n\n` +
-                 `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'Barbil'}\n` +
+                 `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n` +
                 `*💰 Amount to Pay:* ${paymentStatusText}\n\n` +
                 `*🔴 Live Track Your Order:* ${trackingLink}\n\n` +
                 `For any delivery assistance, feel free to call our rider directly. Enjoy your meal! ❤️\n` +

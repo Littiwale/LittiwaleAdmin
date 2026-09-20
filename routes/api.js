@@ -2328,7 +2328,7 @@ router.post('/orders', async (req, res) => {
 
         const customerName = payload.customer ? payload.customer.name : (payload.customerName || 'Customer');
         const customerPhone = payload.customer ? payload.customer.phone : (payload.customerPhone || '');
-        const customerAddress = payload.customer ? payload.customer.address : (payload.customerAddress || payload.deliveryAddress || payload.address || '');
+        let customerAddress = payload.customer ? payload.customer.address : (payload.customerAddress || payload.deliveryAddress || payload.address || '');
         const total = Number(payload.finalTotal || payload.total || payload.subtotal || 0);
         const subtotal = Number(payload.subtotal || total);
         const finalTotal = total;
@@ -2338,6 +2338,19 @@ router.post('/orders', async (req, res) => {
         const notes = payload.deliveryNotes || payload.notes || '';
         const paymentMethod = payload.paymentMethod || 'COD';
         const store = payload.store || 'cloud';
+
+        // Reuse the customer's saved default address when checkout did not send one.
+        if (orderType === 'delivery' && !String(customerAddress || '').trim() && customerPhone) {
+            const cleanPhone = String(customerPhone).replace(/\D/g, '').slice(-10);
+            const savedCustomer = await supabaseDb.query(`SELECT addresses FROM customers WHERE phone = $1 LIMIT 1`, [cleanPhone]);
+            const savedAddresses = Array.isArray(savedCustomer.rows?.[0]?.addresses) ? savedCustomer.rows[0].addresses : [];
+            const savedAddress = savedAddresses.find(item => item.isDefault && item.address) || savedAddresses.find(item => item.address);
+            if (savedAddress) customerAddress = String(savedAddress.address).trim();
+        }
+
+        if (orderType === 'delivery' && !String(customerAddress || '').trim()) {
+            return res.status(400).json({ success: false, error: 'Delivery address is required' });
+        }
 
         await supabaseDb.query(
             `INSERT INTO orders (_id, "orderId", "customerName", "customerPhone", "customerAddress", items, total, "finalTotal", subtotal, "deliveryCharge", discount, "orderType", status, store, "paymentMethod", "deliveryNotes", notes, "createdAt")
@@ -2429,6 +2442,12 @@ router.put('/orders/:id', checkPin, async (req, res) => {
     try {
         const id = req.params.id;
         const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, paymentCollectedByStore, dispatchedAt } = req.body;
+        const hasAddressUpdate = customerAddress !== undefined || deliveryAddress !== undefined || address !== undefined;
+        const updatedAddress = customerAddress || deliveryAddress || address;
+
+        if (hasAddressUpdate && orderType !== 'takeaway' && !String(updatedAddress || '').trim()) {
+            return res.status(400).json({ success: false, error: 'Delivery address cannot be empty' });
+        }
         
         const updates = [];
         const values = [];
@@ -2442,9 +2461,9 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             updates.push(`"orderType" = $${idx++}`);
             values.push(orderType);
         }
-        if (customerAddress !== undefined || deliveryAddress !== undefined || address !== undefined) {
+        if (hasAddressUpdate) {
             updates.push(`"customerAddress" = $${idx++}`);
-            values.push(customerAddress || deliveryAddress || address);
+            values.push(updatedAddress);
         }
         if (deliveryBoy !== undefined) {
             updates.push(`"deliveryBoy" = $${idx++}`);
