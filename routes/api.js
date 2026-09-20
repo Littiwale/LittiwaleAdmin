@@ -1276,7 +1276,7 @@ function buildLuxuryOrderEmailHtml({ ord, newStatus, isDelivered, isTakeaway, cl
     const discount = Number(ord.discount || 0);
     const grandTotal = Number(ord.finalTotal || ord.total || (subtotal + delivery - discount));
     const paymentMode = ord.paymentMethod ? String(ord.paymentMethod).toUpperCase() : (ord.isCOD ? 'CASH ON DELIVERY' : 'PAID ONLINE (UPI)');
-    const addressText = isTakeaway ? 'Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil' : (ord.customerAddress || 'Barbil, Odisha');
+    const addressText = isTakeaway ? 'Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil' : (ord.customerAddress || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH');
 
     // Stage details based on Delivery vs Takeaway
     let headerIcon = '✅';

@@ -226,7 +226,7 @@
     const dateStr = orderData.createdAt ? new Date(orderData.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const custName = orderData.customerName || 'Valued Customer';
     const custPhone = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
-    const custAddress = isTakeaway ? '🛍️ Pickup Location: Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil' : (orderData.deliveryAddress || orderData.customerAddress || orderData.address || 'Barbil');
+    const custAddress = isTakeaway ? '🛍️ Pickup Location: Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil' : (orderData.deliveryAddress || orderData.customerAddress || orderData.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH');
     const landmark = orderData.landmark ? `<div style="font-size:10px; color:#6b7280;">Landmark: ${orderData.landmark}</div>` : '';
     const paymentMode = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'CASH ON DELIVERY (COD)' : 'PAID ONLINE (UPI)');
 
