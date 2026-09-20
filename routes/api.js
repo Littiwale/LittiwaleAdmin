@@ -954,18 +954,27 @@ router.delete('/reels/:id', checkPin, async (req, res) => {
 router.get('/orders', async (req, res) => {
     try {
         const sbRes = await supabaseDb.query('SELECT * FROM orders ORDER BY id DESC');
-        const orders = (sbRes.rows || []).map(o => ({
+        const orders = (sbRes.rows || []).map(o => {
+            const address = o.customerAddress || o.deliveryAddress || o.address || '';
+            const deliveryBoy = typeof o.deliveryBoy === 'string' ? (() => {
+                try { return JSON.parse(o.deliveryBoy); } catch (e) { return null; }
+            })() : o.deliveryBoy;
+            return ({
             ...o,
+            customerAddress: address,
+            deliveryAddress: address,
+            deliveryBoy,
             _id: o._id || o.orderId || String(o.id),
             id: o.orderId || o.id,
             orderId: o.orderId || o.id,
             customer: {
                 name: o.customerName || 'Customer',
                 phone: o.customerPhone,
-                address: o.customerAddress
+                address
             },
             items: Array.isArray(o.items) ? o.items : []
-        }));
+            });
+        });
         res.json(orders);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -990,15 +999,22 @@ router.get('/orders/:id', async (req, res) => {
             return res.status(404).json({ error: 'Order not found' });
         }
         const o = sbRes.rows[0];
+        const address = o.customerAddress || o.deliveryAddress || o.address || '';
+        const deliveryBoy = typeof o.deliveryBoy === 'string' ? (() => {
+            try { return JSON.parse(o.deliveryBoy); } catch (e) { return null; }
+        })() : o.deliveryBoy;
         const order = {
             ...o,
+            customerAddress: address,
+            deliveryAddress: address,
+            deliveryBoy,
             _id: o._id || o.orderId || String(o.id),
             id: o.orderId || o.id,
             orderId: o.orderId || o.id,
             customer: {
                 name: o.customerName || 'Customer',
                 phone: o.customerPhone,
-                address: o.customerAddress
+                address
             },
             items: Array.isArray(o.items) ? o.items : []
         };
@@ -1039,18 +1055,27 @@ router.get('/orders/customer/:phoneOrEmail', async (req, res) => {
             }
         }
 
-        const formattedOrders = orders.map(o => ({
+        const formattedOrders = orders.map(o => {
+            const address = o.customerAddress || o.deliveryAddress || o.address || '';
+            const deliveryBoy = typeof o.deliveryBoy === 'string' ? (() => {
+                try { return JSON.parse(o.deliveryBoy); } catch (e) { return null; }
+            })() : o.deliveryBoy;
+            return ({
             ...o,
+            customerAddress: address,
+            deliveryAddress: address,
+            deliveryBoy,
             _id: o._id || o.orderId || String(o.id),
             id: o.orderId || o.id,
             orderId: o.orderId || o.id,
             customer: {
                 name: o.customerName || 'Customer',
                 phone: o.customerPhone || '',
-                address: o.customerAddress || ''
+                address
             },
             items: Array.isArray(o.items) ? o.items : []
-        }));
+            });
+        });
 
         res.json({
             success: true,
@@ -1358,7 +1383,7 @@ function buildLuxuryOrderEmailHtml({ ord, newStatus, isDelivered, isTakeaway, cl
                                                 ${isTakeaway ? '🛍️ COUNTER PICKUP READY' : '🛵 DELIVERING YOUR ORDER'}
                                             </div>
                                             <div style="font-size:14px; font-weight:800; color:#ffffff;">
-                                                ${isTakeaway ? 'Your food is packed and ready for pickup at Littiwale Counter!' : `Assigned Partner: <strong>${ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Littiwale Direct Rider'}</strong> (<a href="tel:${ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '6370680744'}" style="color:#38bdf8; text-decoration:none;">📞 ${ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '+91 6370680744'}</a>)`}
+                                                ${isTakeaway ? 'Your food is packed and ready for pickup at Littiwale Counter!' : `Assigned Partner: <strong>${ord.deliveryBoy?.name || ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Littiwale Direct Rider'}</strong> (<a href="tel:${ord.deliveryBoy?.phone || ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '6370680744'}" style="color:#38bdf8; text-decoration:none;">📞 ${ord.deliveryBoy?.phone || ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '+91 6370680744'}</a>)`}
                                             </div>
                                         </td>
                                     </tr>
@@ -2233,7 +2258,7 @@ router.post('/orders', async (req, res) => {
 
         const customerName = payload.customer ? payload.customer.name : (payload.customerName || 'Customer');
         const customerPhone = payload.customer ? payload.customer.phone : (payload.customerPhone || '');
-        const customerAddress = payload.customer ? payload.customer.address : (payload.customerAddress || '');
+        const customerAddress = payload.customer ? payload.customer.address : (payload.customerAddress || payload.deliveryAddress || payload.address || '');
         const total = Number(payload.finalTotal || payload.total || payload.subtotal || 0);
         const subtotal = Number(payload.subtotal || total);
         const finalTotal = total;
@@ -2333,7 +2358,7 @@ router.post('/orders', async (req, res) => {
 router.put('/orders/:id', checkPin, async (req, res) => {
     try {
         const id = req.params.id;
-        const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, address } = req.body;
+        const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, paymentCollectedByStore, dispatchedAt } = req.body;
         
         const updates = [];
         const values = [];
@@ -2347,9 +2372,21 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             updates.push(`"orderType" = $${idx++}`);
             values.push(orderType);
         }
-        if (customerAddress !== undefined || address !== undefined) {
+        if (customerAddress !== undefined || deliveryAddress !== undefined || address !== undefined) {
             updates.push(`"customerAddress" = $${idx++}`);
-            values.push(customerAddress || address);
+            values.push(customerAddress || deliveryAddress || address);
+        }
+        if (deliveryBoy !== undefined) {
+            updates.push(`"deliveryBoy" = $${idx++}`);
+            values.push(JSON.stringify(deliveryBoy));
+        }
+        if (paymentCollectedByStore !== undefined) {
+            updates.push(`"paymentCollectedByStore" = $${idx++}`);
+            values.push(Boolean(paymentCollectedByStore));
+        }
+        if (dispatchedAt !== undefined) {
+            updates.push(`"dispatchedAt" = $${idx++}`);
+            values.push(dispatchedAt);
         }
         if (deliveryCharge !== undefined) {
             updates.push(`"deliveryCharge" = $${idx++}`);

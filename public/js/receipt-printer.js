@@ -226,7 +226,7 @@
     const dateStr = orderData.createdAt ? new Date(orderData.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const custName = orderData.customerName || 'Valued Customer';
     const custPhone = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
-    const custAddress = isTakeaway ? '🛍️ Pickup Location: Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil' : (orderData.deliveryAddress || orderData.address || 'Barbil');
+    const custAddress = isTakeaway ? '🛍️ Pickup Location: Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil' : (orderData.deliveryAddress || orderData.customerAddress || orderData.address || 'Barbil');
     const landmark = orderData.landmark ? `<div style="font-size:10px; color:#6b7280;">Landmark: ${orderData.landmark}</div>` : '';
     const paymentMode = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'CASH ON DELIVERY (COD)' : 'PAID ONLINE (UPI)');
 
@@ -395,7 +395,7 @@
     const custName  = orderData.customerName || 'Valued Customer';
     const custPhone = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
     const isTakeaway= orderData.orderType === 'takeaway';
-    const custAddr  = isTakeaway ? 'TAKEAWAY (SELF PICKUP)' : (orderData.deliveryAddress || orderData.address || 'Barbil, Odisha');
+    const custAddr  = isTakeaway ? 'TAKEAWAY (SELF PICKUP)' : (orderData.deliveryAddress || orderData.customerAddress || orderData.address || 'Barbil, Odisha');
     const payment   = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'COD' : 'ONLINE/UPI');
     const items     = orderData.items || [];
     const subtotal  = Number(orderData.subtotal || orderData.finalTotal || 0);
@@ -563,7 +563,7 @@
     const dateStr = orderData.createdAt ? new Date(orderData.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const custName = orderData.customerName || 'Valued Customer';
     const custPhone = orderData.customerPhone || orderData.whatsappPhone || 'N/A';
-    const custAddress = orderData.deliveryAddress || orderData.address || 'Barbil, Odisha';
+    const custAddress = orderData.deliveryAddress || orderData.customerAddress || orderData.address || 'Barbil, Odisha';
     const landmark = orderData.landmark ? `<br><span style="font-size:12px; color:#6b7280;">Landmark: ${orderData.landmark}</span>` : '';
     const paymentMode = orderData.paymentMethod ? String(orderData.paymentMethod).toUpperCase() : (orderData.isCOD ? 'CASH ON DELIVERY (COD)' : 'PAID ONLINE (UPI / NETBANKING)');
 
