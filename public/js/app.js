@@ -6511,6 +6511,7 @@ window.sendDeliveryBoyDispatchWhatsApp = function() {
         : `👉 *[ COLLECT ₹${finalTotal} CASH FROM CUSTOMER ]* 💵\n(Total includes Food ₹${subtotal} + Delivery ₹${delCharge})`;
 
     const gpsLine = order.gpsLink ? `\n*📍 Google Maps:* ${order.gpsLink}` : '';
+    const riderPortalUrl = 'https://rider.littiwale.co.in';
 
     const slip = `📦 *NEW DELIVERY TASK — LITTIWALE BARBIL*\n\n` +
                  `*Order ID:* *#${shortId}*\n` +
@@ -6524,6 +6525,10 @@ window.sendDeliveryBoyDispatchWhatsApp = function() {
                  (discount > 0 ? `• Discount: -₹${discount}\n` : '') +
                  `• Total Order Value: ₹${finalTotal}\n\n` +
                  `*💳 PAYMENT INSTRUCTION:*\n${paymentInstruction}\n\n` +
+                 `*🔐 RIDER PORTAL:*\n` +
+                 `Portal: ${riderPortalUrl}\n` +
+                 `Login ID: Your registered mobile number\n` +
+                 `Password: Use the password shared by Littiwale admin\n\n` +
                  `⚠️ *Please deliver steaming hot, safely & verify customer phone before handover!* 🚀`;
 
     const cleanRiderPhone = String(rider.phone).replace(/\D/g, '').slice(-10);
