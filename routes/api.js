@@ -22,12 +22,38 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'littiwale_super_secret_jwt_key_2026';
+const RIDER_DEFAULT_PASSWORD = 'Littiwale@2026';
 
 function toSlug(str) {
     return (str || 'general')
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
+}
+
+function riderAuth(req, res, next) {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) return res.status(401).json({ success: false, error: 'Rider login required' });
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded.role !== 'rider' || !decoded.riderId) throw new Error('Invalid rider session');
+        req.rider = decoded;
+        next();
+    } catch (err) {
+        return res.status(401).json({ success: false, error: 'Rider session expired' });
+    }
+}
+
+function parseDeliveryBoy(value) {
+    if (!value) return {};
+    if (typeof value === 'object') return value;
+    try { return JSON.parse(value); } catch (e) { return {}; }
+}
+
+function safeRider(rider) {
+    const { passwordHash, password, ...publicRider } = rider || {};
+    return publicRider;
 }
 
 // Upload base64 image buffer to Supabase bucket and return clean masked proxy URL
@@ -2520,7 +2546,7 @@ router.get('/delivery-boys', async (req, res) => {
         if (sbRes.rows && sbRes.rows[0] && sbRes.rows[0].deliveryBoys) {
             list = Array.isArray(sbRes.rows[0].deliveryBoys) ? sbRes.rows[0].deliveryBoys : JSON.parse(sbRes.rows[0].deliveryBoys || '[]');
         }
-        res.json(list);
+        res.json(list.filter(item => item.status !== 'pending' && item.status !== 'rejected').map(safeRider));
     } catch(e) {
         res.json([]);
     }
@@ -2529,10 +2555,17 @@ router.get('/delivery-boys', async (req, res) => {
 router.post('/delivery-boys', checkPin, async (req, res) => {
     try {
         const { name, phone, vehicleNumber, status } = req.body;
+        const normalizedPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+        if (!name || normalizedPhone.length !== 10) {
+            return res.status(400).json({ error: 'Rider name and valid 10-digit phone are required' });
+        }
         const newBoy = {
             id: `boy_${Date.now()}`,
             name: name || 'Rider',
-            phone: phone || '',
+            phone: normalizedPhone,
+            username: normalizedPhone,
+            passwordHash: await bcrypt.hash(RIDER_DEFAULT_PASSWORD, 10),
+            mustChangePassword: true,
             vehicleNumber: vehicleNumber || '',
             status: status || 'active',
             createdAt: new Date().toISOString()
@@ -2547,9 +2580,194 @@ router.post('/delivery-boys', checkPin, async (req, res) => {
 
         await supabaseDb.query(`UPDATE store_settings SET "deliveryBoys" = $1`, [JSON.stringify(list)]);
         console.log(`✅ Added delivery boy "${newBoy.name}" to Supabase!`);
-        res.status(201).json(newBoy);
+        res.status(201).json({ ...safeRider(newBoy), defaultPassword: RIDER_DEFAULT_PASSWORD });
     } catch (err) {
         res.status(400).json({ error: err.message });
+    }
+});
+
+router.post('/rider/applications', async (req, res) => {
+    try {
+        const name = String(req.body.name || '').trim();
+        const phone = String(req.body.phone || '').replace(/\D/g, '').slice(-10);
+        const email = String(req.body.email || '').trim().toLowerCase();
+        if (!name || phone.length !== 10 || !email || !email.includes('@')) {
+            return res.status(400).json({ success: false, error: 'Name, valid mobile number and email are required' });
+        }
+
+        const sbRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+        const rawList = sbRes.rows?.[0]?.deliveryBoys;
+        const list = Array.isArray(rawList) ? rawList : JSON.parse(rawList || '[]');
+        const duplicate = list.find(item => String(item.phone || '').replace(/\D/g, '').slice(-10) === phone || String(item.email || '').toLowerCase() === email);
+        if (duplicate && duplicate.status !== 'rejected') {
+            return res.status(409).json({ success: false, error: duplicate.status === 'active' ? 'This rider already has an account' : 'Application already submitted' });
+        }
+
+        const application = {
+            id: `rider_app_${Date.now()}`,
+            name,
+            phone,
+            email,
+            status: 'pending',
+            appliedAt: new Date().toISOString()
+        };
+        const filtered = list.filter(item => !(item.phone === phone && item.status === 'rejected'));
+        filtered.push(application);
+        await supabaseDb.query(`UPDATE store_settings SET "deliveryBoys" = $1`, [JSON.stringify(filtered)]);
+        res.status(201).json({ success: true, message: 'Application submitted. Littiwale admin will review it shortly.' });
+    } catch (err) {
+        console.error('Rider application error:', err);
+        res.status(400).json({ success: false, error: 'Could not submit application' });
+    }
+});
+
+router.get('/rider/applications', checkPin, async (req, res) => {
+    try {
+        const sbRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+        const rawList = sbRes.rows?.[0]?.deliveryBoys;
+        const list = Array.isArray(rawList) ? rawList : JSON.parse(rawList || '[]');
+        res.json({ success: true, applications: list.filter(item => item.status === 'pending').map(safeRider) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Could not load rider applications' });
+    }
+});
+
+router.post('/rider/applications/:id/approve', checkPin, async (req, res) => {
+    try {
+        const sbRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+        const rawList = sbRes.rows?.[0]?.deliveryBoys;
+        const list = Array.isArray(rawList) ? rawList : JSON.parse(rawList || '[]');
+        const rider = list.find(item => item.id === req.params.id && item.status === 'pending');
+        if (!rider) return res.status(404).json({ success: false, error: 'Pending application not found' });
+        rider.status = 'active';
+        rider.username = rider.phone;
+        rider.passwordHash = await bcrypt.hash(RIDER_DEFAULT_PASSWORD, 10);
+        rider.mustChangePassword = true;
+        rider.approvedAt = new Date().toISOString();
+        await supabaseDb.query(`UPDATE store_settings SET "deliveryBoys" = $1`, [JSON.stringify(list)]);
+        res.json({ success: true, rider: safeRider(rider), defaultPassword: RIDER_DEFAULT_PASSWORD });
+    } catch (err) {
+        res.status(400).json({ success: false, error: 'Could not approve rider application' });
+    }
+});
+
+router.delete('/rider/applications/:id', checkPin, async (req, res) => {
+    try {
+        const sbRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+        const rawList = sbRes.rows?.[0]?.deliveryBoys;
+        const list = Array.isArray(rawList) ? rawList : JSON.parse(rawList || '[]');
+        const filtered = list.filter(item => item.id !== req.params.id);
+        await supabaseDb.query(`UPDATE store_settings SET "deliveryBoys" = $1`, [JSON.stringify(filtered)]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ success: false, error: 'Could not reject rider application' });
+    }
+});
+
+router.post('/rider/login', async (req, res) => {
+    try {
+        const identifier = String(req.body.identifier || '').trim().toLowerCase();
+        const password = String(req.body.password || '');
+        if (!identifier || !password) return res.status(400).json({ success: false, error: 'Phone/username and password are required' });
+
+        const sbRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+        const rawList = sbRes.rows?.[0]?.deliveryBoys;
+        const list = Array.isArray(rawList) ? rawList : JSON.parse(rawList || '[]');
+        const rider = list.find(item => {
+            const phone = String(item.phone || '').replace(/\D/g, '').slice(-10);
+            return item.status !== 'inactive' && (String(item.username || '').toLowerCase() === identifier || phone === identifier.replace(/\D/g, '').slice(-10));
+        });
+        if (!rider) return res.status(401).json({ success: false, error: 'Rider account not found or inactive' });
+
+        const passwordHash = rider.passwordHash || '';
+        const valid = passwordHash
+            ? await bcrypt.compare(password, passwordHash)
+            : password === RIDER_DEFAULT_PASSWORD;
+        if (!valid) return res.status(401).json({ success: false, error: 'Incorrect password' });
+
+        const token = jwt.sign({ role: 'rider', riderId: rider.id, name: rider.name, phone: rider.phone }, JWT_SECRET, { expiresIn: '30d' });
+        res.json({ success: true, token, rider: safeRider(rider), mustChangePassword: rider.mustChangePassword !== false });
+    } catch (err) {
+        console.error('Rider login error:', err);
+        res.status(500).json({ success: false, error: 'Rider login temporarily unavailable' });
+    }
+});
+
+router.get('/rider/me', riderAuth, async (req, res) => {
+    try {
+        const sbRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+        const rawList = sbRes.rows?.[0]?.deliveryBoys;
+        const list = Array.isArray(rawList) ? rawList : JSON.parse(rawList || '[]');
+        const rider = list.find(item => item.id === req.rider.riderId);
+        if (!rider) return res.status(404).json({ success: false, error: 'Rider account not found' });
+        res.json({ success: true, rider: safeRider(rider) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Could not load rider profile' });
+    }
+});
+
+router.put('/rider/password', riderAuth, async (req, res) => {
+    try {
+        const newPassword = String(req.body.newPassword || '');
+        if (newPassword.length < 8) return res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+        const sbRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+        const rawList = sbRes.rows?.[0]?.deliveryBoys;
+        const list = Array.isArray(rawList) ? rawList : JSON.parse(rawList || '[]');
+        const rider = list.find(item => item.id === req.rider.riderId);
+        if (!rider) return res.status(404).json({ success: false, error: 'Rider account not found' });
+        rider.passwordHash = await bcrypt.hash(newPassword, 10);
+        rider.mustChangePassword = false;
+        await supabaseDb.query(`UPDATE store_settings SET "deliveryBoys" = $1`, [JSON.stringify(list)]);
+        res.json({ success: true, rider: safeRider(rider) });
+    } catch (err) {
+        res.status(400).json({ success: false, error: 'Could not update password' });
+    }
+});
+
+router.get('/rider/orders', riderAuth, async (req, res) => {
+    try {
+        const sbRes = await supabaseDb.query('SELECT * FROM orders ORDER BY id DESC LIMIT 300');
+        const orders = (sbRes.rows || []).filter(order => {
+            const assigned = parseDeliveryBoy(order.deliveryBoy);
+            return String(assigned.id || '') === String(req.rider.riderId) || String(assigned.phone || '').replace(/\D/g, '').slice(-10) === String(req.rider.phone || '').slice(-10);
+        }).map(order => {
+            const assigned = parseDeliveryBoy(order.deliveryBoy);
+            const address = order.customerAddress || order.deliveryAddress || order.address || '';
+            return {
+                ...order,
+                _id: order._id || order.orderId || String(order.id),
+                orderId: order.orderId || order.id,
+                customerAddress: address,
+                deliveryAddress: address,
+                deliveryBoy: assigned,
+                riderEarning: Number(assigned.earning || order.deliveryCharge || 0),
+                items: Array.isArray(order.items) ? order.items : []
+            };
+        });
+        res.json({ success: true, orders });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Could not load assigned orders' });
+    }
+});
+
+router.patch('/rider/orders/:id/status', riderAuth, async (req, res) => {
+    try {
+        const requestedStatus = String(req.body.status || '').toLowerCase();
+        const status = requestedStatus === 'out_for_delivery' ? 'dispatched' : requestedStatus;
+        if (!['dispatched', 'delivered'].includes(status)) return res.status(400).json({ success: false, error: 'Invalid rider status' });
+        const id = req.params.id;
+        const orderRes = await supabaseDb.query(`SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`, [id]);
+        const order = orderRes.rows?.[0];
+        if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+        const assigned = parseDeliveryBoy(order.deliveryBoy);
+        if (String(assigned.id || '') !== String(req.rider.riderId)) return res.status(403).json({ success: false, error: 'This order is assigned to another rider' });
+        if (order.status === 'delivered') return res.json({ success: true, status: 'delivered' });
+        const updatedRider = { ...assigned, ...(status === 'dispatched' ? { pickedUpAt: new Date().toISOString() } : { deliveredAt: new Date().toISOString() }) };
+        await supabaseDb.query(`UPDATE orders SET status = $1, "deliveryBoy" = $2 WHERE "orderId" = $3 OR _id = $3 OR id::text = $3`, [status, JSON.stringify(updatedRider), id]);
+        res.json({ success: true, status });
+    } catch (err) {
+        console.error('Rider order status error:', err);
+        res.status(400).json({ success: false, error: 'Could not update order status' });
     }
 });
 

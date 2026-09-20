@@ -4388,6 +4388,7 @@ async function loadStoreSettings() {
         autoReopenIfTimePassed();
 
         if (typeof window.loadDeliveryBoys === 'function') window.loadDeliveryBoys();
+        if (typeof window.loadRiderApplications === 'function') window.loadRiderApplications();
     } catch (e) { console.error(e); }
 }
 
@@ -6172,6 +6173,57 @@ window.loadDeliveryBoys = async function() {
     }
 };
 
+window.loadRiderApplications = async function() {
+    const container = document.getElementById('rider-applications-list');
+    if (!container) return;
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/rider/applications`, { headers: { 'x-admin-pin': authPin, 'x-pin': authPin } });
+        const data = await res.json();
+        const applications = data.applications || [];
+        if (!applications.length) {
+            container.innerHTML = '<div style="padding:14px; color:#94a3b8; font-size:12px; border:1px dashed rgba(255,255,255,.1); border-radius:8px;">No pending rider requests.</div>';
+            return;
+        }
+        const escapeText = value => String(value || '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char]));
+        container.innerHTML = applications.map(app => `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:12px; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.22); border-radius:9px;">
+                <div style="min-width:180px;">
+                    <div style="font-weight:800; color:#fff; font-size:13px;">${escapeText(app.name)}</div>
+                    <div style="color:#94a3b8; font-size:11.5px; margin-top:3px;">📞 ${escapeText(app.phone)} &nbsp; ✉️ ${escapeText(app.email)}</div>
+                </div>
+                <div style="display:flex; gap:7px;">
+                    <button type="button" class="btn btn-sm btn-primary" onclick="window.approveRiderApplication('${app.id}')">Approve</button>
+                    <button type="button" class="btn btn-sm btn-outline" style="color:#f87171; border-color:rgba(248,113,113,.35);" onclick="window.rejectRiderApplication('${app.id}')">Reject</button>
+                </div>
+            </div>`).join('');
+    } catch (err) {
+        container.innerHTML = '<div style="padding:14px; color:#f87171; font-size:12px;">Could not load rider requests.</div>';
+    }
+};
+
+window.approveRiderApplication = async function(id) {
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/rider/applications/${encodeURIComponent(id)}/approve`, { method:'POST', headers:{ 'x-admin-pin':authPin, 'x-pin':authPin } });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || 'Approval failed');
+        window.showAdminToast(`✅ Rider approved. Login: ${data.rider.phone} | Password: ${data.defaultPassword}`, 'success');
+        await window.loadDeliveryBoys();
+        await window.loadRiderApplications();
+    } catch (err) { window.showAdminToast(err.message, 'error'); }
+};
+
+window.rejectRiderApplication = async function(id) {
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/rider/applications/${encodeURIComponent(id)}`, { method:'DELETE', headers:{ 'x-admin-pin':authPin, 'x-pin':authPin } });
+        if (!res.ok) throw new Error('Could not reject request');
+        window.showAdminToast('Rider request rejected', 'warning');
+        await window.loadRiderApplications();
+    } catch (err) { window.showAdminToast(err.message, 'error'); }
+};
+
 window.renderDeliveryBoysList = function() {
     const container = document.getElementById('delivery-boys-list-container');
     if (!container) return;
@@ -6238,7 +6290,8 @@ window.handleSaveNewDeliveryBoy = async function(e) {
         });
 
         if (res.ok) {
-            window.showAdminToast(`🛵 Rider "${name}" added to Fleet!`, 'success');
+            const data = await res.json();
+            window.showAdminToast(`🛵 Rider "${name}" added. Login: ${phone} | Password: ${data.defaultPassword || 'Littiwale@2026'}`, 'success');
             closeModal('add-delivery-boy-modal');
             await window.loadDeliveryBoys();
             // Also refresh dispatch dropdown if open
@@ -6337,7 +6390,7 @@ window.populateDispatchRidersDropdown = function() {
         `;
     } else {
         optionsHtml = boys.map((b, idx) => `
-            <option value="${b.id}" data-name="${b.name}" data-phone="${b.phone}" ${idx === 0 ? 'selected' : ''}>
+            <option value="${b.id}" data-rider-id="${b.id}" data-name="${b.name}" data-phone="${b.phone}" ${idx === 0 ? 'selected' : ''}>
                 🛵 ${b.name} (+91 ${b.phone})
             </option>
         `).join('') + `<option value="__custom__">➕ Enter Custom / Third-Party Rider...</option>`;
@@ -6412,23 +6465,26 @@ window.openDispatchModal = async function(orderId = null) {
     }
     window.populateDispatchRidersDropdown();
 
+    const earningInput = document.getElementById('dispatch-rider-earning');
+    if (earningInput) earningInput.value = Number(order.deliveryCharge || 0);
+
     openModal('order-dispatch-modal');
 };
 
 window.getSelectedDispatchRider = function() {
     const selectEl = document.getElementById('dispatch-delivery-boy-select');
-    if (!selectEl) return { name: 'Littiwale Direct Delivery', phone: '6370680744' };
+    if (!selectEl) return { id: '', name: 'Littiwale Direct Delivery', phone: '6370680744' };
 
     if (selectEl.value === '__custom__') {
         const customName = document.getElementById('dispatch-custom-rider-name')?.value?.trim() || 'Littiwale Direct Delivery';
         const customPhone = (document.getElementById('dispatch-custom-rider-phone')?.value || '6370680744').replace(/\D/g, '').slice(-10);
-        return { name: customName, phone: customPhone || '6370680744' };
+        return { id: '', name: customName, phone: customPhone || '6370680744' };
     }
 
     const opt = selectEl.options[selectEl.selectedIndex];
     const name = opt ? (opt.getAttribute('data-name') || opt.text) : 'Littiwale Direct Delivery';
     const phone = opt ? (opt.getAttribute('data-phone') || '6370680744') : '6370680744';
-    return { name, phone };
+    return { id: opt?.getAttribute('data-rider-id') || selectEl.value || '', name, phone };
 };
 
 window.sendDeliveryBoyDispatchWhatsApp = function() {
@@ -6439,6 +6495,7 @@ window.sendDeliveryBoyDispatchWhatsApp = function() {
     }
 
     const rider = window.getSelectedDispatchRider();
+    const riderEarning = Math.max(0, Number(document.getElementById('dispatch-rider-earning')?.value || order.deliveryCharge || 0));
     const shortId = String(order._id).slice(-6).toUpperCase();
     const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Food Items';
     
@@ -6788,8 +6845,10 @@ window.executeDispatchOrder = async function() {
             body: JSON.stringify({
                 status: 'dispatched',
                 deliveryBoy: {
+                    id: rider.id,
                     name: rider.name,
-                    phone: rider.phone
+                    phone: rider.phone,
+                    earning: riderEarning
                 },
                 paymentCollectedByStore: isPrepaid,
                 dispatchedAt: new Date()

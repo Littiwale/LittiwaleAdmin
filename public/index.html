@@ -1688,6 +1688,17 @@
                         <div id="delivery-boys-list-container" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:12px; margin-top:12px;">
                             <!-- Injected by app.js -->
                         </div>
+
+                        <div style="margin-top:20px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.08);">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                                <div>
+                                    <h4 style="margin:0; color:#fff; font-size:14px;">📝 Rider Join Requests</h4>
+                                    <p style="margin:4px 0 0; color:var(--text-muted); font-size:11.5px;">Review applications before giving portal access.</p>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline" onclick="window.loadRiderApplications()">↻ Refresh Requests</button>
+                            </div>
+                            <div id="rider-applications-list" style="display:grid; gap:9px; margin-top:12px;"></div>
+                        </div>
                     </div>
                 </section>
 
@@ -2642,6 +2653,12 @@
                             </div>
                         </label>
                     </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:18px;">
+                    <label class="form-label" style="font-size:12px; font-weight:800; color:#fff;">💸 Rider Delivery Earning</label>
+                    <input type="number" id="dispatch-rider-earning" class="form-control" min="0" step="1" placeholder="Default: delivery charge" style="padding:10px; font-size:13px; font-weight:700;">
+                    <div style="font-size:11px; color:#94a3b8; margin-top:5px;">This amount will appear in the assigned rider's earnings.</div>
                 </div>
 
                 <!-- Instant 2-Click WhatsApp Slip Actions -->
