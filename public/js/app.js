@@ -1294,7 +1294,11 @@ window.handleOrderTypeToggleClick = async function(targetType) {
     const newFinalTotal = Math.max(0, subtotal - discount + newDelCharge);
     const existingRawAddr = (ord.customerAddress || ord.deliveryAddress || ord.address || '').trim();
     const hasRealAddr = existingRawAddr && !existingRawAddr.toLowerCase().includes('takeaway') && !existingRawAddr.toLowerCase().includes('pickup');
-    const newAddress = isNowTakeaway ? 'Takeaway / Self-Pickup' : (hasRealAddr ? existingRawAddr : 'Barbil');
+    if (!isNowTakeaway && !hasRealAddr) {
+        window.showAdminToast('Delivery address is required before switching to delivery.', 'warning');
+        return;
+    }
+    const newAddress = isNowTakeaway ? 'Takeaway / Self-Pickup' : existingRawAddr;
 
     // Update in memory first
     ord.orderType = targetType;

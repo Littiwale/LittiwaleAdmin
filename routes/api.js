@@ -2448,6 +2448,16 @@ router.put('/orders/:id', checkPin, async (req, res) => {
         if (hasAddressUpdate && orderType !== 'takeaway' && !String(updatedAddress || '').trim()) {
             return res.status(400).json({ success: false, error: 'Delivery address cannot be empty' });
         }
+
+        if (orderType === 'delivery' && !hasAddressUpdate) {
+            const currentOrder = await supabaseDb.query(
+                `SELECT "customerAddress" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                [id]
+            );
+            if (!String(currentOrder.rows?.[0]?.customerAddress || '').trim()) {
+                return res.status(400).json({ success: false, error: 'Delivery address is required' });
+            }
+        }
         
         const updates = [];
         const values = [];
