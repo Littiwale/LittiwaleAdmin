@@ -6398,6 +6398,14 @@ window.populateDispatchRidersDropdown = function() {
     }
 
     selectEl.innerHTML = optionsHtml;
+    const assignedRider = window.currentDispatchOrder?.deliveryBoy || window.currentDispatchOrder?.assignedDeliveryBoy;
+    if (assignedRider && boys.length > 0) {
+        const assignedOption = Array.from(selectEl.options).find(option =>
+            String(option.getAttribute('data-rider-id') || '') === String(assignedRider.id || '') ||
+            String(option.getAttribute('data-phone') || '').replace(/\D/g, '').slice(-10) === String(assignedRider.phone || '').replace(/\D/g, '').slice(-10)
+        );
+        if (assignedOption) selectEl.value = assignedOption.value;
+    }
     window.onDispatchRiderSelected();
 };
 
@@ -6837,6 +6845,7 @@ window.executeDispatchOrder = async function() {
     if (!order || !order._id) return;
 
     const rider = window.getSelectedDispatchRider();
+    const riderEarning = Math.max(0, Number(document.getElementById('dispatch-rider-earning')?.value || order.deliveryCharge || 0));
     const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
