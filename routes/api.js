@@ -1240,7 +1240,7 @@ async function sendRiderWelcomeEmail(email, name, phone, tempPassword) {
                             <strong>Username:</strong> ${phone}<br>
                             <strong>Temporary password:</strong> ${tempPassword}
                         </div>
-                        <p style="color:#fbbf24;font-size:13px;line-height:1.5;">For security, change this password immediately after your first login.</p>
+                        <p style="color:#fbbf24;font-size:13px;line-height:1.5;">You can change this password anytime from your rider dashboard. This is optional.</p>
                         <a href="${riderPortalUrl}" style="display:inline-block;padding:13px 22px;background:#f4b400;color:#0d0d0d;text-decoration:none;border-radius:6px;font-weight:800;">OPEN RIDER DASHBOARD</a>
                     </div>
                     <div style="padding:14px;text-align:center;color:#888;font-size:11px;border-top:1px solid #2d2d2d;">Littiwale Barbil • Taste of Desi Swag</div>
