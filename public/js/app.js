@@ -1421,7 +1421,7 @@ window.confirmQuickOrder = async function(orderId) {
             const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
             const locationInfo = isTakeaway 
                 ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
-                : `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+                : `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
             const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
 
@@ -6124,7 +6124,7 @@ window.confirmOrderAndWhatsApp = async function() {
             const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
             const locationInfo = isTakeaway 
                 ? `*📍 Pickup Counter:* Littiwale Counter, Near Barbil Court, Rabisons Mall\n*⏱️ Ready for Pickup in:* ${estTime}` 
-                : `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+                : `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
             const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
             const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
@@ -6757,7 +6757,7 @@ window.executeWhatsAppAction = function(actionType) {
         const orderTypeHeader = isTakeaway ? '*🛍️ TAKEAWAY ORDER CONFIRMED — LITTIWALE BARBIL*' : '*✅ ORDER CONFIRMED — LITTIWALE BARBIL*';
         const locationInfo = isTakeaway 
             ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
-            : `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'Barbil'}\n*⏱️ Estimated Delivery:* ${estTime}`;
+            : `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
         const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
 
@@ -6791,7 +6791,7 @@ window.executeWhatsAppAction = function(actionType) {
               `Great news! Your order *#${shortId}* has been freshly packed and is out for delivery! 💨\n\n` +
               `*🛵 Delivery Contact:* *${riderName}*\n` +
               `*📞 Phone Number:* +91 ${riderPhone}\n\n` +
-              `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'Barbil'}\n` +
+              `*📍 Delivery Address:* ${order.deliveryAddress || order.customerAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n` +
               `*💰 Amount to Pay:* ${paymentStatusText}\n\n` +
               `*🔴 Live Track Your Order:* ${trackingLink}\n\n` +
               `For any delivery assistance, please feel free to call our delivery contact directly. Thank you for choosing *Littiwale*! ❤️\n` +
