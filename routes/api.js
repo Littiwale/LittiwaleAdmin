@@ -1218,6 +1218,50 @@ async function sendCustomerTempPasswordEmail(email, name, tempPass, isReset = fa
     }
 }
 
+async function sendRiderWelcomeEmail(email, name, phone, tempPassword) {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey || !email) return;
+    const riderPortalUrl = (process.env.RIDER_PORTAL_URL || 'https://rider.littiwale.co.in').replace(/\/+$/, '');
+    try {
+        const emailHtml = `
+            <!DOCTYPE html>
+            <html><body style="margin:0;padding:24px;background:#0d0d0d;font-family:Poppins,Arial,sans-serif;color:#f8f8f8;">
+                <div style="max-width:560px;margin:0 auto;background:#181818;border:1px solid #3a2a0b;border-radius:16px;overflow:hidden;">
+                    <div style="padding:24px;text-align:center;background:linear-gradient(135deg,#2d2108,#181818);border-bottom:1px solid #5b410d;">
+                        <img src="https://littiwale.co.in/images/logo.png" alt="Littiwale" width="86" height="86" style="object-fit:contain;">
+                        <h1 style="margin:12px 0 4px;color:#f4b400;font-size:23px;">WELCOME TO THE TEAM</h1>
+                        <p style="margin:0;color:#d6b85f;font-size:12px;letter-spacing:1px;">LITTIWALE DELIVERY PARTNER</p>
+                    </div>
+                    <div style="padding:25px;">
+                        <p>Hi <strong>${name || 'Rider'}</strong>,</p>
+                        <p style="color:#c4c4c4;line-height:1.6;">Your rider account has been approved. Use the details below to open your delivery dashboard.</p>
+                        <div style="padding:16px;background:#0d0d0d;border:1px solid #49360d;border-radius:10px;line-height:1.8;">
+                            <strong>Dashboard:</strong> <a href="${riderPortalUrl}" style="color:#f4b400;">${riderPortalUrl}</a><br>
+                            <strong>Username:</strong> ${phone}<br>
+                            <strong>Temporary password:</strong> ${tempPassword}
+                        </div>
+                        <p style="color:#fbbf24;font-size:13px;line-height:1.5;">For security, change this password immediately after your first login.</p>
+                        <a href="${riderPortalUrl}" style="display:inline-block;padding:13px 22px;background:#f4b400;color:#0d0d0d;text-decoration:none;border-radius:6px;font-weight:800;">OPEN RIDER DASHBOARD</a>
+                    </div>
+                    <div style="padding:14px;text-align:center;color:#888;font-size:11px;border-top:1px solid #2d2d2d;">Littiwale Barbil • Taste of Desi Swag</div>
+                </div>
+            </body></html>`;
+        await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                from: 'Littiwale Delivery <support@littiwale.co.in>',
+                to: [email],
+                subject: 'Your Littiwale Rider Account Is Approved',
+                html: emailHtml
+            })
+        });
+        console.log(`📧 Rider welcome email dispatched to ${email}`);
+    } catch (err) {
+        console.error('Rider welcome email failed:', err.message);
+    }
+}
+
 // =========================================================================
 // LUXURY ORDER EMAIL BUILDER (Zomato/Swiggy Gold Tier UI with Visual Stepper)
 // =========================================================================
@@ -2645,7 +2689,10 @@ router.post('/rider/applications/:id/approve', checkPin, async (req, res) => {
         rider.mustChangePassword = true;
         rider.approvedAt = new Date().toISOString();
         await supabaseDb.query(`UPDATE store_settings SET "deliveryBoys" = $1`, [JSON.stringify(list)]);
-        res.json({ success: true, rider: safeRider(rider), defaultPassword: RIDER_DEFAULT_PASSWORD });
+        sendRiderWelcomeEmail(rider.email, rider.name, rider.phone, RIDER_DEFAULT_PASSWORD).catch(() => {});
+        const riderPortalUrl = (process.env.RIDER_PORTAL_URL || 'https://rider.littiwale.co.in').replace(/\/+$/, '');
+        const whatsappMessage = `Hi ${rider.name}, your Littiwale Rider account is approved!\n\nDashboard: ${riderPortalUrl}\nUsername: ${rider.phone}\nTemporary password: ${RIDER_DEFAULT_PASSWORD}\n\nPlease change your password after first login.`;
+        res.json({ success: true, rider: safeRider(rider), defaultPassword: RIDER_DEFAULT_PASSWORD, riderPortalUrl, whatsappMessage, whatsappUrl: `https://wa.me/91${rider.phone}?text=${encodeURIComponent(whatsappMessage)}` });
     } catch (err) {
         res.status(400).json({ success: false, error: 'Could not approve rider application' });
     }

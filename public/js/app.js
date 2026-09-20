@@ -6208,7 +6208,8 @@ window.approveRiderApplication = async function(id) {
         const res = await fetch(`${API_URL}/rider/applications/${encodeURIComponent(id)}/approve`, { method:'POST', headers:{ 'x-admin-pin':authPin, 'x-pin':authPin } });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || 'Approval failed');
-        window.showAdminToast(`✅ Rider approved. Login: ${data.rider.phone} | Password: ${data.defaultPassword}`, 'success');
+        window.showAdminToast(`✅ Rider approved. Login details emailed. WhatsApp message is ready to send.`, 'success');
+        if (data.whatsappUrl) window.open(data.whatsappUrl, '_blank');
         await window.loadDeliveryBoys();
         await window.loadRiderApplications();
     } catch (err) { window.showAdminToast(err.message, 'error'); }
