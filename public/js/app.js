@@ -7788,9 +7788,9 @@ window.applyRoleBasedUI = function() {
     ];
 
     if (isOrderManager) {
-        if (staffHub) staffHub.style.display = 'block';
-        if (superadminView) superadminView.style.display = 'none';
-        if (superadminBanner) superadminBanner.style.display = 'none';
+        if (staffHub) staffHub.style.display = 'none';
+        if (superadminView) superadminView.style.display = 'block';
+        if (superadminBanner) superadminBanner.style.display = 'block';
         if (navContentGroup) navContentGroup.style.display = 'none';
         if (navInsightsLabel) navInsightsLabel.style.display = 'none';
         if (profileRoleBadge) profileRoleBadge.textContent = 'Orders & Kitchen Desk';
@@ -7809,7 +7809,7 @@ window.applyRoleBasedUI = function() {
         // Update staff operational KPIs and render live queue
         window.updateStaffOperationalKPIs();
     } else {
-        if (staffHub) staffHub.style.display = 'block';
+        if (staffHub) staffHub.style.display = 'none';
         if (superadminView) superadminView.style.display = 'block';
         if (superadminBanner) superadminBanner.style.display = 'block';
         if (navContentGroup) navContentGroup.style.display = 'block';

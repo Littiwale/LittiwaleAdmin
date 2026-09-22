@@ -389,99 +389,6 @@
                      ========================================================================== -->
                 <section id="dashboard-section" class="tab-section active">
                     
-                    <!-- STAFF & ORDER MANAGER POS DASHBOARD HUB -->
-                    <div id="staff-dashboard-hub" style="display:none; margin-bottom:24px;">
-                        
-                        <!-- Staff Welcome Banner -->
-                        <div style="background:linear-gradient(135deg, rgba(234,88,12,0.18), rgba(245,158,11,0.08)); border:1.5px solid rgba(234,88,12,0.35); border-radius:16px; padding:20px 24px; margin-bottom:20px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px;">
-                            <div>
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <span style="font-size:20px;">👨‍🍳</span>
-                                    <h2 style="margin:0; font-size:1.35rem; font-weight:900; color:#fff;">Kitchen & Billing Desk Hub</h2>
-                                    <span class="badge" style="background:rgba(234,88,12,0.25); color:#ea580c; border:1px solid rgba(234,88,12,0.4); font-size:11px; padding:3px 8px;">Order Manager</span>
-                                </div>
-                                <div style="font-size:12.5px; color:var(--text-muted); margin-top:4px;">
-                                    Quick call entry, live kitchen status & Bluetooth thermal receipt printing.
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-primary" onclick="window.openCreateOrderModal()" 
-                                style="background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%); font-weight:900; font-size:13.5px; padding:10px 20px; box-shadow:0 4px 18px rgba(234,88,12,0.45); display:inline-flex; align-items:center; gap:8px;">
-                                <span>⚡ ➕</span>
-                                <span>Create New Order</span>
-                            </button>
-                        </div>
-
-                        <!-- 4 Big Mobile-Friendly Quick Action Cards -->
-                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:20px;">
-                            
-                            <!-- Card 1: Create Order -->
-                            <div onclick="window.openCreateOrderModal()" style="cursor:pointer; background:#161622; border:1.5px solid rgba(234,88,12,0.4); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s; box-shadow:0 8px 25px rgba(0,0,0,0.4);">
-                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(234,88,12,0.2); border:1px solid rgba(234,88,12,0.5); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
-                                    📝
-                                </div>
-                                <div>
-                                    <div style="font-size:14px; font-weight:900; color:#fff;">New Call / Counter Order</div>
-                                    <div style="font-size:11.5px; color:#ea580c; font-weight:700; margin-top:2px;">⚡ 1-Tap POS Entry →</div>
-                                </div>
-                            </div>
-
-                            <!-- Card 2: Live Queue -->
-                            <div onclick="switchSection('orders-section')" style="cursor:pointer; background:#161622; border:1.5px solid rgba(245,158,11,0.25); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s;">
-                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(245,158,11,0.18); border:1px solid rgba(245,158,11,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
-                                    🛍️
-                                </div>
-                                <div>
-                                    <div style="font-size:14px; font-weight:900; color:#fff;">Live Orders Queue</div>
-                                    <div style="font-size:11.5px; color:#fbbf24; font-weight:700; margin-top:2px;" id="staff-pending-count-text">0 Pending Orders</div>
-                                </div>
-                            </div>
-
-                            <!-- Card 3: Menu Stock -->
-                            <div onclick="switchSection('menu-section')" style="cursor:pointer; background:#161622; border:1.5px solid rgba(16,185,129,0.25); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s;">
-                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
-                                    🍽️
-                                </div>
-                                <div>
-                                    <div style="font-size:14px; font-weight:900; color:#fff;">Menu Stock Control</div>
-                                    <div style="font-size:11.5px; color:#34d399; font-weight:700; margin-top:2px;">Toggle In/Out of Stock →</div>
-                                </div>
-                            </div>
-
-                            <!-- Card 4: Print Thermal Bill & Receipt Station -->
-                            <div onclick="switchSection('billing-section')" style="cursor:pointer; background:#161622; border:1.5px solid rgba(59,130,246,0.25); border-radius:14px; padding:18px 20px; display:flex; align-items:center; gap:16px; transition:transform 0.15s, border-color 0.2s;">
-                                <div style="width:48px; height:48px; border-radius:12px; background:rgba(59,130,246,0.18); border:1px solid rgba(59,130,246,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">
-                                    🖨️
-                                </div>
-                                <div>
-                                    <div style="font-size:14px; font-weight:900; color:#fff;">Print & Preview Bills</div>
-                                    <div style="font-size:11.5px; color:#60a5fa; font-weight:700; margin-top:2px;">View Orders & Thermal Print →</div>
-                                </div>
-                            </div>
-
-                        </div>
-
-                        <!-- Staff Operational Numbers Strip -->
-                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; background:#14141c; border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:14px 18px;">
-                            <div style="text-align:center; padding:6px;">
-                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#94a3b8;">Today's Orders</div>
-                                <div style="font-size:22px; font-weight:900; color:#fff; margin-top:2px;" id="staff-kpi-today-orders">0</div>
-                            </div>
-                            <div style="text-align:center; padding:6px; border-left:1px solid rgba(255,255,255,0.06);">
-                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#fbbf24;">Pending in Kitchen</div>
-                                <div style="font-size:22px; font-weight:900; color:#fbbf24; margin-top:2px;" id="staff-kpi-pending-orders">0</div>
-                            </div>
-                            <div style="text-align:center; padding:6px; border-left:1px solid rgba(255,255,255,0.06);">
-                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#22c55e;">Delivered Today</div>
-                                <div style="font-size:22px; font-weight:900; color:#22c55e; margin-top:2px;" id="staff-kpi-delivered-orders">0</div>
-                            </div>
-                            <div style="text-align:center; padding:6px; border-left:1px solid rgba(255,255,255,0.06);">
-                                <div style="font-size:11px; font-weight:700; text-transform:uppercase; color:#ef4444;">Out of Stock</div>
-                                <div style="font-size:22px; font-weight:900; color:#ef4444; margin-top:2px;" id="staff-kpi-out-stock">0</div>
-                            </div>
-                        </div>
-
-                    </div>
-
                     <!-- ========================================== -->
                     <!-- SUPERADMIN EXECUTIVE VIEW (HIDDEN FOR ORDER STAFF) -->
                     <!-- ========================================== -->
@@ -495,7 +402,7 @@
                         <div class="welcome-desc">Manage your restaurant operations, website content, menu and deliveries from one central platform.</div>
                     </div>
 
-                    <!-- 5 KPI Stats Grid (Including Live Revenue Calculator) -->
+                    <!-- Dashboard Actions -->
                     <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));">
                         
                         <!-- Revenue KPI Card -->
@@ -511,49 +418,27 @@
                             </div>
                         </div>
 
-                        <div class="kpi-card" onclick="switchSection('menu-section')" style="cursor:pointer;">
+                        <div class="kpi-card dashboard-action-card" onclick="window.openCreateOrderModal()" style="cursor:pointer; border:1px solid rgba(234,88,12,0.35);">
                             <div class="kpi-header">
-                                <div class="kpi-icon-box green">🍽️</div>
-                                <span class="kpi-label">Total Menu Dishes</span>
+                                <div class="kpi-icon-box orange">📝</div>
+                                <span class="kpi-label">Create New Order</span>
                             </div>
-                            <div class="kpi-number" id="kpi-menu-count">0</div>
+                            <div class="kpi-number dashboard-action-symbol">＋</div>
                             <div class="kpi-footer">
-                                <span style="color:#10b981; font-weight:700;">● Active Catalog</span>
-                                <span>Dishes in database</span>
+                                <span style="color:var(--brand-orange); font-weight:700;">⚡ Counter / Phone POS</span>
+                                <span>Open order form</span>
                             </div>
                         </div>
 
-                        <div class="kpi-card" onclick="openModal('category-modal')" style="cursor:pointer;">
+                        <div class="kpi-card dashboard-action-card" onclick="switchSection('billing-section')" style="cursor:pointer; border:1px solid rgba(59,130,246,0.35);">
                             <div class="kpi-header">
-                                <div class="kpi-icon-box gold">📁</div>
-                                <span class="kpi-label">Food Categories</span>
+                                <div class="kpi-icon-box blue">🖨️</div>
+                                <span class="kpi-label">Print & Preview Bills</span>
                             </div>
-                            <div class="kpi-number" id="kpi-categories-count">0</div>
+                            <div class="kpi-number dashboard-action-symbol">▣</div>
                             <div class="kpi-footer">
-                                <span class="kpi-trend up" id="kpi-categories-sub">Organized Categories</span>
-                            </div>
-                        </div>
-
-                        <div class="kpi-card" onclick="switchToCmsTab('announcements-tab')" style="cursor:pointer;">
-                            <div class="kpi-header">
-                                <div class="kpi-icon-box">📢</div>
-                                <span class="kpi-label">Active Announcements</span>
-                            </div>
-                            <div class="kpi-number" id="kpi-banners-count">0</div>
-                            <div class="kpi-footer">
-                                <span style="color:var(--brand-orange); font-weight:700;">● Live Banners</span>
-                                <span>Shown on website</span>
-                            </div>
-                        </div>
-
-                        <div class="kpi-card" onclick="switchSection('coupons-section')" style="cursor:pointer;">
-                            <div class="kpi-header">
-                                <div class="kpi-icon-box blue">🏷️</div>
-                                <span class="kpi-label">Promo Coupons</span>
-                            </div>
-                            <div class="kpi-number" id="kpi-coupons-count">0</div>
-                            <div class="kpi-footer">
-                                <span class="kpi-trend up">Discount Codes</span>
+                                <span style="color:#60a5fa; font-weight:700;">● Thermal Print Station</span>
+                                <span>View and print bills</span>
                             </div>
                         </div>
                     </div>
