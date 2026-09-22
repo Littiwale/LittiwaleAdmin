@@ -6602,8 +6602,7 @@ window.markTakeawayReady = async function(orderId) {
                 'x-pin': authPin
             },
             body: JSON.stringify({
-                status: 'dispatched',
-                dispatchedAt: new Date()
+                status: 'dispatched'
             })
         });
         if (res.ok) {
@@ -6613,7 +6612,8 @@ window.markTakeawayReady = async function(orderId) {
             window.fetchAndRenderOrders();
             window.sendTakeawayReadyWhatsApp(order._id);
         } else {
-            window.showAdminToast('Failed to update status. Verify Admin PIN.', 'error');
+            const errorPayload = await res.json().catch(() => ({}));
+            window.showAdminToast(errorPayload.error || 'Failed to update status. Verify Admin PIN.', 'error');
         }
     } catch(e) {
         console.error('Mark takeaway ready error:', e);

@@ -3350,10 +3350,8 @@ td strong {
   #modal-create-order .modal-content {
     width: 100% !important;
     max-width: 100% !important;
-    height: 92vh !important;
-    height: 92dvh !important;
-    max-height: 92vh !important;
-    max-height: 92dvh !important;
+    height: min(100dvh, 760px) !important;
+    max-height: 100dvh !important;
     border-radius: 20px 20px 0 0 !important;
     margin: 0 !important;
     border-left: none !important;
@@ -3449,6 +3447,34 @@ td strong {
     padding: 12px 14px !important;
     font-size: 13.5px !important;
     font-weight: 900 !important;
+  }
+}
+
+@media (max-width: 380px) {
+  #modal-create-order .modal-header {
+    padding: 12px 14px !important;
+  }
+
+  .admin-create-order-scrollable {
+    padding: 12px 12px 20px !important;
+  }
+
+  .admin-create-order-footer {
+    gap: 8px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .admin-create-order-footer button {
+    min-width: 0 !important;
+    white-space: normal !important;
+    line-height: 1.15 !important;
+  }
+
+  .admin-create-order-footer button:last-child {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    font-size: 12px !important;
   }
 }
 
