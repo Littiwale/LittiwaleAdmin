@@ -2475,9 +2475,10 @@
                 <!-- Rider / Delivery Boy Selection -->
                 <div class="form-group" style="margin-bottom:16px;">
                     <label class="form-label" style="font-size:12px; font-weight:800; color:#fff; display:flex; justify-content:space-between; align-items:center;">
-                        <span>🛵 Assign Delivery Boy *</span>
+                        <span>🛵 Assign / Change Delivery Boy *</span>
                         <a href="javascript:void(0)" onclick="openAddDeliveryBoyModal()" style="font-size:11px; color:#38bdf8; text-decoration:none; font-weight:700;">+ New Rider</a>
                     </label>
+                    <div id="dispatch-assigned-rider-summary" style="display:none; margin-bottom:8px; padding:9px 11px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:8px; color:#a7f3d0; font-size:12px; line-height:1.4;"></div>
                     <select id="dispatch-delivery-boy-select" class="form-control" style="padding:10px; font-size:13px; font-weight:700; color:#fff; background:#1e1e28;" onchange="onDispatchRiderSelected()">
                         <!-- Injected by app.js -->
                     </select>

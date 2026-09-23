@@ -1065,7 +1065,7 @@ window.openOrderQuickModal = function(orderId) {
                         <div style="font-weight:900; font-size:14px; color:#60a5fa; margin-bottom:12px;">⚡ STEP 2: ASSIGN RIDER, THEN DISPATCH</div>
                         <div style="display:flex; gap:10px;">
                             <button type="button" class="btn btn-primary" style="flex:1; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:13px; padding:13px 8px; border-radius:10px;" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
-                                🛵 Assign Delivery Boy
+                                🛵 ${ord.deliveryBoy?.name ? 'Change Delivery Boy' : 'Assign Delivery Boy'}
                             </button>
                             <button type="button" class="btn btn-primary" style="flex:1; background:linear-gradient(135deg, #10b981, #059669); color:#fff; font-weight:900; font-size:13px; padding:13px 8px; border-radius:10px;" onclick="markOrderDispatched('${ord._id}');">
                                 📦 Mark Dispatched
@@ -1092,13 +1092,16 @@ window.openOrderQuickModal = function(orderId) {
                     </div>
                 `;
             } else {
-                const riderName = ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Rider';
-                const riderPhone = ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '';
+                const riderName = ord.deliveryBoy?.name || ord.assignedDeliveryBoy?.name || ord.deliveryBoyName || 'Rider';
+                const riderPhone = ord.deliveryBoy?.phone || ord.assignedDeliveryBoy?.phone || ord.deliveryBoyPhone || '';
                 actionCard.innerHTML = `
                     <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:14px 12px; text-align:center; box-sizing:border-box; overflow:hidden;">
                         <div style="font-weight:900; font-size:13px; color:#34d399; margin-bottom:4px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
                         ${riderPhone ? `<div style="font-size:11.5px; color:#cbd5e1; margin-bottom:10px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:8px;"></div>'}
                         <div style="display:flex; flex-direction:column; gap:8px;">
+                            <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(59,130,246,0.15); border:1px solid #3b82f6; color:#60a5fa; font-weight:800; font-size:12.5px; padding:9px 10px; border-radius:10px;" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
+                                🛵 Change Delivery Boy
+                            </button>
                             <button type="button" class="btn btn-primary" style="width:100%; background:#10b981; color:#000; font-weight:900; font-size:13.5px; padding:12px 10px; border-radius:10px; white-space:normal; line-height:1.2;" onclick="closeModal('order-quick-modal'); directUpdateOrderStatus('${ord._id}', 'delivered'); setTimeout(() => sendCustomerDeliveredWhatsApp('${ord._id}'), 500);">
                                 🎉 Mark Order Delivered (Completed)
                             </button>
@@ -6022,7 +6025,7 @@ window.openOrderConfirmModal = function(orderId) {
         } else if (status === 'accepted' || status === 'confirmed') {
             buttonsHtml += `
                 <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="openDispatchModal()">
-                    <span>🛵 Assign Delivery Boy</span>
+                    <span>🛵 ${order.deliveryBoy?.name ? 'Change Delivery Boy' : 'Assign Delivery Boy'}</span>
                 </button>
                 <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="markOrderDispatched('${order._id}')">
                     <span>📦 Mark Out for Delivery (Dispatch)</span>
@@ -6038,6 +6041,9 @@ window.openOrderConfirmModal = function(orderId) {
             `;
         } else if (status === 'dispatched') {
             buttonsHtml += `
+                <button type="button" class="btn btn-secondary" style="background:rgba(59,130,246,0.15); border:1px solid #3b82f6; color:#60a5fa; font-weight:800; font-size:13px; padding:11px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="openDispatchModal()">
+                    <span>🛵 Change Delivery Boy</span>
+                </button>
                 <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="quickUpdateOrderStatus('delivered')">
                     <span>🎉 Mark Order as Delivered</span>
                 </button>
@@ -6411,12 +6417,30 @@ window.populateDispatchRidersDropdown = function() {
 
     selectEl.innerHTML = optionsHtml;
     const assignedRider = window.currentDispatchOrder?.deliveryBoy || window.currentDispatchOrder?.assignedDeliveryBoy;
-    if (assignedRider && boys.length > 0) {
+    if (assignedRider) {
         const assignedOption = Array.from(selectEl.options).find(option =>
             String(option.getAttribute('data-rider-id') || '') === String(assignedRider.id || '') ||
             String(option.getAttribute('data-phone') || '').replace(/\D/g, '').slice(-10) === String(assignedRider.phone || '').replace(/\D/g, '').slice(-10)
         );
-        if (assignedOption) selectEl.value = assignedOption.value;
+        if (assignedOption) {
+            selectEl.value = assignedOption.value;
+        } else {
+            const preservedOption = document.createElement('option');
+            preservedOption.value = assignedRider.id || `assigned_${String(assignedRider.phone || '').replace(/\D/g, '')}`;
+            preservedOption.setAttribute('data-rider-id', assignedRider.id || '');
+            preservedOption.setAttribute('data-name', assignedRider.name || 'Assigned Rider');
+            preservedOption.setAttribute('data-phone', assignedRider.phone || '');
+            preservedOption.textContent = `🛵 Current: ${assignedRider.name || 'Assigned Rider'} (+91 ${assignedRider.phone || 'N/A'})`;
+            selectEl.insertBefore(preservedOption, selectEl.firstChild);
+            selectEl.value = preservedOption.value;
+        }
+    }
+    const summaryEl = document.getElementById('dispatch-assigned-rider-summary');
+    if (summaryEl) {
+        summaryEl.style.display = assignedRider?.name ? 'block' : 'none';
+        summaryEl.innerHTML = assignedRider?.name
+            ? `✅ Currently assigned: <strong>${assignedRider.name}</strong> (+91 ${assignedRider.phone || 'N/A'})<br><span style="color:#94a3b8;">Selecting another rider will unassign this rider from the order.</span>`
+            : '';
     }
     window.onDispatchRiderSelected();
 };
