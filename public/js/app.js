@@ -1062,10 +1062,15 @@ window.openOrderQuickModal = function(orderId) {
             } else {
                 actionCard.innerHTML = `
                     <div style="background:rgba(59,130,246,0.1); border:1.5px solid rgba(59,130,246,0.35); border-radius:14px; padding:16px; text-align:center;">
-                        <div style="font-weight:900; font-size:14px; color:#60a5fa; margin-bottom:12px;">⚡ STEP 2: FOOD READY? ASSIGN RIDER</div>
-                        <button type="button" class="btn btn-primary" style="width:100%; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:13px; border-radius:10px; box-shadow:0 4px 15px rgba(59,130,246,0.4);" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
-                            📦 Assign Delivery Partner & Dispatch →
-                        </button>
+                        <div style="font-weight:900; font-size:14px; color:#60a5fa; margin-bottom:12px;">⚡ STEP 2: ASSIGN RIDER, THEN DISPATCH</div>
+                        <div style="display:flex; gap:10px;">
+                            <button type="button" class="btn btn-primary" style="flex:1; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:13px; padding:13px 8px; border-radius:10px;" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
+                                🛵 Assign Delivery Boy
+                            </button>
+                            <button type="button" class="btn btn-primary" style="flex:1; background:linear-gradient(135deg, #10b981, #059669); color:#fff; font-weight:900; font-size:13px; padding:13px 8px; border-radius:10px;" onclick="markOrderDispatched('${ord._id}');">
+                                📦 Mark Dispatched
+                            </button>
+                        </div>
                     </div>
                 `;
             }
@@ -6017,6 +6022,9 @@ window.openOrderConfirmModal = function(orderId) {
         } else if (status === 'accepted' || status === 'confirmed') {
             buttonsHtml += `
                 <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="openDispatchModal()">
+                    <span>🛵 Assign Delivery Boy</span>
+                </button>
+                <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; font-weight:900; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="markOrderDispatched('${order._id}')">
                     <span>📦 Mark Out for Delivery (Dispatch)</span>
                 </button>
                 <div style="display:flex; gap:10px;">
@@ -6844,13 +6852,12 @@ window.executeWhatsAppAction = function(actionType) {
     }
 };
 
-window.executeDispatchOrder = async function() {
+window.saveDeliveryBoyAssignment = async function() {
     const order = window.currentDispatchOrder;
     if (!order || !order._id) return;
 
     const rider = window.getSelectedDispatchRider();
     const riderEarning = Math.max(0, Number(document.getElementById('dispatch-rider-earning')?.value || order.deliveryCharge || 0));
-    const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
     try {
@@ -6862,29 +6869,64 @@ window.executeDispatchOrder = async function() {
                 'x-pin': authPin
             },
             body: JSON.stringify({
-                status: 'dispatched',
                 deliveryBoy: {
                     id: rider.id,
                     name: rider.name,
-                    phone: rider.phone,
+                    phone: String(rider.phone || '').replace(/\D/g, '').slice(-10),
                     earning: riderEarning
-                },
-                paymentCollectedByStore: isPrepaid,
-                dispatchedAt: new Date()
+                }
             })
         });
 
         if (res.ok) {
             const shortId = String(order._id).slice(-6).toUpperCase();
-            window.showAdminToast(`🚀 Order #${shortId} Dispatched with ${rider.name}!`, 'success');
+            order.deliveryBoy = { id: rider.id, name: rider.name, phone: rider.phone, earning: riderEarning };
+            window.showAdminToast(`🛵 Rider ${rider.name} assigned to Order #${shortId}!`, 'success');
             closeModal('order-dispatch-modal');
+            window.fetchAndRenderOrders();
+        } else {
+            const errorPayload = await res.json().catch(() => ({}));
+            window.showAdminToast(errorPayload.error || 'Failed to assign delivery boy. Please verify Admin PIN.', 'error');
+        }
+    } catch(e) {
+        console.error('Delivery boy assignment error:', e);
+        window.showAdminToast('Error assigning delivery boy', 'error');
+    }
+};
+
+window.markOrderDispatched = async function(orderId) {
+    const order = (window.cachedOrders || []).find(item => String(item._id) === String(orderId)) || window.currentSelectedOrder;
+    if (!order || !order._id) return;
+
+    const assignedRider = order.deliveryBoy || order.assignedDeliveryBoy;
+    if (!assignedRider?.name || !assignedRider?.phone) {
+        window.showAdminToast('Pehle delivery boy assign karein', 'warning');
+        return;
+    }
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const res = await fetch(`${API_URL}/orders/${order._id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ status: 'dispatched' })
+        });
+
+        if (res.ok) {
+            window.showAdminToast(`📦 Order #${String(order._id).slice(-6).toUpperCase()} marked dispatched!`, 'success');
+            closeModal('order-quick-modal');
             closeModal('order-confirm-modal');
             window.fetchAndRenderOrders();
         } else {
-            window.showAdminToast('Failed to dispatch order. Please verify Admin PIN.', 'error');
+            const errorPayload = await res.json().catch(() => ({}));
+            window.showAdminToast(errorPayload.error || 'Failed to mark order dispatched.', 'error');
         }
-    } catch(e) {
-        console.error('Dispatch error:', e);
+    } catch (e) {
+        console.error('Dispatch status error:', e);
         window.showAdminToast('Error marking order dispatched', 'error');
     }
 };

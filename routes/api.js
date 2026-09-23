@@ -576,6 +576,12 @@ router.put('/announcements/:id', checkPin, async (req, res) => {
         const values = [];
         let idx = 1;
 
+        // Older Supabase order tables may not have the newer dispatch metadata columns yet.
+        const columnResult = await supabaseDb.query(
+            `SELECT column_name FROM information_schema.columns WHERE table_name = 'orders'`
+        );
+        const orderColumns = new Set((columnResult.rows || []).map(row => row.column_name));
+
         if (payload.title !== undefined) {
             updates.push(`title = $${idx++}`);
             values.push(payload.title);
@@ -2479,11 +2485,11 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             updates.push(`"deliveryBoy" = $${idx++}`);
             values.push(JSON.stringify(deliveryBoy));
         }
-        if (paymentCollectedByStore !== undefined) {
+        if (paymentCollectedByStore !== undefined && orderColumns.has('paymentCollectedByStore')) {
             updates.push(`"paymentCollectedByStore" = $${idx++}`);
             values.push(Boolean(paymentCollectedByStore));
         }
-        if (dispatchedAt !== undefined) {
+        if (dispatchedAt !== undefined && orderColumns.has('dispatchedAt')) {
             updates.push(`"dispatchedAt" = $${idx++}`);
             values.push(dispatchedAt);
         }
