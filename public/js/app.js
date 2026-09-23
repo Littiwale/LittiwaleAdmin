@@ -1063,6 +1063,7 @@ window.openOrderQuickModal = function(orderId) {
                 actionCard.innerHTML = `
                     <div style="background:rgba(59,130,246,0.1); border:1.5px solid rgba(59,130,246,0.35); border-radius:14px; padding:16px; text-align:center;">
                         <div style="font-weight:900; font-size:14px; color:#60a5fa; margin-bottom:12px;">⚡ STEP 2: ASSIGN RIDER, THEN DISPATCH</div>
+                        ${ord.deliveryBoy?.name ? `<div style="margin-bottom:12px; padding:9px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:8px; color:#a7f3d0; font-size:12px; line-height:1.45;">Assigned: <strong>${ord.deliveryBoy.name}</strong> (+91 ${ord.deliveryBoy.phone || 'N/A'})<br>Rider earning: <strong>₹${Number(ord.deliveryBoy.earning || 0).toLocaleString('en-IN')}</strong></div>` : ''}
                         <div style="display:flex; gap:10px;">
                             <button type="button" class="btn btn-primary" style="flex:1; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:13px; padding:13px 8px; border-radius:10px;" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
                                 🛵 ${ord.deliveryBoy?.name ? 'Change Delivery Boy' : 'Assign Delivery Boy'}
@@ -1097,7 +1098,7 @@ window.openOrderQuickModal = function(orderId) {
                 actionCard.innerHTML = `
                     <div style="background:rgba(16,185,129,0.1); border:1.5px solid rgba(16,185,129,0.35); border-radius:14px; padding:14px 12px; text-align:center; box-sizing:border-box; overflow:hidden;">
                         <div style="font-weight:900; font-size:13px; color:#34d399; margin-bottom:4px;">⚡ STEP 3: ORDER OUT FOR DELIVERY</div>
-                        ${riderPhone ? `<div style="font-size:11.5px; color:#cbd5e1; margin-bottom:10px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)</div>` : '<div style="margin-bottom:8px;"></div>'}
+                        ${riderPhone ? `<div style="font-size:11.5px; color:#cbd5e1; margin-bottom:10px;">Assigned Rider: <strong>${riderName}</strong> (<a href="tel:${riderPhone}" style="color:#38bdf8; text-decoration:none;">📞 ${riderPhone}</a>)<br>Rider earning: <strong style="color:#34d399;">₹${Number(ord.deliveryBoy?.earning || 0).toLocaleString('en-IN')}</strong></div>` : '<div style="margin-bottom:8px;"></div>'}
                         <div style="display:flex; flex-direction:column; gap:8px;">
                             <button type="button" class="btn btn-secondary" style="width:100%; background:rgba(59,130,246,0.15); border:1px solid #3b82f6; color:#60a5fa; font-weight:800; font-size:12.5px; padding:9px 10px; border-radius:10px;" onclick="closeModal('order-quick-modal'); openDispatchModal('${ord._id}');">
                                 🛵 Change Delivery Boy
