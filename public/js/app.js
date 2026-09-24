@@ -587,6 +587,20 @@ window.backToStep1 = function() {
     if (errorEl) errorEl.textContent = '';
 };
 
+function showLogin() {
+    loginScreen.classList.remove('hidden');
+    dashboardScreen.classList.add('hidden');
+    if (loginError) loginError.textContent = '';
+}
+
+function showDashboard() {
+    loginScreen.classList.add('hidden');
+    dashboardScreen.classList.remove('hidden');
+    if (typeof window.applyRoleBasedUI === 'function') {
+        window.applyRoleBasedUI();
+    }
+}
+
 // =======================
 // WEBSITE ORDERS REVENUE TRACKER & LIVE ORDERS (REAL-TIME AUTO SYNC)
 // =======================
