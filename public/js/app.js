@@ -6531,14 +6531,21 @@ window.openDispatchModal = async function(orderId = null) {
         collectLabel.textContent = `💵 Collect Cash from Customer (₹${totalVal})`;
     }
 
-    // Default payment choice: if order.paymentMethod === 'UPI' or paymentCollectedByStore, default to prepaid
+    const savedAmountPaid = Math.max(0, Number(order.amountPaid || 0));
+    const savedPaymentStatus = String(order.paymentStatus || '').toLowerCase();
     const payCollectRadio = document.getElementById('dispatch-pay-collect');
+    const payPartialRadio = document.getElementById('dispatch-pay-partial');
     const payPrepaidRadio = document.getElementById('dispatch-pay-prepaid');
-    if (order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full')) {
+    const partialAmountInput = document.getElementById('dispatch-amount-paid');
+    if (savedPaymentStatus === 'partial' || (savedAmountPaid > 0 && savedAmountPaid < totalVal)) {
+        if (payPartialRadio) payPartialRadio.checked = true;
+        if (partialAmountInput) partialAmountInput.value = savedAmountPaid;
+    } else if (order.paymentCollectedByStore || savedPaymentStatus === 'paid' || (order.paymentMethod === 'UPI' && order.paymentMode === 'full')) {
         if (payPrepaidRadio) payPrepaidRadio.checked = true;
     } else {
         if (payCollectRadio) payCollectRadio.checked = true;
     }
+    window.onDispatchPaymentChoiceChanged();
 
     // Ensure delivery boys are loaded
     if (!window.cachedDeliveryBoys || window.cachedDeliveryBoys.length === 0) {
@@ -6550,6 +6557,48 @@ window.openDispatchModal = async function(orderId = null) {
     if (earningInput) earningInput.value = Number(order.deliveryCharge || 0);
 
     openModal('order-dispatch-modal');
+};
+
+window.onDispatchPaymentChoiceChanged = function() {
+    const partialRadio = document.getElementById('dispatch-pay-partial');
+    const amountInput = document.getElementById('dispatch-amount-paid');
+    if (amountInput) amountInput.style.display = partialRadio?.checked ? 'block' : 'none';
+};
+
+window.getStoredOrderPaymentDetails = function(order) {
+    const total = Math.max(0, Number(order?.finalTotal || order?.subtotal || 0));
+    let paid = Math.max(0, Number(order?.amountPaid || 0));
+    if (!paid && order?.paymentCollectedByStore) paid = total;
+    paid = Math.min(total, paid);
+    const due = Math.max(0, total - paid);
+    const status = due === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending');
+    return { total, paid, due, status };
+};
+
+window.getDispatchPaymentDetails = function(order) {
+    const stored = window.getStoredOrderPaymentDetails(order);
+    const selected = document.querySelector('input[name="dispatch-payment-choice"]:checked')?.value || 'collect';
+    let paid = 0;
+
+    if (selected === 'prepaid') {
+        paid = stored.total;
+    } else if (selected === 'partial') {
+        paid = Number(document.getElementById('dispatch-amount-paid')?.value || 0);
+        if (!Number.isFinite(paid) || paid <= 0 || paid >= stored.total) {
+            window.showAdminToast(`Advance must be greater than ₹0 and less than total ₹${stored.total}`, 'warning');
+            return null;
+        }
+    }
+
+    const due = Math.max(0, stored.total - paid);
+    return {
+        total: stored.total,
+        paid,
+        due,
+        status: due === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending'),
+        mode: due === 0 ? 'full' : (paid > 0 ? 'partial' : 'full'),
+        collectedByStore: paid > 0
+    };
 };
 
 window.getSelectedDispatchRider = function() {
@@ -6592,15 +6641,17 @@ window.sendDeliveryBoyDispatchWhatsApp = function() {
     const shortId = String(order._id).slice(-6).toUpperCase();
     const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * it.quantity)})`).join('\n') || '• Food Items';
     
-    const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
     const subtotal = Number(order.subtotal || order.finalTotal || 0);
     const delCharge = Number(order.deliveryCharge || 0);
     const discount = Number(order.discount || 0);
     const finalTotal = Number(order.finalTotal || (subtotal - discount + delCharge));
-
-    const paymentInstruction = isPrepaid 
-        ? `👉 *[ ₹0 — ALREADY PAID ONLINE ✅ DO NOT COLLECT CASH ]*`
-        : `👉 *[ COLLECT ₹${finalTotal} CASH FROM CUSTOMER ]* 💵\n(Total includes Food ₹${subtotal} + Delivery ₹${delCharge})`;
+    const payment = window.getDispatchPaymentDetails(order);
+    if (!payment) return;
+    const paymentInstruction = payment.status === 'paid'
+        ? `👉 *[ ₹0 — PAYMENT FULLY RECEIVED ✅ DO NOT COLLECT CASH ]*`
+        : payment.status === 'partial'
+            ? `👉 *[ COLLECT ₹${payment.due} BALANCE FROM CUSTOMER ]* 💵\n(Advance already received: ₹${payment.paid})`
+            : `👉 *[ COLLECT ₹${payment.due} CASH FROM CUSTOMER ]* 💵\n(Total includes Food ₹${subtotal} + Delivery ₹${delCharge})`;
 
     const gpsLine = order.gpsLink ? `\n*📍 Google Maps:* ${order.gpsLink}` : '';
     const riderPortalUrl = 'https://rider.littiwale.co.in';
@@ -6641,9 +6692,12 @@ window.sendCustomerDispatchWhatsApp = function() {
     const targetPhone = order.whatsappPhone || order.customerPhone || '';
     const cleanCustPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
 
-    const isPrepaid = document.getElementById('dispatch-pay-prepaid')?.checked || false;
-    const finalTotal = Number(order.finalTotal || order.subtotal || 0);
-    const paymentStatusText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (Cash on Delivery 💵)`;
+    const payment = window.getStoredOrderPaymentDetails(order);
+    const paymentStatusText = payment.status === 'paid'
+        ? `₹0 (Already Paid ✅)`
+        : payment.status === 'partial'
+            ? `₹${payment.due} (Balance Due; ₹${payment.paid} advance received 💵)`
+            : `₹${payment.due} (Cash on Delivery 💵)`;
 
     const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
     const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
@@ -6929,6 +6983,8 @@ window.saveDeliveryBoyAssignment = async function() {
     if (!order || !order._id) return;
 
     const rider = window.getSelectedDispatchRider();
+    const payment = window.getDispatchPaymentDetails(order);
+    if (!payment) return;
     const riderEarning = Math.max(0, Number(document.getElementById('dispatch-rider-earning')?.value || order.deliveryCharge || 0));
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
@@ -6946,13 +7002,23 @@ window.saveDeliveryBoyAssignment = async function() {
                     name: rider.name,
                     phone: String(rider.phone || '').replace(/\D/g, '').slice(-10),
                     earning: riderEarning
-                }
+                },
+                paymentMode: payment.mode,
+                amountPaid: payment.paid,
+                amountDue: payment.due,
+                paymentStatus: payment.status,
+                paymentCollectedByStore: payment.collectedByStore
             })
         });
 
         if (res.ok) {
             const shortId = String(order._id).slice(-6).toUpperCase();
             order.deliveryBoy = { id: rider.id, name: rider.name, phone: rider.phone, earning: riderEarning };
+            order.amountPaid = payment.paid;
+            order.amountDue = payment.due;
+            order.paymentStatus = payment.status;
+            order.paymentMode = payment.mode;
+            order.paymentCollectedByStore = payment.collectedByStore;
             window.currentDispatchOrder = order;
             window.showAdminToast(`🛵 Rider ${rider.name} assigned to Order #${shortId}!`, 'success');
             window.sendDeliveryBoyDispatchWhatsApp();

@@ -23,6 +23,9 @@ const orderSchema = new mongoose.Schema({
     finalTotal: { type: Number, required: true, default: 0 },
     paymentMethod: { type: String, enum: ['COD', 'UPI'], default: 'COD' },
     paymentMode: { type: String, default: 'full' },
+    amountPaid: { type: Number, default: 0, min: 0 },
+    amountDue: { type: Number, default: 0, min: 0 },
+    paymentStatus: { type: String, enum: ['pending', 'partial', 'paid'], default: 'pending' },
     notes: { type: String, default: '' },
     orderSource: { type: String, default: 'website' },
     deliveryBoy: {

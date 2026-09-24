@@ -2500,15 +2500,23 @@
                 <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:10px; padding:12px 14px; margin-bottom:20px;">
                     <label class="form-label" style="font-size:12px; font-weight:800; color:#fbbf24; margin-bottom:10px; display:block;">💰 Cash / Payment Collection Instruction for Rider:</label>
                     <div style="display:flex; flex-direction:column; gap:8px;">
-                        <label style="display:flex; align-items:center; gap:10px; font-size:12.5px; color:#fff; cursor:pointer; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
-                            <input type="radio" name="dispatch-payment-choice" id="dispatch-pay-collect" value="collect" checked style="accent-color:#f59e0b; width:16px; height:16px;">
+                        <label style="display:flex; align-items:flex-start; gap:10px; font-size:12.5px; color:#fff; cursor:pointer; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                            <input type="radio" name="dispatch-payment-choice" id="dispatch-pay-collect" value="collect" checked onchange="window.onDispatchPaymentChoiceChanged()" style="accent-color:#f59e0b; width:16px; height:16px; margin-top:2px;">
                             <div>
                                 <strong style="color:#f59e0b;" id="dispatch-collect-cash-label">💵 Collect Cash from Customer (₹0)</strong>
                                 <div style="font-size:11px; color:#94a3b8;">Driver will collect full cash amount on delivery</div>
                             </div>
                         </label>
-                        <label style="display:flex; align-items:center; gap:10px; font-size:12.5px; color:#fff; cursor:pointer; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
-                            <input type="radio" name="dispatch-payment-choice" id="dispatch-pay-prepaid" value="prepaid" style="accent-color:#10b981; width:16px; height:16px;">
+                        <label style="display:flex; align-items:flex-start; gap:10px; font-size:12.5px; color:#fff; cursor:pointer; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                            <input type="radio" name="dispatch-payment-choice" id="dispatch-pay-partial" value="partial" onchange="window.onDispatchPaymentChoiceChanged()" style="accent-color:#f59e0b; width:16px; height:16px; margin-top:2px;">
+                            <div style="width:100%;">
+                                <strong style="color:#fbbf24;">🧾 Partial Payment / Advance Received</strong>
+                                <div style="font-size:11px; color:#94a3b8;">Enter the amount already received at the restaurant</div>
+                                <input type="number" id="dispatch-amount-paid" min="0" step="1" class="form-control" placeholder="Advance received (₹)" style="display:none; margin-top:8px; padding:8px; font-size:12px;">
+                            </div>
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:10px; font-size:12.5px; color:#fff; cursor:pointer; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06);">
+                            <input type="radio" name="dispatch-payment-choice" id="dispatch-pay-prepaid" value="prepaid" onchange="window.onDispatchPaymentChoiceChanged()" style="accent-color:#10b981; width:16px; height:16px; margin-top:2px;">
                             <div>
                                 <strong style="color:#34d399;">✅ Already Paid Online / Received at Restaurant (Collect ₹0)</strong>
                                 <div style="font-size:11px; color:#94a3b8;">Driver does NOT collect any money from customer</div>
@@ -2521,16 +2529,6 @@
                     <label class="form-label" style="font-size:12px; font-weight:800; color:#fff;">💸 Rider Delivery Earning</label>
                     <input type="number" id="dispatch-rider-earning" class="form-control" min="0" step="1" placeholder="Default: delivery charge" style="padding:10px; font-size:13px; font-weight:700;">
                     <div style="font-size:11px; color:#94a3b8; margin-top:5px;">This amount will appear in the assigned rider's earnings.</div>
-                </div>
-
-                <!-- Instant 2-Click WhatsApp Slip Actions -->
-                <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;">
-                    <button type="button" class="btn btn-primary" style="background:#25d366; color:#000; font-weight:900; font-size:13.5px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="sendDeliveryBoyDispatchWhatsApp()">
-                        <span>📲 1. WhatsApp Delivery Slip to Rider</span>
-                    </button>
-                    <button type="button" class="btn btn-secondary" style="background:rgba(59,130,246,0.15); border:1px solid #3b82f6; color:#60a5fa; font-weight:800; font-size:13px; padding:11px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="sendCustomerDispatchWhatsApp()">
-                        <span>💬 2. WhatsApp "Out for Delivery" to Customer</span>
-                    </button>
                 </div>
 
                 <!-- Confirm & Save Status -->

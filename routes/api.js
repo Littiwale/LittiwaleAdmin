@@ -23,6 +23,25 @@ if (SUPABASE_URL && SUPABASE_KEY) {
 
 const JWT_SECRET = process.env.JWT_SECRET || 'littiwale_super_secret_jwt_key_2026';
 const RIDER_DEFAULT_PASSWORD = 'Littiwale@2026';
+let orderPaymentColumnsReady;
+
+function ensureOrderPaymentColumns() {
+    if (!orderPaymentColumnsReady) {
+        orderPaymentColumnsReady = supabaseDb.query(
+            `ALTER TABLE orders
+             ADD COLUMN IF NOT EXISTS "amountPaid" NUMERIC NOT NULL DEFAULT 0,
+             ADD COLUMN IF NOT EXISTS "amountDue" NUMERIC NOT NULL DEFAULT 0,
+             ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'pending',
+             ADD COLUMN IF NOT EXISTS "paymentMode" TEXT NOT NULL DEFAULT 'full',
+             ADD COLUMN IF NOT EXISTS "paymentCollectedByStore" BOOLEAN NOT NULL DEFAULT FALSE,
+             ADD COLUMN IF NOT EXISTS "dispatchedAt" TIMESTAMPTZ`
+        ).catch(error => {
+            orderPaymentColumnsReady = null;
+            throw error;
+        });
+    }
+    return orderPaymentColumnsReady;
+}
 
 function toSlug(str) {
     return (str || 'general')
@@ -2446,8 +2465,9 @@ router.post('/orders', async (req, res) => {
 
 router.put('/orders/:id', checkPin, async (req, res) => {
     try {
+        await ensureOrderPaymentColumns();
         const id = req.params.id;
-        const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, paymentCollectedByStore, dispatchedAt } = req.body;
+        const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, paymentCollectedByStore, paymentMode, amountPaid, amountDue, paymentStatus, dispatchedAt } = req.body;
         const hasAddressUpdate = customerAddress !== undefined || deliveryAddress !== undefined || address !== undefined;
         const updatedAddress = customerAddress || deliveryAddress || address;
 
@@ -2485,11 +2505,38 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             updates.push(`"deliveryBoy" = $${idx++}`);
             values.push(JSON.stringify(deliveryBoy));
         }
-        if (paymentCollectedByStore !== undefined && orderColumns.has('paymentCollectedByStore')) {
+        if (paymentCollectedByStore !== undefined) {
             updates.push(`"paymentCollectedByStore" = $${idx++}`);
             values.push(Boolean(paymentCollectedByStore));
         }
-        if (dispatchedAt !== undefined && orderColumns.has('dispatchedAt')) {
+        if (paymentMode !== undefined) {
+            updates.push(`"paymentMode" = $${idx++}`);
+            values.push(String(paymentMode));
+        }
+        if (amountPaid !== undefined) {
+            const paid = Number(amountPaid);
+            if (!Number.isFinite(paid) || paid < 0) {
+                return res.status(400).json({ success: false, error: 'Advance payment must be a valid non-negative amount' });
+            }
+            updates.push(`"amountPaid" = $${idx++}`);
+            values.push(paid);
+        }
+        if (amountDue !== undefined) {
+            const due = Number(amountDue);
+            if (!Number.isFinite(due) || due < 0) {
+                return res.status(400).json({ success: false, error: 'Balance payment must be a valid non-negative amount' });
+            }
+            updates.push(`"amountDue" = $${idx++}`);
+            values.push(due);
+        }
+        if (paymentStatus !== undefined) {
+            if (!['pending', 'partial', 'paid'].includes(String(paymentStatus))) {
+                return res.status(400).json({ success: false, error: 'Invalid payment status' });
+            }
+            updates.push(`"paymentStatus" = $${idx++}`);
+            values.push(String(paymentStatus));
+        }
+        if (dispatchedAt !== undefined) {
             updates.push(`"dispatchedAt" = $${idx++}`);
             values.push(dispatchedAt);
         }
