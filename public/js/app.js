@@ -6953,7 +6953,9 @@ window.saveDeliveryBoyAssignment = async function() {
         if (res.ok) {
             const shortId = String(order._id).slice(-6).toUpperCase();
             order.deliveryBoy = { id: rider.id, name: rider.name, phone: rider.phone, earning: riderEarning };
+            window.currentDispatchOrder = order;
             window.showAdminToast(`🛵 Rider ${rider.name} assigned to Order #${shortId}!`, 'success');
+            window.sendDeliveryBoyDispatchWhatsApp();
             closeModal('order-dispatch-modal');
             window.fetchAndRenderOrders();
         } else {
@@ -6994,7 +6996,6 @@ window.markOrderDispatched = async function(orderId) {
             if (order.orderType && String(order.orderType).toLowerCase() === 'takeaway') {
                 window.sendTakeawayReadyWhatsApp(order._id);
             } else {
-                window.sendDeliveryBoyDispatchWhatsApp();
                 window.sendCustomerDispatchWhatsApp();
             }
             closeModal('order-quick-modal');
