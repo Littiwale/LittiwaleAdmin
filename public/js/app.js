@@ -6197,7 +6197,14 @@ window.renderDeliveryBoysList = function() {
     if (!container) return;
 
     const orders = window.cachedOrders || [];
-    const riderCards = (window.cachedDeliveryBoys || []).map(boy => {
+    const sortedDeliveryBoys = [...(window.cachedDeliveryBoys || [])].sort((a, b) => {
+        const aOrders = window.getRiderAssignedOrders(a).length;
+        const bOrders = window.getRiderAssignedOrders(b).length;
+        if (bOrders !== aOrders) return bOrders - aOrders;
+        return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+
+    const riderCards = sortedDeliveryBoys.map(boy => {
         const assignedOrders = window.getRiderAssignedOrders(boy);
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
