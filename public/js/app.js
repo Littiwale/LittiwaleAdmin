@@ -7661,6 +7661,8 @@ window.renderAdminOrderDishResults = function(dishes) {
         const isVeg = d.dietaryPreference === 'veg' || (!d.dietaryPreference && !d.diet && !d.isNonVeg);
         const icon = isVeg ? '🟢' : '🔴';
         const nameEscaped = (d.name || 'Dish').replace(/'/g, "\\'");
+        const dishOptions = window.getAdminOrderDishOptions(d);
+        const optionsEncoded = encodeURIComponent(JSON.stringify(dishOptions));
         
         return `
             <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; gap:8px; min-width:0; box-sizing:border-box;">
@@ -7669,25 +7671,71 @@ window.renderAdminOrderDishResults = function(dishes) {
                     <strong style="font-size:12.5px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1;">${d.name}</strong>
                     <span style="font-size:11.5px; color:#94a3b8; font-weight:600; flex-shrink:0;">₹${price}</span>
                 </div>
-                <button type="button" class="btn btn-sm" onclick="window.addAdminOrderItem('${dishId}', '${nameEscaped}', ${price})" 
+                <button type="button" class="btn btn-sm" onclick="window.addAdminOrderItemWithOptions('${dishId}', '${nameEscaped}', ${price}, '${optionsEncoded}')"
                     style="padding:4px 12px; font-size:12px; font-weight:800; background:rgba(234,88,12,0.2); color:#ea580c; border:1px solid rgba(234,88,12,0.4); border-radius:6px; cursor:pointer; flex-shrink:0;">
-                    + Add
+                    ${dishOptions.length ? 'Choose' : '+ Add'}
                 </button>
             </div>
         `;
     }).join('');
 };
 
-window.addAdminOrderItem = function(id, name, price) {
-    const existing = adminOrderSelectedItems.find(item => item.id === id);
+window.getAdminOrderDishOptions = function(dish) {
+    const name = String(dish?.name || '').toLowerCase();
+    const category = String(dish?.category || '').toLowerCase();
+    const isThali = name.includes('thali') || category.includes('thali');
+    if (isThali) {
+        return [
+            { label: 'Rice + Dal', desc: 'Steamed Basmati Rice with Homestyle Tadka Dal' },
+            { label: '5 Roti (5 Pcs)', desc: '5 Fresh Hot Whole Wheat Tawa Rotis' },
+            { label: 'Mix (Rice + Dal + 2 Rotis)', desc: 'Mini Rice, Homestyle Dal & 2 Hot Rotis' }
+        ];
+    }
+    return Array.isArray(dish?.options) ? dish.options.map(option => typeof option === 'string' ? { label: option, desc: '' } : option).filter(option => option?.label) : [];
+};
+
+window.addAdminOrderItemWithOptions = function(id, name, price, encodedOptions) {
+    let options = [];
+    try {
+        options = JSON.parse(decodeURIComponent(encodedOptions || '[]'));
+    } catch (error) {
+        console.warn('Could not read dish options:', error);
+    }
+
+    if (!Array.isArray(options) || options.length === 0) {
+        window.addAdminOrderItem(id, name, price);
+        return;
+    }
+
+    const titleEl = document.getElementById('admin-order-options-title');
+    const subtitleEl = document.getElementById('admin-order-options-subtitle');
+    const container = document.getElementById('admin-order-options-list');
+    if (!container) return;
+
+    if (titleEl) titleEl.textContent = name;
+    if (subtitleEl) subtitleEl.textContent = String(name).toLowerCase().includes('thali') ? 'Choose your Thali combination' : 'Choose an option';
+    container.innerHTML = options.map(option => `
+        <button type="button" onclick="window.addAdminOrderItem('${id}', '${String(name).replace(/'/g, "\\'")}', ${Number(price)}, '${String(option.label).replace(/'/g, "\\'")}'); window.closeModal('admin-order-options-modal');" style="display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%; padding:13px 14px; margin-bottom:8px; text-align:left; color:#fff; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.12); border-radius:10px; cursor:pointer;">
+            <span><strong style="display:block; font-size:13px;">${option.label}</strong>${option.desc ? `<small style="display:block; color:#94a3b8; margin-top:3px;">${option.desc}</small>` : ''}</span>
+            <i class="fas fa-chevron-right" style="color:#f97316;"></i>
+        </button>
+    `).join('');
+    window.openModal('admin-order-options-modal');
+};
+
+window.addAdminOrderItem = function(id, name, price, selectedOption = '') {
+    const cartId = selectedOption ? `${id}_${selectedOption.replace(/\s+/g, '-').toLowerCase()}` : id;
+    const cartName = selectedOption ? `${name} (${selectedOption})` : name;
+    const existing = adminOrderSelectedItems.find(item => item.id === cartId);
     if (existing) {
         existing.quantity += 1;
     } else {
         adminOrderSelectedItems.push({
-            id,
-            name,
+            id: cartId,
+            name: cartName,
             price: Number(price || 0),
-            quantity: 1
+            quantity: 1,
+            selectedOption: selectedOption || null
         });
     }
     window.renderAdminOrderSelectedItems();
@@ -7853,7 +7901,8 @@ window.submitAdminOrder = async function() {
             id: it.id,
             name: it.name,
             price: it.price,
-            quantity: it.quantity
+            quantity: it.quantity,
+            ...(it.selectedOption ? { selectedOption: it.selectedOption } : {})
         })),
         subtotal: subtotal,
         deliveryCharge: deliveryCharge,
