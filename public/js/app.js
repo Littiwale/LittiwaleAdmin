@@ -572,7 +572,7 @@ window.backToStep1 = function() {
     const step1 = document.getElementById('login-step1-form');
     if (step2) step2.style.display = 'none';
     if (step1) step1.style.display = 'block';
-    
+
     const step1Badge = document.getElementById('step1-badge');
     const step2Badge = document.getElementById('step2-badge');
     if (step1Badge) {
@@ -586,66 +586,6 @@ window.backToStep1 = function() {
     const errorEl = document.getElementById('login-error');
     if (errorEl) errorEl.textContent = '';
 };
-
-if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-        authPin = '';
-        authToken = '';
-        tempAuthToken = '';
-        localStorage.removeItem('adminPin');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminUser');
-        window.backToStep1();
-        showLogin();
-    });
-}
-
-function showLogin() {
-    loginScreen.classList.remove('hidden');
-    dashboardScreen.classList.add('hidden');
-    if (loginError) loginError.textContent = '';
-}
-
-function showDashboard() {
-    loginScreen.classList.add('hidden');
-    dashboardScreen.classList.remove('hidden');
-    if (typeof window.applyRoleBasedUI === 'function') {
-        window.applyRoleBasedUI();
-    }
-}
-
-// =======================
-// CUSTOM CONFIRM MODAL
-// =======================
-function showConfirm(title, message, okText = 'Yes', isDanger = true) {
-    return new Promise((resolve) => {
-        document.getElementById('confirm-title').textContent = title;
-        document.getElementById('confirm-message').textContent = message;
-        
-        const okBtn = document.getElementById('confirm-ok');
-        okBtn.textContent = okText;
-        okBtn.style.background = isDanger ? 'var(--danger)' : 'var(--primary)';
-        
-        const cancelBtn = document.getElementById('confirm-cancel');
-        
-        // Remove old event listeners
-        const newOk = okBtn.cloneNode(true);
-        const newCancel = cancelBtn.cloneNode(true);
-        okBtn.parentNode.replaceChild(newOk, okBtn);
-        cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-        
-        newOk.onclick = () => {
-            closeModal('confirm-modal');
-            resolve(true);
-        };
-        newCancel.onclick = () => {
-            closeModal('confirm-modal');
-            resolve(false);
-        };
-        
-        openModal('confirm-modal');
-    });
-}
 
 // =======================
 // WEBSITE ORDERS REVENUE TRACKER & LIVE ORDERS (REAL-TIME AUTO SYNC)
@@ -6185,61 +6125,12 @@ window.loadDeliveryBoys = async function() {
         const res = await fetch(`${API_URL}/delivery-boys`);
         if (res.ok) {
             window.cachedDeliveryBoys = await res.json();
-            window.getRiderAssignedOrders = function(boy) {
-                const orders = window.cachedOrders || [];
-                const riderPhone = String(boy?.phone || '').replace(/\D/g, '').slice(-10);
-                return orders.filter(order => {
-                    const assigned = order.deliveryBoy || order.assignedDeliveryBoy || {};
-                    const orderPhone = String(assigned.phone || '').replace(/\D/g, '').slice(-10);
-                    return String(assigned.id || '') === String(boy?.id || '') || (riderPhone && orderPhone && riderPhone === orderPhone);
-                });
-            };
-
-            window.getRiderOrderEarning = function(order) {
-                const assigned = order?.deliveryBoy || order?.assignedDeliveryBoy || {};
-                const earning = Number(assigned.earning || order?.deliveryCharge || 0);
-                return Number.isFinite(earning) ? Math.max(0, earning) : 0;
-            };
-
-            window.getRiderOrderDate = function(order) {
-                return new Date(order?.createdAt || order?.updatedAt || 0);
-            };
-
-            window.isSameCalendarDay = function(firstDate, secondDate) {
-                return firstDate.toDateString() === secondDate.toDateString();
-            };
-
-            window.renderDeliveryBoysList = function() {
+            window.renderDeliveryBoysList();
         }
     } catch(e) {
         console.warn('Error loading delivery boys:', e);
-};
-                    const assignedOrders = window.getRiderAssignedOrders(boy);
-                    const now = new Date();
-                    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                    const activeOrders = assignedOrders.filter(order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase()));
-                    const todayEarnings = assignedOrders.filter(order => window.isSameCalendarDay(window.getRiderOrderDate(order), now)).reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
-                    const monthEarnings = assignedOrders.filter(order => window.getRiderOrderDate(order) >= monthStart).reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
-        const res = await fetch(`${API_URL}/rider/applications`, { headers: { 'x-admin-pin': authPin, 'x-pin': authPin } });
-                    const totalEarnings = assignedOrders.reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
-        }
-        const escapeText = value => String(value || '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char]));
-                        <div role="button" tabindex="0" onclick="window.openRiderDetails('${boy.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') window.openRiderDetails('${boy.id}')" style="background:var(--bg-card-inner); border:1px solid var(--border-card); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:10px; min-height:190px; cursor:pointer; transition:transform .18s ease, border-color .18s ease;" onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='rgba(56,189,248,0.55)'" onmouseout="this.style.transform=''; this.style.borderColor='var(--border-card)'">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:12px; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.22); border-radius:9px;">
-                <div style="min-width:180px;">
-                    <div style="font-weight:800; color:#fff; font-size:13px;">${escapeText(app.name)}</div>
-                                        <span style="width:28px; height:28px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; background:rgba(56,189,248,0.13); color:#38bdf8;"><i class="fas fa-motorcycle"></i></span> <span>${boy.name}</span>
-                </div>
-                <div style="display:flex; gap:7px;">
-                                        <i class="fas fa-phone-alt"></i> +91 ${boy.phone}
-                    <button type="button" class="btn btn-sm btn-outline" style="color:#f87171; border-color:rgba(248,113,113,.35);" onclick="window.rejectRiderApplication('${app.id}')">Reject</button>
-                </div>
-            </div>`).join('');
-                                    <a href="https://wa.me/91${boy.phone}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="padding:5px 8px; font-size:11px; background:#25d366; color:#000; font-weight:700; text-decoration:none; border-radius:6px;" title="Chat with Rider">
-                                        <i class="fab fa-whatsapp"></i>
     }
-                                    <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px; font-size:11px; border-color:#ef4444; color:#ef4444; border-radius:6px;" onclick="event.stopPropagation(); window.deleteDeliveryBoy('${boy.id}')" title="Remove Rider">
-                                        <i class="fas fa-trash-alt"></i>
+};
 window.approveRiderApplication = async function(id) {
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     try {
@@ -6263,27 +6154,46 @@ window.rejectRiderApplication = async function(id) {
     } catch (err) { window.showAdminToast(err.message, 'error'); }
 };
 
+window.getRiderAssignedOrders = function(boy) {
+    const orders = window.cachedOrders || [];
+    const riderPhone = String(boy?.phone || '').replace(/\D/g, '').slice(-10);
+    return orders.filter(order => {
+        const assigned = order.deliveryBoy || order.assignedDeliveryBoy || {};
+        const orderPhone = String(assigned.phone || '').replace(/\D/g, '').slice(-10);
+        return String(assigned.id || '') === String(boy?.id || '') || (riderPhone && orderPhone && riderPhone === orderPhone);
+    });
+};
+
+window.getRiderOrderEarning = function(order) {
+    const assigned = order?.deliveryBoy || order?.assignedDeliveryBoy || {};
+    const earning = Number(assigned.earning || order?.deliveryCharge || 0);
+    return Number.isFinite(earning) ? Math.max(0, earning) : 0;
+};
+
+window.getRiderOrderDate = function(order) {
+    return new Date(order?.createdAt || order?.updatedAt || 0);
+};
+
+window.isSameCalendarDay = function(firstDate, secondDate) {
+    return firstDate.toDateString() === secondDate.toDateString();
+};
+
 window.renderDeliveryBoysList = function() {
     const container = document.getElementById('delivery-boys-list-container');
     if (!container) return;
 
     const orders = window.cachedOrders || [];
     const riderCards = (window.cachedDeliveryBoys || []).map(boy => {
-        const riderPhone = String(boy.phone || '').replace(/\D/g, '').slice(-10);
-        const assignedOrders = orders.filter(order => {
-            const assigned = order.deliveryBoy || order.assignedDeliveryBoy || {};
-            const orderPhone = String(assigned.phone || '').replace(/\D/g, '').slice(-10);
-            return String(assigned.id || '') === String(boy.id || '') || (riderPhone && orderPhone && riderPhone === orderPhone);
-        });
+        const assignedOrders = window.getRiderAssignedOrders(boy);
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const activeOrders = assignedOrders.filter(order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase()));
+        const monthEarnings = assignedOrders.filter(order => window.getRiderOrderDate(order) >= monthStart).reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
 
-        const totalEarnings = assignedOrders.reduce((sum, order) => {
-            const assigned = order.deliveryBoy || order.assignedDeliveryBoy || {};
-            const earning = Number(assigned.earning || order.deliveryCharge || 0);
-            return sum + (Number.isFinite(earning) ? earning : 0);
-        }, 0);
+        const totalEarnings = assignedOrders.reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
 
         return `
-            <div style="background:var(--bg-card-inner); border:1px solid var(--border-card); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:10px; min-height:160px;">
+            <div role="button" tabindex="0" onclick="window.openRiderDetails('${boy.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') window.openRiderDetails('${boy.id}')" style="background:var(--bg-card-inner); border:1px solid var(--border-card); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:10px; min-height:190px; cursor:pointer;">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
                     <div>
                         <div style="font-weight:800; color:#fff; font-size:13.5px; display:flex; align-items:center; gap:6px;">
@@ -6294,11 +6204,11 @@ window.renderDeliveryBoysList = function() {
                         </div>
                     </div>
                     <div style="display:flex; gap:6px;">
-                        <a href="https://wa.me/91${boy.phone}" target="_blank" class="btn btn-sm" style="padding:5px 8px; font-size:11px; background:#25d366; color:#000; font-weight:700; text-decoration:none; border-radius:6px;" title="Chat with Rider">
-                            💬
+                        <a href="https://wa.me/91${boy.phone}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="padding:5px 8px; font-size:11px; background:#25d366; color:#000; font-weight:700; text-decoration:none; border-radius:6px;" title="Chat with Rider">
+                            <i class="fab fa-whatsapp"></i>
                         </a>
-                        <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px; font-size:11px; border-color:#ef4444; color:#ef4444; border-radius:6px;" onclick="window.deleteDeliveryBoy('${boy.id}')" title="Remove Rider">
-                            ✕
+                        <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px; font-size:11px; border-color:#ef4444; color:#ef4444; border-radius:6px;" onclick="event.stopPropagation(); window.deleteDeliveryBoy('${boy.id}')" title="Remove Rider">
+                            <i class="fas fa-trash-alt"></i>
                         </button>
                     </div>
                 </div>
