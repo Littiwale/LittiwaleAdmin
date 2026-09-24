@@ -2735,6 +2735,17 @@
         </div>
     </div>
 
+    <!-- Rider Operational Detail Modal -->
+    <div id="rider-detail-modal" class="modal hidden">
+        <div class="modal-content" style="max-width:560px; padding:0; overflow:hidden; border-radius:16px; border:1px solid rgba(56,189,248,0.25); background:#14141c; box-shadow:0 25px 60px rgba(0,0,0,0.85);">
+            <div class="modal-header" style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); background:rgba(56,189,248,0.08); display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="rider-detail-title" class="modal-title" style="color:#fff; font-size:1.1rem; font-weight:800; margin:0;">Rider Details</h3>
+                <button type="button" class="modal-close-btn" onclick="closeModal('rider-detail-modal')">✕</button>
+            </div>
+            <div id="rider-detail-content" style="padding:20px; max-height:72vh; overflow-y:auto;"></div>
+        </div>
+    </div>
+
     <!-- ➕ Add Delivery Boy Modal -->
     <div id="add-delivery-boy-modal" class="modal hidden">
         <div class="modal-content" style="max-width:440px; padding:0; overflow:hidden; border-radius:16px; border:1px solid rgba(255,255,255,0.12); background:#14141c; box-shadow:0 25px 60px rgba(0,0,0,0.85);">

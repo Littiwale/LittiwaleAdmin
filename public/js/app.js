@@ -6185,42 +6185,61 @@ window.loadDeliveryBoys = async function() {
         const res = await fetch(`${API_URL}/delivery-boys`);
         if (res.ok) {
             window.cachedDeliveryBoys = await res.json();
-            window.renderDeliveryBoysList();
+            window.getRiderAssignedOrders = function(boy) {
+                const orders = window.cachedOrders || [];
+                const riderPhone = String(boy?.phone || '').replace(/\D/g, '').slice(-10);
+                return orders.filter(order => {
+                    const assigned = order.deliveryBoy || order.assignedDeliveryBoy || {};
+                    const orderPhone = String(assigned.phone || '').replace(/\D/g, '').slice(-10);
+                    return String(assigned.id || '') === String(boy?.id || '') || (riderPhone && orderPhone && riderPhone === orderPhone);
+                });
+            };
+
+            window.getRiderOrderEarning = function(order) {
+                const assigned = order?.deliveryBoy || order?.assignedDeliveryBoy || {};
+                const earning = Number(assigned.earning || order?.deliveryCharge || 0);
+                return Number.isFinite(earning) ? Math.max(0, earning) : 0;
+            };
+
+            window.getRiderOrderDate = function(order) {
+                return new Date(order?.createdAt || order?.updatedAt || 0);
+            };
+
+            window.isSameCalendarDay = function(firstDate, secondDate) {
+                return firstDate.toDateString() === secondDate.toDateString();
+            };
+
+            window.renderDeliveryBoysList = function() {
         }
     } catch(e) {
         console.warn('Error loading delivery boys:', e);
-    }
 };
-
-window.loadRiderApplications = async function() {
-    const container = document.getElementById('rider-applications-list');
-    if (!container) return;
-    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
-    try {
+                    const assignedOrders = window.getRiderAssignedOrders(boy);
+                    const now = new Date();
+                    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const activeOrders = assignedOrders.filter(order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase()));
+                    const todayEarnings = assignedOrders.filter(order => window.isSameCalendarDay(window.getRiderOrderDate(order), now)).reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
+                    const monthEarnings = assignedOrders.filter(order => window.getRiderOrderDate(order) >= monthStart).reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
         const res = await fetch(`${API_URL}/rider/applications`, { headers: { 'x-admin-pin': authPin, 'x-pin': authPin } });
-        const data = await res.json();
-        const applications = data.applications || [];
-        if (!applications.length) {
-            container.innerHTML = '<div style="padding:14px; color:#94a3b8; font-size:12px; border:1px dashed rgba(255,255,255,.1); border-radius:8px;">No pending rider requests.</div>';
-            return;
+                    const totalEarnings = assignedOrders.reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
         }
         const escapeText = value => String(value || '').replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[char]));
-        container.innerHTML = applications.map(app => `
+                        <div role="button" tabindex="0" onclick="window.openRiderDetails('${boy.id}')" onkeydown="if(event.key === 'Enter' || event.key === ' ') window.openRiderDetails('${boy.id}')" style="background:var(--bg-card-inner); border:1px solid var(--border-card); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:10px; min-height:190px; cursor:pointer; transition:transform .18s ease, border-color .18s ease;" onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='rgba(56,189,248,0.55)'" onmouseout="this.style.transform=''; this.style.borderColor='var(--border-card)'">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:12px; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.22); border-radius:9px;">
                 <div style="min-width:180px;">
                     <div style="font-weight:800; color:#fff; font-size:13px;">${escapeText(app.name)}</div>
-                    <div style="color:#94a3b8; font-size:11.5px; margin-top:3px;">📞 ${escapeText(app.phone)} &nbsp; ✉️ ${escapeText(app.email)}</div>
+                                        <span style="width:28px; height:28px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; background:rgba(56,189,248,0.13); color:#38bdf8;"><i class="fas fa-motorcycle"></i></span> <span>${boy.name}</span>
                 </div>
                 <div style="display:flex; gap:7px;">
-                    <button type="button" class="btn btn-sm btn-primary" onclick="window.approveRiderApplication('${app.id}')">Approve</button>
+                                        <i class="fas fa-phone-alt"></i> +91 ${boy.phone}
                     <button type="button" class="btn btn-sm btn-outline" style="color:#f87171; border-color:rgba(248,113,113,.35);" onclick="window.rejectRiderApplication('${app.id}')">Reject</button>
                 </div>
             </div>`).join('');
-    } catch (err) {
-        container.innerHTML = '<div style="padding:14px; color:#f87171; font-size:12px;">Could not load rider requests.</div>';
+                                    <a href="https://wa.me/91${boy.phone}" target="_blank" onclick="event.stopPropagation()" class="btn btn-sm" style="padding:5px 8px; font-size:11px; background:#25d366; color:#000; font-weight:700; text-decoration:none; border-radius:6px;" title="Chat with Rider">
+                                        <i class="fab fa-whatsapp"></i>
     }
-};
-
+                                    <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px; font-size:11px; border-color:#ef4444; color:#ef4444; border-radius:6px;" onclick="event.stopPropagation(); window.deleteDeliveryBoy('${boy.id}')" title="Remove Rider">
+                                        <i class="fas fa-trash-alt"></i>
 window.approveRiderApplication = async function(id) {
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     try {
@@ -6286,17 +6305,22 @@ window.renderDeliveryBoysList = function() {
 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                     <div style="padding:8px 10px; border-radius:10px; background:rgba(59,130,246,0.10); border:1px solid rgba(59,130,246,0.25);">
-                        <div style="font-size:10px; color:#93c5fd; text-transform:uppercase; letter-spacing:0.6px; font-weight:700;">Orders</div>
+                        <div style="font-size:10px; color:#93c5fd; text-transform:uppercase; letter-spacing:0.6px; font-weight:700;"><i class="fas fa-box"></i> Orders</div>
                         <div style="font-size:17px; color:#fff; font-weight:900; margin-top:3px;">${assignedOrders.length}</div>
                     </div>
                     <div style="padding:8px 10px; border-radius:10px; background:rgba(16,185,129,0.10); border:1px solid rgba(16,185,129,0.25);">
-                        <div style="font-size:10px; color:#86efac; text-transform:uppercase; letter-spacing:0.6px; font-weight:700;">Earnings</div>
+                        <div style="font-size:10px; color:#86efac; text-transform:uppercase; letter-spacing:0.6px; font-weight:700;"><i class="fas fa-wallet"></i> Earnings</div>
                         <div style="font-size:17px; color:#fff; font-weight:900; margin-top:3px;">₹${Number(totalEarnings).toLocaleString('en-IN')}</div>
                     </div>
                 </div>
 
-                <div style="font-size:11px; color:#cbd5e1; line-height:1.5;">
-                    ${assignedOrders.length ? `Latest: ${assignedOrders.slice(0, 2).map(order => `#${String(order._id || order.orderId || '').slice(-6).toUpperCase()}`).join(', ')}` : 'No assigned orders yet'}
+                <div style="display:flex; justify-content:space-between; gap:8px; font-size:10.5px; color:#cbd5e1; line-height:1.5;">
+                    <span><i class="fas fa-bolt" style="color:#fbbf24;"></i> Active: <strong>${activeOrders.length}</strong></span>
+                    <span><i class="fas fa-chart-line" style="color:#34d399;"></i> This month: <strong>₹${monthEarnings.toLocaleString('en-IN')}</strong></span>
+                </div>
+                <div style="font-size:11px; color:#94a3b8; line-height:1.5; border-top:1px solid rgba(255,255,255,0.07); padding-top:8px;">
+                    ${assignedOrders.length ? `<i class="fas fa-clock" style="color:#38bdf8;"></i> Latest: ${assignedOrders.slice().sort((a, b) => window.getRiderOrderDate(b) - window.getRiderOrderDate(a)).slice(0, 2).map(order => `#${String(order._id || order.orderId || '').slice(-6).toUpperCase()}`).join(', ')}` : '<i class="fas fa-inbox"></i> No assigned orders yet'}
+                    <span style="float:right; color:#38bdf8; font-weight:700;">View details <i class="fas fa-arrow-right"></i></span>
                 </div>
             </div>
         `;
@@ -6312,6 +6336,47 @@ window.renderDeliveryBoysList = function() {
     }
 
     container.innerHTML = riderCards;
+};
+
+window.openRiderDetails = function(riderId) {
+    const rider = (window.cachedDeliveryBoys || []).find(item => String(item.id) === String(riderId));
+    const content = document.getElementById('rider-detail-content');
+    const title = document.getElementById('rider-detail-title');
+    if (!rider || !content || !title) return;
+
+    const orders = window.getRiderAssignedOrders(rider).slice().sort((a, b) => window.getRiderOrderDate(b) - window.getRiderOrderDate(a));
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayOrders = orders.filter(order => window.isSameCalendarDay(window.getRiderOrderDate(order), now));
+    const monthOrders = orders.filter(order => window.getRiderOrderDate(order) >= monthStart);
+    const activeOrders = orders.filter(order => !['delivered', 'cancelled'].includes(String(order.status || '').toLowerCase()));
+    const totalEarnings = orders.reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
+    const todayEarnings = todayOrders.reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
+    const monthEarnings = monthOrders.reduce((sum, order) => sum + window.getRiderOrderEarning(order), 0);
+
+    title.innerHTML = `<i class="fas fa-motorcycle" style="color:#38bdf8;"></i> ${rider.name}`;
+    content.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; padding:12px; border-radius:12px; background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.2);">
+            <div><div style="color:#fff; font-weight:800;">${rider.name}</div><div style="color:#94a3b8; font-size:12px; margin-top:4px;"><i class="fas fa-phone-alt"></i> +91 ${rider.phone}</div></div>
+            <a href="https://wa.me/91${rider.phone}" target="_blank" class="btn btn-sm" style="background:#25d366; color:#000; font-weight:800; text-decoration:none;"><i class="fab fa-whatsapp"></i> Chat</a>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:9px; margin-bottom:16px;">
+            <div style="padding:11px; border-radius:10px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25);"><div style="font-size:10px; color:#86efac; text-transform:uppercase; font-weight:700;"><i class="fas fa-calendar-day"></i> Today</div><div style="font-size:18px; color:#fff; font-weight:900; margin-top:3px;">₹${todayEarnings.toLocaleString('en-IN')}</div><div style="font-size:10px; color:#94a3b8;">${todayOrders.length} deliveries</div></div>
+            <div style="padding:11px; border-radius:10px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.25);"><div style="font-size:10px; color:#fcd34d; text-transform:uppercase; font-weight:700;"><i class="fas fa-calendar-alt"></i> This Month</div><div style="font-size:18px; color:#fff; font-weight:900; margin-top:3px;">₹${monthEarnings.toLocaleString('en-IN')}</div><div style="font-size:10px; color:#94a3b8;">${monthOrders.length} deliveries</div></div>
+            <div style="padding:11px; border-radius:10px; background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.25);"><div style="font-size:10px; color:#93c5fd; text-transform:uppercase; font-weight:700;"><i class="fas fa-route"></i> Active</div><div style="font-size:18px; color:#fff; font-weight:900; margin-top:3px;">${activeOrders.length}</div><div style="font-size:10px; color:#94a3b8;">current assignments</div></div>
+            <div style="padding:11px; border-radius:10px; background:rgba(168,85,247,0.1); border:1px solid rgba(168,85,247,0.25);"><div style="font-size:10px; color:#d8b4fe; text-transform:uppercase; font-weight:700;"><i class="fas fa-coins"></i> Lifetime</div><div style="font-size:18px; color:#fff; font-weight:900; margin-top:3px;">₹${totalEarnings.toLocaleString('en-IN')}</div><div style="font-size:10px; color:#94a3b8;">${orders.length} total deliveries</div></div>
+        </div>
+        <div style="font-size:12px; color:#fff; font-weight:800; margin-bottom:8px;"><i class="fas fa-list" style="color:#38bdf8;"></i> Latest Deliveries</div>
+        <div style="display:grid; gap:7px; max-height:250px; overflow-y:auto;">
+            ${orders.length ? orders.slice(0, 8).map(order => {
+                const orderId = String(order._id || order.orderId || '').slice(-6).toUpperCase();
+                const status = String(order.status || 'pending').toUpperCase();
+                const statusColor = status === 'DELIVERED' ? '#34d399' : (status === 'CANCELLED' ? '#f87171' : '#fbbf24');
+                return `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 10px; border-radius:9px; background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.07);"><div><div style="color:#fff; font-weight:700; font-size:12px;"><i class="fas fa-receipt" style="color:#38bdf8;"></i> #${orderId}</div><div style="font-size:10.5px; color:#94a3b8; margin-top:3px;">${order.customerName || 'Customer'} · ${window.getRiderOrderDate(order).toLocaleDateString('en-IN')}</div></div><div style="text-align:right;"><div style="color:#86efac; font-weight:800; font-size:12px;">₹${window.getRiderOrderEarning(order).toLocaleString('en-IN')}</div><div style="font-size:9px; color:${statusColor}; font-weight:800; margin-top:3px;">${status}</div></div></div>`;
+            }).join('') : '<div style="padding:18px; text-align:center; color:#94a3b8; border:1px dashed rgba(255,255,255,0.12); border-radius:9px;">No deliveries assigned yet.</div>'}
+        </div>
+    `;
+    openModal('rider-detail-modal');
 };
 
 window.openAddDeliveryBoyModal = function() {
