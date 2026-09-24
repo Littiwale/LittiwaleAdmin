@@ -6248,6 +6248,60 @@ window.renderDeliveryBoysList = function() {
     const container = document.getElementById('delivery-boys-list-container');
     if (!container) return;
 
+    const orders = window.cachedOrders || [];
+    const riderCards = (window.cachedDeliveryBoys || []).map(boy => {
+        const riderPhone = String(boy.phone || '').replace(/\D/g, '').slice(-10);
+        const assignedOrders = orders.filter(order => {
+            const assigned = order.deliveryBoy || order.assignedDeliveryBoy || {};
+            const orderPhone = String(assigned.phone || '').replace(/\D/g, '').slice(-10);
+            return String(assigned.id || '') === String(boy.id || '') || (riderPhone && orderPhone && riderPhone === orderPhone);
+        });
+
+        const totalEarnings = assignedOrders.reduce((sum, order) => {
+            const assigned = order.deliveryBoy || order.assignedDeliveryBoy || {};
+            const earning = Number(assigned.earning || order.deliveryCharge || 0);
+            return sum + (Number.isFinite(earning) ? earning : 0);
+        }, 0);
+
+        return `
+            <div style="background:var(--bg-card-inner); border:1px solid var(--border-card); border-radius:12px; padding:12px 14px; display:flex; flex-direction:column; gap:10px; min-height:160px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                    <div>
+                        <div style="font-weight:800; color:#fff; font-size:13.5px; display:flex; align-items:center; gap:6px;">
+                            <span>🛵</span> <span>${boy.name}</span>
+                        </div>
+                        <div style="font-size:11.5px; color:#38bdf8; font-weight:600; margin-top:2px;">
+                            📞 +91 ${boy.phone}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <a href="https://wa.me/91${boy.phone}" target="_blank" class="btn btn-sm" style="padding:5px 8px; font-size:11px; background:#25d366; color:#000; font-weight:700; text-decoration:none; border-radius:6px;" title="Chat with Rider">
+                            💬
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px; font-size:11px; border-color:#ef4444; color:#ef4444; border-radius:6px;" onclick="window.deleteDeliveryBoy('${boy.id}')" title="Remove Rider">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div style="padding:8px 10px; border-radius:10px; background:rgba(59,130,246,0.10); border:1px solid rgba(59,130,246,0.25);">
+                        <div style="font-size:10px; color:#93c5fd; text-transform:uppercase; letter-spacing:0.6px; font-weight:700;">Orders</div>
+                        <div style="font-size:17px; color:#fff; font-weight:900; margin-top:3px;">${assignedOrders.length}</div>
+                    </div>
+                    <div style="padding:8px 10px; border-radius:10px; background:rgba(16,185,129,0.10); border:1px solid rgba(16,185,129,0.25);">
+                        <div style="font-size:10px; color:#86efac; text-transform:uppercase; letter-spacing:0.6px; font-weight:700;">Earnings</div>
+                        <div style="font-size:17px; color:#fff; font-weight:900; margin-top:3px;">₹${Number(totalEarnings).toLocaleString('en-IN')}</div>
+                    </div>
+                </div>
+
+                <div style="font-size:11px; color:#cbd5e1; line-height:1.5;">
+                    ${assignedOrders.length ? `Latest: ${assignedOrders.slice(0, 2).map(order => `#${String(order._id || order.orderId || '').slice(-6).toUpperCase()}`).join(', ')}` : 'No assigned orders yet'}
+                </div>
+            </div>
+        `;
+    }).join('');
+
     if (!window.cachedDeliveryBoys || window.cachedDeliveryBoys.length === 0) {
         container.innerHTML = `
             <div style="grid-column:1/-1; padding:20px; text-align:center; background:rgba(255,255,255,0.02); border:1px dashed rgba(255,255,255,0.1); border-radius:10px; color:#94a3b8; font-size:12.5px;">
@@ -6257,26 +6311,7 @@ window.renderDeliveryBoysList = function() {
         return;
     }
 
-    container.innerHTML = window.cachedDeliveryBoys.map(boy => `
-        <div style="background:var(--bg-card-inner); border:1px solid var(--border-card); border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <div style="font-weight:800; color:#fff; font-size:13.5px; display:flex; align-items:center; gap:6px;">
-                    <span>🛵</span> <span>${boy.name}</span>
-                </div>
-                <div style="font-size:11.5px; color:#38bdf8; font-weight:600; margin-top:2px;">
-                    📞 +91 ${boy.phone}
-                </div>
-            </div>
-            <div style="display:flex; gap:6px;">
-                <a href="https://wa.me/91${boy.phone}" target="_blank" class="btn btn-sm" style="padding:5px 8px; font-size:11px; background:#25d366; color:#000; font-weight:700; text-decoration:none; border-radius:6px;" title="Chat with Rider">
-                    💬
-                </a>
-                <button type="button" class="btn btn-sm btn-outline" style="padding:5px 8px; font-size:11px; border-color:#ef4444; color:#ef4444; border-radius:6px;" onclick="window.deleteDeliveryBoy('${boy.id}')" title="Remove Rider">
-                    ✕
-                </button>
-            </div>
-        </div>
-    `).join('');
+    container.innerHTML = riderCards;
 };
 
 window.openAddDeliveryBoyModal = function() {
@@ -6519,7 +6554,19 @@ window.openDispatchModal = async function(orderId = null) {
 
 window.getSelectedDispatchRider = function() {
     const selectEl = document.getElementById('dispatch-delivery-boy-select');
-    if (!selectEl) return { id: '', name: 'Littiwale Direct Delivery', phone: '6370680744' };
+    const currentOrder = window.currentDispatchOrder || window.currentSelectedOrder;
+    const currentAssigned = currentOrder?.deliveryBoy || currentOrder?.assignedDeliveryBoy;
+
+    if (!selectEl) {
+        if (currentAssigned?.name || currentAssigned?.phone) {
+            return {
+                id: currentAssigned.id || '',
+                name: currentAssigned.name || 'Littiwale Direct Delivery',
+                phone: String(currentAssigned.phone || '').replace(/\D/g, '').slice(-10) || '6370680744'
+            };
+        }
+        return { id: '', name: 'Littiwale Direct Delivery', phone: '6370680744' };
+    }
 
     if (selectEl.value === '__custom__') {
         const customName = document.getElementById('dispatch-custom-rider-name')?.value?.trim() || 'Littiwale Direct Delivery';
@@ -6528,9 +6575,9 @@ window.getSelectedDispatchRider = function() {
     }
 
     const opt = selectEl.options[selectEl.selectedIndex];
-    const name = opt ? (opt.getAttribute('data-name') || opt.text) : 'Littiwale Direct Delivery';
-    const phone = opt ? (opt.getAttribute('data-phone') || '6370680744') : '6370680744';
-    return { id: opt?.getAttribute('data-rider-id') || selectEl.value || '', name, phone };
+    const name = opt ? (opt.getAttribute('data-name') || opt.text) : (currentAssigned?.name || 'Littiwale Direct Delivery');
+    const phone = opt ? (opt.getAttribute('data-phone') || '6370680744') : (String(currentAssigned?.phone || '').replace(/\D/g, '').slice(-10) || '6370680744');
+    return { id: opt?.getAttribute('data-rider-id') || selectEl.value || currentAssigned?.id || '', name, phone };
 };
 
 window.sendDeliveryBoyDispatchWhatsApp = function() {
@@ -6706,7 +6753,7 @@ window.sendCustomerDeliveredWhatsApp = function(orderId) {
     const msg = `🎉 *ORDER DELIVERED — THANK YOU FOR CHOOSING LITTIWALE!* ❤️\n\n` +
                 `Dear *${custName}*,\n` +
                 `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been completed! 🍽️\n\n` +
-                `We hope you enjoyed every authentic bite of our traditional litti! 🔥\n\n` +
+                `We hope you enjoy every authentic bite of our food! 🔥\n\n` +
                 `⭐ *Rate Your Experience:*\n` +
                 `Loved our food & service? Please take 10 seconds to give Littiwale a 5-star Google review:\n` +
                 `👉 https://g.page/r/CYlrxD6jO24cEAE/review\n\n` +
@@ -6850,7 +6897,7 @@ window.executeWhatsAppAction = function(actionType) {
         msg = `🎉 *ORDER DELIVERED — THANK YOU FOR CHOOSING LITTIWALE!* ❤️\n\n` +
               `Dear *${custName}*,\n` +
               `Your steaming hot meal from *Littiwale* (Order *#${shortId}*) has been completed! 🍽️\n\n` +
-              `We hope you enjoyed every authentic bite of our traditional litti! 🔥\n\n` +
+              `We hope you enjoy every authentic bite of our food! 🔥\n\n` +
               `⭐ *Rate Your Experience:*\n` +
               `If you loved the taste & service, please take 10 seconds to give Littiwale a 5-star Google review:\n` +
               `👉 https://g.page/r/CYlrxD6jO24cEAE/review\n\n` +
@@ -6929,6 +6976,7 @@ window.markOrderDispatched = async function(orderId) {
         return;
     }
 
+    window.currentDispatchOrder = order;
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     try {
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
@@ -6943,6 +6991,12 @@ window.markOrderDispatched = async function(orderId) {
 
         if (res.ok) {
             window.showAdminToast(`📦 Order #${String(order._id).slice(-6).toUpperCase()} marked dispatched!`, 'success');
+            if (order.orderType && String(order.orderType).toLowerCase() === 'takeaway') {
+                window.sendTakeawayReadyWhatsApp(order._id);
+            } else {
+                window.sendDeliveryBoyDispatchWhatsApp();
+                window.sendCustomerDispatchWhatsApp();
+            }
             closeModal('order-quick-modal');
             closeModal('order-confirm-modal');
             window.fetchAndRenderOrders();
