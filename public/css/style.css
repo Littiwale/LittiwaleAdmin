@@ -3346,6 +3346,57 @@ td strong {
 }
 
 @media (max-width: 768px) {
+  #modal-thermal-billing-hub {
+    padding: 0 !important;
+    align-items: flex-end !important;
+  }
+
+  #modal-thermal-billing-hub .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: min(92dvh, 760px) !important;
+    max-height: 92dvh !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+
+  #modal-thermal-billing-hub .thermal-station-split-view {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(220px, 1fr) minmax(260px, 1fr) !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    overflow-y: auto !important;
+    min-height: 0 !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  #modal-thermal-billing-hub .thermal-station-split-view > div {
+    min-height: 0 !important;
+    overflow: hidden !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  #modal-thermal-billing-hub .thermal-station-split-view > div:last-child {
+    border-bottom: none !important;
+  }
+
+  #modal-thermal-billing-hub .thermal-station-split-view > div:first-child {
+    padding: 12px 14px !important;
+  }
+
+  #modal-thermal-billing-hub .thermal-station-split-view > div:last-child {
+    padding: 12px 14px !important;
+  }
+
+  #modal-thermal-billing-hub #thermal-station-orders-list {
+    min-height: 0 !important;
+  }
+
+  #modal-thermal-billing-hub .modal-close-btn {
+    flex-shrink: 0 !important;
+  }
+
   #modal-create-order {
     padding: 0 !important;
     align-items: flex-end !important;

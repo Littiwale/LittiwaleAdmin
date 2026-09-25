@@ -2803,6 +2803,12 @@
             </div>
 
             <div style="padding:20px; max-height:78vh; overflow-y:auto;">
+                <div style="margin-bottom:16px; padding:12px 14px; background:rgba(37,211,102,0.08); border:1px solid rgba(37,211,102,0.22); border-radius:10px;">
+                    <label for="wa-target-phone" style="display:block; color:#d1fae5; font-size:12px; font-weight:800; margin-bottom:7px;">WhatsApp Number for This Order *</label>
+                    <input type="tel" id="wa-target-phone" class="form-control" inputmode="numeric" maxlength="10" pattern="[0-9]{10}" placeholder="Enter 10-digit WhatsApp number" style="width:100%; box-sizing:border-box; font-size:14px; font-weight:700; letter-spacing:0.5px;" oninput="this.value = this.value.replace(/\D/g, '').slice(-10)">
+                    <div style="color:#86efac; font-size:10.5px; margin-top:6px; line-height:1.4;">Customer calling number alag ho sakta hai. Message isi WhatsApp number par open hoga.</div>
+                </div>
+
                 <div style="font-size:12px; color:#94a3b8; font-weight:700; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">
                     ⚡ Select WhatsApp Action / Template
                 </div>
@@ -3300,6 +3306,7 @@
 
                 </div>
 
+                    </div>
             </div>
 
             <!-- Modal Actions Footer (Permanent Sticky at Bottom) -->
@@ -3331,8 +3338,6 @@
     </div>
 
     <!-- ==========================================================================
-         THERMAL BILLING & PRINT STATION MODAL (SPLIT VIEW)
-         ========================================================================== -->
          THERMAL BILLING & PRINT STATION MODAL (SPLIT VIEW)
          ========================================================================== -->
     <div id="modal-thermal-billing-hub" class="modal hidden">

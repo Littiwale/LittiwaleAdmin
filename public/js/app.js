@@ -6854,6 +6854,13 @@ window.openWhatsAppQuickModal = function(orderId = null) {
     const custInfoEl = document.getElementById('wa-modal-cust-info');
     if (custInfoEl) custInfoEl.textContent = `${custName} • +91 ${cleanPhone || 'N/A'}`;
 
+    const targetPhoneInput = document.getElementById('wa-target-phone');
+    if (targetPhoneInput) {
+        targetPhoneInput.value = cleanPhone;
+        targetPhoneInput.focus();
+        targetPhoneInput.select();
+    }
+
     const statusBadgeEl = document.getElementById('wa-modal-status-badge');
     if (statusBadgeEl) {
         statusBadgeEl.textContent = status.toUpperCase();
@@ -6872,13 +6879,20 @@ window.executeWhatsAppAction = function(actionType) {
 
     const shortId = String(order._id).slice(-6).toUpperCase();
     const custName = order.customerName || 'Customer';
-    const targetPhone = order.whatsappPhone || order.customerPhone || '';
-    const cleanPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
+    const targetPhoneInput = document.getElementById('wa-target-phone');
+    const selectedPhone = targetPhoneInput?.value || order.whatsappPhone || order.customerPhone || '';
+    const cleanPhone = String(selectedPhone).replace(/\D/g, '').slice(-10);
 
-    if (!cleanPhone) {
-        window.showAdminToast('Customer WhatsApp/phone number unavailable', 'warning');
+    if (!/^\d{10}$/.test(cleanPhone)) {
+        window.showAdminToast('Please enter a valid 10-digit WhatsApp number', 'warning');
+        if (targetPhoneInput) {
+            targetPhoneInput.focus();
+            targetPhoneInput.select();
+        }
         return;
     }
+
+    order.whatsappPhone = cleanPhone;
 
     const isTakeaway = (order.orderType === 'takeaway');
     const itemsList = (order.items || []).map(it => `• ${it.quantity}x ${it.name} (₹${it.subtotal || (it.price * (it.quantity || 1))})`).join('\n') || '• Order Items';
