@@ -890,6 +890,29 @@ window.openAllOrdersSection = function() {
 // =========================================================================
 // ⚡ QUICK ORDER DETAILS & 1-TAP ACTION MODAL (MOBILE FIRST)
 // =========================================================================
+window.parseEstimatedTimeRange = function(value, isTakeaway = false) {
+    const defaults = isTakeaway ? { min: 15, max: 20 } : { min: 25, max: 35 };
+    const text = String(value || '');
+    const rangeMatch = text.match(/(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})/i);
+    const singleMatch = text.match(/\d{1,3}/);
+    const min = Number(rangeMatch?.[1] || singleMatch?.[0] || defaults.min);
+    const max = Number(rangeMatch?.[2] || singleMatch?.[0] || defaults.max);
+    const safeMin = Math.min(240, Math.max(1, min));
+    return { min: safeMin, max: Math.min(240, Math.max(safeMin, max)) };
+};
+
+window.readEstimatedTimeRange = function(minId, maxId) {
+    const minInput = document.getElementById(minId);
+    const maxInput = document.getElementById(maxId);
+    const min = Number(minInput?.value);
+    const max = Number(maxInput?.value);
+    if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max > 240 || max < min) {
+        window.showAdminToast('Enter valid prep time: minimum must be at least 1 and maximum must be equal to or greater than minimum.', 'warning');
+        return null;
+    }
+    return `${min}-${max} mins`;
+};
+
 window.openOrderQuickModal = function(orderId) {
     const orders = window.cachedOrders || [];
     const ord = orders.find(o => String(o._id) === String(orderId)) || orders.find(o => String(o.id) === String(orderId));
@@ -950,6 +973,7 @@ window.openOrderQuickModal = function(orderId) {
             const isTakeaway = (ord.orderType === 'takeaway');
             const currentDelCharge = isTakeaway ? 0 : Number(ord.deliveryCharge || 0);
             const currentFinalTotal = Math.max(0, subtotal - discount + currentDelCharge);
+            const estimateRange = window.parseEstimatedTimeRange(ord.estimatedTime, isTakeaway);
 
             actionCard.innerHTML = `
                 <div style="background:rgba(37,211,102,0.08); border:1.5px solid rgba(37,211,102,0.35); border-radius:14px; padding:16px;">
@@ -989,7 +1013,10 @@ window.openOrderQuickModal = function(orderId) {
                     <!-- Prep Time Input -->
                     <div style="margin-bottom:14px;">
                         <label style="font-size:11.5px; font-weight:700; color:#94a3b8; margin-bottom:4px; display:block;">⏱️ Estimated ${isTakeaway ? 'Prep / Pickup' : 'Prep / Delivery'} Time</label>
-                        <input type="text" id="quick-est-time-input" class="form-control" style="padding:8px 12px; font-size:13px; color:#fff; background:#1e1e28; border-radius:8px; border:1px solid rgba(255,255,255,0.1);" value="${isTakeaway ? '15-20 mins' : '25-35 mins'}" placeholder="e.g. 25-35 mins">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                            <label style="font-size:11px; color:#94a3b8;">Min (mins)<input type="number" id="quick-est-time-min" class="form-control" min="1" max="240" step="1" value="${estimateRange.min}" style="margin-top:4px; padding:8px 10px; color:#fff; background:#1e1e28; border-radius:8px; border:1px solid rgba(255,255,255,0.1);"></label>
+                            <label style="font-size:11px; color:#94a3b8;">Max (mins)<input type="number" id="quick-est-time-max" class="form-control" min="1" max="240" step="1" value="${estimateRange.max}" style="margin-top:4px; padding:8px 10px; color:#fff; background:#1e1e28; border-radius:8px; border:1px solid rgba(255,255,255,0.1);"></label>
+                        </div>
                     </div>
 
                     <div style="display:flex; gap:10px;">
@@ -1354,7 +1381,8 @@ window.confirmQuickOrder = async function(orderId) {
     const subtotal = Number(order.subtotal || order.finalTotal || 0);
     const discount = Number(order.discount || 0);
     const finalTotal = Math.max(0, subtotal - discount + delCharge);
-    const estTime = document.getElementById('quick-est-time-input')?.value || (isTakeaway ? '15-20 mins' : '25-35 mins');
+    const estTime = window.readEstimatedTimeRange('quick-est-time-min', 'quick-est-time-max');
+    if (!estTime) return;
 
     try {
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
@@ -1367,11 +1395,13 @@ window.confirmQuickOrder = async function(orderId) {
             body: JSON.stringify({
                 status: 'accepted',
                 deliveryCharge: delCharge,
-                finalTotal: finalTotal
+                finalTotal: finalTotal,
+                estimatedTime: estTime
             })
         });
 
         if (res.ok) {
+            order.estimatedTime = estTime;
             window.showAdminToast(`✅ Order #${String(order._id).slice(-6).toUpperCase()} Confirmed!`, 'success');
             closeModal('order-quick-modal');
             window.fetchAndRenderOrders();
@@ -5875,7 +5905,8 @@ window.openOrderConfirmModal = function(orderId) {
     const delLockBadge = document.getElementById('ord-modal-del-lock-badge');
     const dispatchBtn = document.getElementById('ord-modal-btn-dispatch');
     const estLabel = document.getElementById('ord-modal-est-label');
-    const estTimeEl = document.getElementById('ord-modal-est-time');
+    const estTimeMinEl = document.getElementById('ord-modal-est-time-min');
+    const estTimeMaxEl = document.getElementById('ord-modal-est-time-max');
 
     if (custNameEl) custNameEl.textContent = order.customerName || 'Customer';
     if (custPhoneEl) custPhoneEl.textContent = order.customerPhone || 'N/A';
@@ -5912,9 +5943,12 @@ window.openOrderConfirmModal = function(orderId) {
             }
             if (dispatchBtn) dispatchBtn.innerHTML = '🛍️ Ready for Pickup';
             if (estLabel) estLabel.textContent = 'Estimated Prep / Pickup Time';
-            if (estTimeEl) {
-                estTimeEl.value = order.estimatedTime || '15-20 mins';
-                estTimeEl.disabled = !isPending;
+            if (estTimeMinEl && estTimeMaxEl) {
+                const range = window.parseEstimatedTimeRange(order.estimatedTime, true);
+                estTimeMinEl.value = range.min;
+                estTimeMaxEl.value = range.max;
+                estTimeMinEl.disabled = !isPending;
+                estTimeMaxEl.disabled = !isPending;
             }
         } else {
             const currentDel = order.deliveryCharge !== undefined ? order.deliveryCharge : 30;
@@ -5928,9 +5962,12 @@ window.openOrderConfirmModal = function(orderId) {
             }
             if (dispatchBtn) dispatchBtn.innerHTML = '📦 Out for Delivery';
             if (estLabel) estLabel.textContent = 'Estimated Delivery Time';
-            if (estTimeEl) {
-                estTimeEl.value = order.estimatedTime || '25-35 mins';
-                estTimeEl.disabled = !isPending;
+            if (estTimeMinEl && estTimeMaxEl) {
+                const range = window.parseEstimatedTimeRange(order.estimatedTime, false);
+                estTimeMinEl.value = range.min;
+                estTimeMaxEl.value = range.max;
+                estTimeMinEl.disabled = !isPending;
+                estTimeMaxEl.disabled = !isPending;
             }
         }
     }
@@ -6064,7 +6101,8 @@ window.confirmOrderAndWhatsApp = async function() {
     const subtotal = Number(order.subtotal || order.finalTotal || 0);
     const discount = Number(order.discount || 0);
     const finalTotal = Math.max(0, subtotal - discount + delCharge);
-    const estTime = document.getElementById('ord-modal-est-time')?.value || (isTakeaway ? '15-20 mins' : '25-35 mins');
+    const estTime = window.readEstimatedTimeRange('ord-modal-est-time-min', 'ord-modal-est-time-max');
+    if (!estTime) return;
 
     try {
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
@@ -6077,11 +6115,13 @@ window.confirmOrderAndWhatsApp = async function() {
             body: JSON.stringify({
                 status: 'accepted',
                 deliveryCharge: delCharge,
-                finalTotal: finalTotal
+                finalTotal: finalTotal,
+                estimatedTime: estTime
             })
         });
 
         if (res.ok) {
+            order.estimatedTime = estTime;
             window.showAdminToast(`✅ Order #${String(order._id).slice(-6).toUpperCase()} Confirmed!`, 'success');
             closeModal('order-confirm-modal');
             window.fetchAndRenderOrders();
@@ -6313,8 +6353,10 @@ window.openRiderDetails = function(riderId) {
 window.openAddDeliveryBoyModal = function() {
     const nameInput = document.getElementById('new-rider-name');
     const phoneInput = document.getElementById('new-rider-phone');
+    const emailInput = document.getElementById('new-rider-email');
     if (nameInput) nameInput.value = '';
     if (phoneInput) phoneInput.value = '';
+    if (emailInput) emailInput.value = '';
     openModal('add-delivery-boy-modal');
 };
 
@@ -6322,6 +6364,7 @@ window.handleSaveNewDeliveryBoy = async function(e) {
     if (e) e.preventDefault();
     const name = document.getElementById('new-rider-name')?.value?.trim();
     const phone = document.getElementById('new-rider-phone')?.value?.trim();
+    const email = document.getElementById('new-rider-email')?.value?.trim() || '';
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
     if (!name || !phone) {
@@ -6337,7 +6380,7 @@ window.handleSaveNewDeliveryBoy = async function(e) {
                 'x-admin-pin': authPin,
                 'x-pin': authPin
             },
-            body: JSON.stringify({ name, phone })
+            body: JSON.stringify({ name, phone, email })
         });
 
         if (res.ok) {
@@ -6616,13 +6659,14 @@ window.getSelectedDispatchRider = function() {
     if (selectEl.value === '__custom__') {
         const customName = document.getElementById('dispatch-custom-rider-name')?.value?.trim() || 'Littiwale Direct Delivery';
         const customPhone = (document.getElementById('dispatch-custom-rider-phone')?.value || '6370680744').replace(/\D/g, '').slice(-10);
-        return { id: '', name: customName, phone: customPhone || '6370680744' };
+        const customEmail = document.getElementById('dispatch-custom-rider-email')?.value?.trim() || '';
+        return { id: '', name: customName, phone: customPhone || '6370680744', email: customEmail };
     }
 
     const opt = selectEl.options[selectEl.selectedIndex];
     const name = opt ? (opt.getAttribute('data-name') || opt.text) : (currentAssigned?.name || 'Littiwale Direct Delivery');
     const phone = opt ? (opt.getAttribute('data-phone') || '6370680744') : (String(currentAssigned?.phone || '').replace(/\D/g, '').slice(-10) || '6370680744');
-    return { id: opt?.getAttribute('data-rider-id') || selectEl.value || currentAssigned?.id || '', name, phone };
+    return { id: opt?.getAttribute('data-rider-id') || selectEl.value || currentAssigned?.id || '', name, phone, email: '' };
 };
 
 window.sendDeliveryBoyDispatchWhatsApp = function() {
@@ -7007,6 +7051,7 @@ window.saveDeliveryBoyAssignment = async function() {
                 'x-pin': authPin
             },
             body: JSON.stringify({
+                riderEmail: rider.email || '',
                 deliveryBoy: {
                     id: rider.id,
                     name: rider.name,

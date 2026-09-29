@@ -2442,7 +2442,10 @@
                 <!-- Estimated Delivery Time -->
                 <div class="form-group" style="margin-bottom:18px;">
                     <label class="form-label" id="ord-modal-est-label">Estimated Delivery / Prep Time</label>
-                    <input type="text" id="ord-modal-est-time" class="form-control" value="25-35 mins" placeholder="e.g. 25-35 mins">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                        <label style="font-size:11px; color:#94a3b8;">Min (mins)<input type="number" id="ord-modal-est-time-min" class="form-control" min="1" max="240" step="1" value="25" style="margin-top:4px;"></label>
+                        <label style="font-size:11px; color:#94a3b8;">Max (mins)<input type="number" id="ord-modal-est-time-max" class="form-control" min="1" max="240" step="1" value="35" style="margin-top:4px;"></label>
+                    </div>
                 </div>
 
                 <!-- Dynamic Lifecycle Action Buttons -->
@@ -2506,6 +2509,10 @@
                     <div class="form-group" style="margin-bottom:0;">
                         <label class="form-label" style="font-size:11px;">Rider 10-digit Phone</label>
                         <input type="tel" id="dispatch-custom-rider-phone" class="form-control" placeholder="e.g. 9876543210">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0; grid-column:1 / -1;">
+                        <label class="form-label" style="font-size:11px;">Rider Email (for assignment notification)</label>
+                        <input type="email" id="dispatch-custom-rider-email" class="form-control" placeholder="rider@example.com">
                     </div>
                 </div>
 
@@ -2774,6 +2781,10 @@
                 <div class="form-group" style="margin-bottom:20px;">
                     <label class="form-label" style="font-size:12px; font-weight:700; color:#fff;">WhatsApp & Calling Number (10 digits) *</label>
                     <input type="tel" id="new-rider-phone" class="form-control" placeholder="e.g. 6370680744" required pattern="[0-9]{10}">
+                </div>
+                <div class="form-group" style="margin-bottom:20px;">
+                    <label class="form-label" style="font-size:12px; font-weight:700; color:#fff;">Rider Email (for delivery assignment updates)</label>
+                    <input type="email" id="new-rider-email" class="form-control" placeholder="rider@example.com">
                 </div>
                 <div style="display:flex; gap:10px;">
                     <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('add-delivery-boy-modal')">Cancel</button>

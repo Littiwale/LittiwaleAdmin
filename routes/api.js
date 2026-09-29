@@ -34,7 +34,8 @@ function ensureOrderPaymentColumns() {
              ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'pending',
              ADD COLUMN IF NOT EXISTS "paymentMode" TEXT NOT NULL DEFAULT 'full',
              ADD COLUMN IF NOT EXISTS "paymentCollectedByStore" BOOLEAN NOT NULL DEFAULT FALSE,
-             ADD COLUMN IF NOT EXISTS "dispatchedAt" TIMESTAMPTZ`
+             ADD COLUMN IF NOT EXISTS "dispatchedAt" TIMESTAMPTZ,
+             ADD COLUMN IF NOT EXISTS "estimatedTime" TEXT`
         ).catch(error => {
             orderPaymentColumnsReady = null;
             throw error;
@@ -1501,6 +1502,12 @@ function buildLuxuryOrderEmailHtml({ ord, newStatus, isDelivered, isTakeaway, cl
                                     </tr>
                                 </table>
 
+                                ${norm === 'accepted' && ord.estimatedTime ? `
+                                <div style="background:#18181f; border:1px solid #27272a; border-radius:10px; padding:12px 14px; margin:-10px 0 20px; color:#f8fafc; font-size:13px;">
+                                    ⏱️ Estimated ${isTakeaway ? 'prep / pickup' : 'delivery'} time: <strong>${ord.estimatedTime}</strong>
+                                </div>
+                                ` : ''}
+
                                 <!-- ITEMS TABLE -->
                                 <div style="font-size:11.5px; color:#94a3b8; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">
                                     Ordered Items
@@ -1681,6 +1688,64 @@ async function sendStatusUpdateEmail(customerEmail, ord, newStatus) {
     } catch (e) {
         console.warn('⚠️ Status email dispatch failed:', e.message);
     }
+}
+
+async function sendDeliveryAssignmentEmails(ord, customerEmail, riderEmail, assignmentType) {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) return;
+
+    const shortId = String(ord.orderId || ord._id || 'LW').toUpperCase();
+    const rider = parseDeliveryBoy(ord.deliveryBoy);
+    const address = ord.customerAddress || ord.deliveryAddress || ord.address || 'Address not provided';
+    const estimatedTime = ord.estimatedTime || '25-35 mins';
+    const total = Number(ord.finalTotal || ord.total || ord.subtotal || 0);
+    const due = Number.isFinite(Number(ord.amountDue)) ? Number(ord.amountDue) : total;
+    const items = (Array.isArray(ord.items) ? ord.items : [])
+        .map(item => `- ${item.quantity || 1}x ${item.name || 'Food item'}`)
+        .join('\n') || '- Food items';
+    const trackingUrl = `${(process.env.FRONTEND_URL || 'https://littiwale.co.in').replace(/\/+$/, '')}/track.html?id=${encodeURIComponent(ord.orderId || ord._id)}`;
+    const riderPortalUrl = (process.env.RIDER_PORTAL_URL || 'https://rider.littiwale.co.in').replace(/\/+$/, '');
+    const customerSubject = assignmentType === 'changed' ? 'Delivery Partner Changed' : 'Delivery Partner Assigned';
+    const messages = [];
+
+    if (customerEmail && customerEmail.includes('@')) {
+        messages.push({
+            to: customerEmail,
+            subject: `${customerSubject} - Order #${shortId} | Littiwale Barbil`,
+            text: `Hi ${ord.customerName || 'Customer'},\n\n${assignmentType === 'changed' ? 'Your delivery partner has been changed.' : 'A delivery partner has been assigned to your order.'}\n\nOrder: #${shortId}\nDelivery partner: ${rider.name || 'Rider'}\nContact: +91 ${rider.phone || 'N/A'}\nAddress: ${address}\nEstimated delivery: ${estimatedTime}\nAmount due: ₹${due}\n\nTrack your order: ${trackingUrl}\n\n— Team Littiwale Barbil`
+        });
+    }
+
+    if (riderEmail && riderEmail.includes('@')) {
+        messages.push({
+            to: riderEmail,
+            subject: `New Delivery Assignment - Order #${shortId} | Littiwale Barbil`,
+            text: `Hi ${rider.name || 'Rider'},\n\n${assignmentType === 'changed' ? 'This order has been reassigned to you.' : 'A new delivery task has been assigned to you.'}\n\nOrder: #${shortId}\nCustomer: ${ord.customerName || 'Customer'}\nCustomer phone: +91 ${ord.customerPhone || 'N/A'}\nAddress: ${address}${ord.landmark ? ` (Landmark: ${ord.landmark})` : ''}\nEstimated delivery: ${estimatedTime}\n\nItems:\n${items}\n\nTotal order value: ₹${total}\nAmount to collect: ₹${due}\nYour delivery earning: ₹${Number(rider.earning || 0)}\n\nRider portal: ${riderPortalUrl}\nPlease deliver safely and contact the customer before handover.\n\n— Team Littiwale Barbil`
+        });
+    }
+
+    await Promise.all(messages.map(async message => {
+        try {
+            const response = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${resendApiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    from: 'Littiwale Orders <orders@littiwale.co.in>',
+                    to: [message.to],
+                    subject: message.subject,
+                    text: message.text
+                })
+            });
+            if (!response.ok) {
+                console.warn(`Assignment email failed for ${message.to}: ${response.status} ${await response.text()}`);
+            }
+        } catch (error) {
+            console.warn(`Assignment email failed for ${message.to}:`, error.message);
+        }
+    }));
 }
 
 // CUSTOMER AUTH & ACCOUNT ROUTES
@@ -2467,9 +2532,23 @@ router.put('/orders/:id', checkPin, async (req, res) => {
     try {
         await ensureOrderPaymentColumns();
         const id = req.params.id;
-        const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, paymentCollectedByStore, paymentMode, amountPaid, amountDue, paymentStatus, dispatchedAt } = req.body;
+        const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, riderEmail, estimatedTime, paymentCollectedByStore, paymentMode, amountPaid, amountDue, paymentStatus, dispatchedAt } = req.body;
         const hasAddressUpdate = customerAddress !== undefined || deliveryAddress !== undefined || address !== undefined;
         const updatedAddress = customerAddress || deliveryAddress || address;
+        const normalizedRiderEmail = String(riderEmail || '').trim().toLowerCase();
+        let previousRider = {};
+
+        if (normalizedRiderEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedRiderEmail)) {
+            return res.status(400).json({ success: false, error: 'Enter a valid rider email address' });
+        }
+
+        if (deliveryBoy !== undefined) {
+            const previousOrderRes = await supabaseDb.query(
+                `SELECT "deliveryBoy" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                [id]
+            );
+            previousRider = parseDeliveryBoy(previousOrderRes.rows?.[0]?.deliveryBoy);
+        }
 
         if (hasAddressUpdate && orderType !== 'takeaway' && !String(updatedAddress || '').trim()) {
             return res.status(400).json({ success: false, error: 'Delivery address cannot be empty' });
@@ -2504,6 +2583,10 @@ router.put('/orders/:id', checkPin, async (req, res) => {
         if (deliveryBoy !== undefined) {
             updates.push(`"deliveryBoy" = $${idx++}`);
             values.push(JSON.stringify(deliveryBoy));
+        }
+        if (estimatedTime !== undefined) {
+            updates.push(`"estimatedTime" = $${idx++}`);
+            values.push(String(estimatedTime).trim());
         }
         if (paymentCollectedByStore !== undefined) {
             updates.push(`"paymentCollectedByStore" = $${idx++}`);
@@ -2569,6 +2652,46 @@ router.put('/orders/:id', checkPin, async (req, res) => {
                 `UPDATE orders SET ${updates.join(', ')} WHERE "orderId" = $${idx} OR _id = $${idx} OR id::text = $${idx}`,
                 values
             );
+        }
+
+        if (deliveryBoy?.name) {
+            const previousPhone = String(previousRider.phone || '').replace(/\D/g, '').slice(-10);
+            const nextPhone = String(deliveryBoy.phone || '').replace(/\D/g, '').slice(-10);
+            const sameRider = (previousRider.id && deliveryBoy.id && String(previousRider.id) === String(deliveryBoy.id)) || (previousPhone && nextPhone && previousPhone === nextPhone);
+
+            if (!sameRider) {
+                (async () => {
+                    try {
+                        const orderRes = await supabaseDb.query(
+                            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                            [id]
+                        );
+                        const fullOrder = orderRes.rows?.[0];
+                        if (!fullOrder) return;
+
+                        let customerEmail = String(fullOrder.customerEmail || fullOrder.email || '').trim().toLowerCase();
+                        if (!customerEmail && fullOrder.customerPhone) {
+                            const cleanPhone = String(fullOrder.customerPhone).replace(/\D/g, '').slice(-10);
+                            const customerRes = await supabaseDb.query(`SELECT email FROM customers WHERE phone = $1 LIMIT 1`, [cleanPhone]);
+                            customerEmail = String(customerRes.rows?.[0]?.email || '').trim().toLowerCase();
+                        }
+
+                        const settingsRes = await supabaseDb.query(`SELECT "deliveryBoys" FROM store_settings LIMIT 1`);
+                        const savedRidersValue = settingsRes.rows?.[0]?.deliveryBoys;
+                        const savedRiders = Array.isArray(savedRidersValue) ? savedRidersValue : JSON.parse(savedRidersValue || '[]');
+                        const savedRider = savedRiders.find(item =>
+                            (deliveryBoy.id && String(item.id || '') === String(deliveryBoy.id)) ||
+                            (nextPhone && String(item.phone || '').replace(/\D/g, '').slice(-10) === nextPhone)
+                        );
+                        const savedRiderEmail = String(savedRider?.email || '').trim().toLowerCase();
+                        const resolvedRiderEmail = savedRiderEmail || normalizedRiderEmail;
+                        const assignmentType = previousRider.name || previousPhone ? 'changed' : 'assigned';
+                        await sendDeliveryAssignmentEmails(fullOrder, customerEmail, resolvedRiderEmail, assignmentType);
+                    } catch (error) {
+                        console.warn('Delivery assignment email check error:', error.message);
+                    }
+                })();
+            }
         }
 
         // If status changed, send Real-time Status Update Email (Delivered, Dispatched, Accepted, Cooking, etc.)
@@ -2672,7 +2795,11 @@ router.get('/delivery-boys', async (req, res) => {
         if (sbRes.rows && sbRes.rows[0] && sbRes.rows[0].deliveryBoys) {
             list = Array.isArray(sbRes.rows[0].deliveryBoys) ? sbRes.rows[0].deliveryBoys : JSON.parse(sbRes.rows[0].deliveryBoys || '[]');
         }
-        res.json(list.filter(item => item.status !== 'pending' && item.status !== 'rejected').map(safeRider));
+        res.json(list.filter(item => item.status !== 'pending' && item.status !== 'rejected').map(item => {
+            const publicRider = { ...item };
+            delete publicRider.email;
+            return safeRider(publicRider);
+        }));
     } catch(e) {
         res.json([]);
     }
@@ -2680,15 +2807,20 @@ router.get('/delivery-boys', async (req, res) => {
 
 router.post('/delivery-boys', checkPin, async (req, res) => {
     try {
-        const { name, phone, vehicleNumber, status } = req.body;
+        const { name, phone, email, vehicleNumber, status } = req.body;
         const normalizedPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+        const normalizedEmail = String(email || '').trim().toLowerCase();
         if (!name || normalizedPhone.length !== 10) {
             return res.status(400).json({ error: 'Rider name and valid 10-digit phone are required' });
+        }
+        if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+            return res.status(400).json({ error: 'Enter a valid rider email address' });
         }
         const newBoy = {
             id: `boy_${Date.now()}`,
             name: name || 'Rider',
             phone: normalizedPhone,
+            email: normalizedEmail,
             username: normalizedPhone,
             passwordHash: await bcrypt.hash(RIDER_DEFAULT_PASSWORD, 10),
             mustChangePassword: true,
