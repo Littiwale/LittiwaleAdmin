@@ -1818,12 +1818,30 @@
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-icon-box orange">🛵</div>
-                                <span class="kpi-label">Gross Sales & Fees</span>
+                                <span class="kpi-label">Billed Sales & Fees</span>
                             </div>
                             <div class="kpi-number" id="fin-website-gross" style="color:#fff;">₹0</div>
                             <div class="kpi-footer">
-                                <span id="fin-website-del-fee" style="color:#f59e0b; font-weight:700;">Del Fee: ₹0</span>
+                                <span id="fin-website-del-fee" style="color:#f59e0b; font-weight:700;">Delivery charges: ₹0</span>
                             </div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <div class="kpi-icon-box green">✓</div>
+                                <span class="kpi-label">Payments Received</span>
+                            </div>
+                            <div class="kpi-number" id="fin-website-collected" style="color:#34d399;">₹0</div>
+                            <div class="kpi-footer"><span>Recorded customer collections</span></div>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <div class="kpi-icon-box orange">!</div>
+                                <span class="kpi-label">Outstanding Due</span>
+                            </div>
+                            <div class="kpi-number" id="fin-website-due" style="color:#fbbf24;">₹0</div>
+                            <div class="kpi-footer"><span>Delivered bills not fully paid</span></div>
                         </div>
                     </div>
 
@@ -1847,12 +1865,14 @@
                                         <th>Food (₹)</th>
                                         <th>Delivery Fee (₹)</th>
                                         <th>Grand Total (₹)</th>
+                                        <th>Paid (₹)</th>
+                                        <th>Due (₹)</th>
                                         <th>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="finance-tbody">
                                     <tr>
-                                        <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
+                                        <td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">
                                             <div style="font-size:32px; margin-bottom:8px;">🛒</div>
                                             <div style="font-size:14px; font-weight:700; color:#fff; margin-bottom:4px;">No Orders in Selected Timeframe</div>
                                             <div style="font-size:12px; color:var(--text-dim);">When customers place orders, their revenue breakdown and order totals will appear here in real-time.</div>
@@ -2543,6 +2563,14 @@
                             </div>
                         </label>
                     </div>
+                    <label style="display:grid; grid-template-columns:1fr 1fr; align-items:center; gap:8px; margin-top:10px; font-size:11px; color:#94a3b8;">
+                        <span>Method for payment already received</span>
+                        <select id="dispatch-payment-method" class="form-control" style="padding:8px;">
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </label>
                 </div>
 
                 <div class="form-group" style="margin-bottom:18px;">
@@ -2656,6 +2684,46 @@
                             <strong style="font-size:18px; color:var(--brand-gold);" id="quick-order-grand-total">₹0</strong>
                         </div>
                     </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; font-size:12px;">
+                        <div style="color:#94a3b8;">Received: <strong id="quick-summary-paid" style="color:#34d399;">₹0</strong></div>
+                        <div style="color:#94a3b8; text-align:right;">Due: <strong id="quick-summary-due" style="color:#fbbf24;">₹0</strong></div>
+                    </div>
+                    <div id="quick-payment-tools" style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:10px; align-items:end;">
+                        <label style="font-size:11px; color:#94a3b8;">Received (+) / correction (-)
+                            <input type="number" id="quick-payment-amount" step="0.01" class="form-control" placeholder="₹ amount" style="margin-top:4px; padding:8px;">
+                        </label>
+                        <label style="font-size:11px; color:#94a3b8;">Method
+                            <select id="quick-payment-method" class="form-control" style="margin-top:4px; padding:8px;">
+                                <option value="cash">Cash</option>
+                                <option value="upi">UPI</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </label>
+                        <label style="font-size:11px; color:#94a3b8;">Note / correction reason
+                            <input type="text" id="quick-payment-note" maxlength="300" class="form-control" placeholder="Required for correction" style="margin-top:4px; padding:8px;">
+                        </label>
+                        <button type="button" class="btn btn-primary" style="padding:8px 10px; font-size:11px;" onclick="window.recordQuickOrderPayment()">Record</button>
+                    </div>
+                    <div id="quick-payment-history" style="margin-top:8px; color:#94a3b8; font-size:11px; line-height:1.5;"></div>
+                    <div id="quick-refund-tools" style="display:none; grid-template-columns:minmax(0,0.7fr) minmax(0,1.3fr); gap:8px; margin-top:10px; align-items:end;">
+                        <label style="font-size:11px; color:#94a3b8;">Refund amount
+                            <input type="number" id="quick-refund-amount" min="0.01" step="0.01" class="form-control" placeholder="₹ amount" style="margin-top:4px; padding:8px;">
+                        </label>
+                        <label style="font-size:11px; color:#94a3b8;">Refund reason
+                            <input type="text" id="quick-refund-reason" maxlength="300" class="form-control" placeholder="Reason for refund" style="margin-top:4px; padding:8px;">
+                        </label>
+                        <button type="button" class="btn btn-secondary" style="grid-column:1 / -1; padding:8px 10px; font-size:11px;" onclick="window.recordQuickOrderRefund()">Record refund actually issued</button>
+                    </div>
+                    <div id="quick-discount-tools" style="display:grid; grid-template-columns:minmax(0,0.7fr) minmax(0,1.3fr); gap:8px; margin-top:10px; align-items:end;">
+                        <label style="font-size:11px; color:#94a3b8;">Total discount
+                            <input type="number" id="quick-discount-input" min="0" step="1" class="form-control" placeholder="₹ amount" style="margin-top:4px; padding:8px;">
+                        </label>
+                        <label style="font-size:11px; color:#94a3b8;">Reason
+                            <input type="text" id="quick-discount-reason" maxlength="300" class="form-control" placeholder="Reason for discount" style="margin-top:4px; padding:8px;">
+                        </label>
+                        <button type="button" class="btn btn-secondary" style="grid-column:1 / -1; padding:8px 10px; font-size:11px;" onclick="window.saveQuickOrderDiscount()">Apply discount</button>
+                    </div>
+                    <div id="quick-discount-history" style="margin-top:6px; color:#94a3b8; font-size:11px; line-height:1.5;"></div>
                 </div>
 
                 <!-- Auxiliary Secondary Tools (Print KOT, Print Bill, Delete) -->

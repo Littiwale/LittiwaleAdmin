@@ -18,6 +18,8 @@ const orderSchema = new mongoose.Schema({
     items: [orderItemSchema],
     subtotal: { type: Number, required: true, default: 0 },
     discount: { type: Number, default: 0 },
+    discountReason: { type: String, default: '' },
+    discountHistory: { type: [mongoose.Schema.Types.Mixed], default: [] },
     couponCode: { type: String, default: '' },
     deliveryCharge: { type: Number, default: 0 },
     finalTotal: { type: Number, required: true, default: 0 },
@@ -26,6 +28,9 @@ const orderSchema = new mongoose.Schema({
     amountPaid: { type: Number, default: 0, min: 0 },
     amountDue: { type: Number, default: 0, min: 0 },
     paymentStatus: { type: String, enum: ['pending', 'partial', 'paid'], default: 'pending' },
+    paymentTransactions: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    amountRefunded: { type: Number, default: 0, min: 0 },
+    refundTransactions: { type: [mongoose.Schema.Types.Mixed], default: [] },
     notes: { type: String, default: '' },
     orderSource: { type: String, default: 'website' },
     deliveryBoy: {

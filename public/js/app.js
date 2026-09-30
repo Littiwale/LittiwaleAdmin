@@ -1029,7 +1029,7 @@ window.openOrderQuickModal = function(orderId) {
                     </div>
                 </div>
             `;
-        } else if (status === 'accepted' || status === 'confirmed') {
+        } else if (status === 'accepted' || status === 'confirmed' || status === 'preparing') {
             const isTakeaway = (ord.orderType === 'takeaway');
             if (isTakeaway) {
                 actionCard.innerHTML = `
@@ -1038,6 +1038,7 @@ window.openOrderQuickModal = function(orderId) {
                         <button type="button" class="btn btn-primary" style="width:100%; background:linear-gradient(135deg, #f59e0b, #d97706); color:#000; font-weight:900; font-size:14px; padding:13px; border-radius:10px; box-shadow:0 4px 15px rgba(245,158,11,0.4);" onclick="closeModal('order-quick-modal'); window.markTakeawayReady('${ord._id}');">
                             🛍️ Mark Ready for Pickup & Notify Customer →
                         </button>
+                        <button type="button" class="btn btn-outline" style="width:100%; margin-top:8px; border-color:#ef4444; color:#f87171; font-weight:800;" onclick="cancelOrderPrompt('${ord._id}')">Cancel before dispatch</button>
                     </div>
                 `;
             } else {
@@ -1053,6 +1054,7 @@ window.openOrderQuickModal = function(orderId) {
                                 📦 Mark Dispatched
                             </button>
                         </div>
+                        <button type="button" class="btn btn-outline" style="width:100%; margin-top:10px; border-color:#ef4444; color:#f87171; font-weight:800;" onclick="cancelOrderPrompt('${ord._id}')">Cancel before rider starts delivery</button>
                     </div>
                 `;
             }
@@ -1200,6 +1202,11 @@ window.openOrderQuickModal = function(orderId) {
     const ordDelFee = Number(ord.deliveryCharge || 0);
     const ordDiscount = Number(ord.discount || 0);
     const ordGrandTotal = Number(ord.finalTotal || ord.total || ordSubtotal + ordDelFee - ordDiscount);
+    const hasPaymentHistory = Array.isArray(ord.paymentTransactions) && ord.paymentTransactions.length > 0;
+    const storedPaid = Number(ord.amountPaid || 0);
+    const ordPaid = Math.max(0, storedPaid || (!hasPaymentHistory && ord.paymentCollectedByStore ? ordGrandTotal : 0));
+    const refunded = Math.max(0, Number(ord.amountRefunded || 0));
+    const ordDue = Math.max(0, ordGrandTotal - ordPaid);
 
     if (summarySubtotalEl) summarySubtotalEl.textContent = `₹${ordSubtotal}`;
     if (summaryDelFeeEl) {
@@ -1216,6 +1223,58 @@ window.openOrderQuickModal = function(orderId) {
         }
     }
     if (grandTotalEl) grandTotalEl.textContent = `₹${ordGrandTotal}`;
+    const paidEl = document.getElementById('quick-summary-paid');
+    const dueEl = document.getElementById('quick-summary-due');
+    if (paidEl) paidEl.textContent = refunded > 0 ? `₹${ordPaid} (₹${refunded} refunded)` : `₹${ordPaid}`;
+    if (dueEl) dueEl.textContent = status === 'cancelled' ? 'Cancelled' : (ordPaid > ordGrandTotal ? `₹0 (₹${ordPaid - ordGrandTotal} credit)` : `₹${ordDue}`);
+
+    const paymentTools = document.getElementById('quick-payment-tools');
+    if (paymentTools) paymentTools.style.display = status === 'cancelled' ? 'none' : 'grid';
+    const refundTools = document.getElementById('quick-refund-tools');
+    if (refundTools) refundTools.style.display = status === 'cancelled' && ordPaid > refunded ? 'grid' : 'none';
+    const refundAmountInput = document.getElementById('quick-refund-amount');
+    if (refundAmountInput) refundAmountInput.placeholder = `Max ₹${Math.max(0, ordPaid - refunded)}`;
+    const discountTools = document.getElementById('quick-discount-tools');
+    if (discountTools) discountTools.style.display = status === 'cancelled' || status === 'delivered' ? 'none' : 'grid';
+    const paymentAmountInput = document.getElementById('quick-payment-amount');
+    if (paymentAmountInput) paymentAmountInput.value = '';
+    const discountInput = document.getElementById('quick-discount-input');
+    if (discountInput) discountInput.value = ordDiscount;
+    const discountReasonInput = document.getElementById('quick-discount-reason');
+    if (discountReasonInput) discountReasonInput.value = ord.discountReason || '';
+    const discountHistoryEl = document.getElementById('quick-discount-history');
+    if (discountHistoryEl) {
+        let discountHistory = ord.discountHistory || [];
+        if (typeof discountHistory === 'string') {
+            try { discountHistory = JSON.parse(discountHistory); } catch (error) { discountHistory = []; }
+        }
+        discountHistoryEl.textContent = Array.isArray(discountHistory) && discountHistory.length
+            ? `Discount history: ${discountHistory.slice(-4).reverse().map(entry => `₹${entry.previousDiscount || 0} → ₹${entry.discount || 0} (${entry.reason || 'No reason'})`).join(' • ')}`
+            : 'No discount changes recorded.';
+    }
+    const paymentHistoryEl = document.getElementById('quick-payment-history');
+    if (paymentHistoryEl) {
+        let transactions = ord.paymentTransactions || [];
+        if (typeof transactions === 'string') {
+            try { transactions = JSON.parse(transactions); } catch (error) { transactions = []; }
+        }
+        let refunds = ord.refundTransactions || [];
+        if (typeof refunds === 'string') {
+            try { refunds = JSON.parse(refunds); } catch (error) { refunds = []; }
+        }
+        const history = [
+            ...(Array.isArray(transactions) ? transactions.map(entry => ({ ...entry, historyType: 'payment' })) : []),
+            ...(Array.isArray(refunds) ? refunds.map(entry => ({ ...entry, historyType: 'refund' })) : [])
+        ].sort((left, right) => new Date(left.recordedAt || 0) - new Date(right.recordedAt || 0));
+        paymentHistoryEl.textContent = history.length
+            ? `Payment history: ${history.slice(-6).reverse().map(entry => {
+                const amount = Number(entry.amount || 0);
+                const date = entry.recordedAt ? new Date(entry.recordedAt).toLocaleString() : '';
+                const sign = entry.historyType === 'refund' || amount < 0 ? '-' : (amount > 0 ? '+' : '');
+                return `${sign}₹${Math.abs(amount)} ${entry.historyType === 'refund' ? 'refund' : (entry.method || '')} ${entry.note || entry.reason ? `(${entry.note || entry.reason})` : ''} ${date}`.trim();
+            }).join(' • ')}`
+            : 'No payment entries recorded yet.';
+    }
 
     // 6. Secondary Tool Buttons Setup
     const printKotBtn = document.getElementById('quick-print-kot-btn');
@@ -1253,6 +1312,96 @@ window.recalcQuickDelCharge = function(orderId) {
     }
     const mainTotalEl = document.getElementById('quick-order-grand-total');
     if (mainTotalEl) mainTotalEl.textContent = `₹${finalTotal}`;
+};
+
+window.recordQuickOrderPayment = async function() {
+    const orderId = window.currentQuickOrderId;
+    const order = (window.cachedOrders || []).find(item => String(item._id) === String(orderId));
+    const amount = Number(document.getElementById('quick-payment-amount')?.value);
+    const method = document.getElementById('quick-payment-method')?.value || 'cash';
+    const note = document.getElementById('quick-payment-note')?.value?.trim() || '';
+    if (!order || !Number.isFinite(amount) || amount === 0 || (amount < 0 && !note)) {
+        window.showAdminToast('Enter a non-zero amount; corrections also need a reason', 'warning');
+        return;
+    }
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const response = await fetch(`${API_URL}/orders/${order._id}/payments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-pin': authPin, 'x-pin': authPin },
+            body: JSON.stringify({ amount, method, note })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not record payment');
+        Object.assign(order, result);
+        if (document.getElementById('quick-payment-amount')) document.getElementById('quick-payment-amount').value = '';
+        if (document.getElementById('quick-payment-note')) document.getElementById('quick-payment-note').value = '';
+        const toastMessage = amount < 0 ? 'Payment correction recorded' : (result.overpaidAmount > 0 ? `Payment saved; ₹${result.overpaidAmount} is above the bill and needs review` : 'Payment recorded');
+        window.showAdminToast(toastMessage, result.overpaidAmount > 0 ? 'warning' : 'success');
+        window.openOrderQuickModal(order._id);
+        window.fetchAndRenderOrders();
+    } catch (error) {
+        window.showAdminToast(error.message || 'Could not record payment', 'error');
+    }
+};
+
+window.saveQuickOrderDiscount = async function() {
+    const orderId = window.currentQuickOrderId;
+    const order = (window.cachedOrders || []).find(item => String(item._id) === String(orderId));
+    const discount = Number(document.getElementById('quick-discount-input')?.value);
+    const reason = document.getElementById('quick-discount-reason')?.value?.trim() || '';
+    if (!order || !Number.isFinite(discount) || discount < 0) {
+        window.showAdminToast('Enter a valid discount amount', 'warning');
+        return;
+    }
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const response = await fetch(`${API_URL}/orders/${order._id}/discount`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-pin': authPin, 'x-pin': authPin },
+            body: JSON.stringify({ discount, reason })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not apply discount');
+        Object.assign(order, result);
+        window.showAdminToast('Discount saved and bill total recalculated', 'success');
+        window.openOrderQuickModal(order._id);
+        window.fetchAndRenderOrders();
+    } catch (error) {
+        window.showAdminToast(error.message || 'Could not apply discount', 'error');
+    }
+};
+
+window.recordQuickOrderRefund = async function() {
+    const orderId = window.currentQuickOrderId;
+    const order = (window.cachedOrders || []).find(item => String(item._id) === String(orderId));
+    const amount = Number(document.getElementById('quick-refund-amount')?.value);
+    const reason = document.getElementById('quick-refund-reason')?.value?.trim() || '';
+    if (!order || !Number.isFinite(amount) || amount <= 0 || !reason) {
+        window.showAdminToast('Enter a refund amount and reason', 'warning');
+        return;
+    }
+
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const response = await fetch(`${API_URL}/orders/${order._id}/refunds`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-pin': authPin, 'x-pin': authPin },
+            body: JSON.stringify({ amount, reason })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not record refund');
+        Object.assign(order, result);
+        if (document.getElementById('quick-refund-amount')) document.getElementById('quick-refund-amount').value = '';
+        if (document.getElementById('quick-refund-reason')) document.getElementById('quick-refund-reason').value = '';
+        window.showAdminToast('Refund recorded', 'success');
+        window.openOrderQuickModal(order._id);
+        window.fetchAndRenderOrders();
+    } catch (error) {
+        window.showAdminToast(error.message || 'Could not record refund', 'error');
+    }
 };
 
 window.handleOrderTypeToggleClick = async function(targetType) {
@@ -1420,7 +1569,8 @@ window.confirmQuickOrder = async function(orderId) {
                 ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
                 : `*📍 Delivery Address:* ${order.customerAddress || order.deliveryAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
-            const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
+            const paymentDetails = window.getStoredOrderPaymentDetails(order);
+            const paymentNote = paymentDetails.status === 'paid' ? `Paid ₹${paymentDetails.paid} ✅` : `₹${paymentDetails.due} due (${order.paymentMethod || 'COD'})`;
 
             const msg = `${orderTypeHeader}\n\n` +
                         `Hi *${order.customerName || 'Customer'}*,\n` +
@@ -1862,7 +2012,9 @@ function renderWebsiteRevenue() {
     
     let totalFoodRevenue = 0; // Pure Food Item Net Revenue (excl. delivery fee)
     let totalDeliveryFee = 0; // Total Delivery Charges (Paid to Rider)
-    let totalGrandSales = 0;  // Grand total collected
+    let totalGrandSales = 0;  // Delivered bill value
+    let totalCollected = 0;
+    let totalOutstanding = 0;
 
     deliveredOrders.forEach(o => {
         const itemSubtotal = Number(o.subtotal || 0);
@@ -1873,10 +2025,15 @@ function renderWebsiteRevenue() {
         const fallbackFood = o.finalTotal ? Math.max(0, Number(o.finalTotal) - Number(o.deliveryCharge || 0)) : 0;
         const foodAmount = netItemTotal > 0 ? netItemTotal : fallbackFood;
         const delFee = Number(o.deliveryCharge || 0);
+        const billTotal = Number(o.finalTotal || (foodAmount + delFee));
+        const recordedPaid = Number(o.amountPaid || 0);
+        const paid = recordedPaid || (o.paymentCollectedByStore ? billTotal : 0);
 
         totalFoodRevenue += foodAmount;
         totalDeliveryFee += delFee;
-        totalGrandSales += Number(o.finalTotal || (foodAmount + delFee));
+        totalGrandSales += billTotal;
+        totalCollected += paid;
+        totalOutstanding += Math.max(0, billTotal - paid);
     });
 
     const foodAov = totalDeliveredOrders > 0 ? Math.round(totalFoodRevenue / totalDeliveredOrders) : 0;
@@ -1902,7 +2059,13 @@ function renderWebsiteRevenue() {
     if (elWebGross) elWebGross.textContent = `₹${totalGrandSales.toLocaleString('en-IN')}`;
 
     const elWebDelFee = document.getElementById('fin-website-del-fee');
-    if (elWebDelFee) elWebDelFee.textContent = `Rider Fees: ₹${totalDeliveryFee.toLocaleString('en-IN')}`;
+    if (elWebDelFee) elWebDelFee.textContent = `Delivery charges: ₹${totalDeliveryFee.toLocaleString('en-IN')}`;
+
+    const elWebCollected = document.getElementById('fin-website-collected');
+    if (elWebCollected) elWebCollected.textContent = `₹${totalCollected.toLocaleString('en-IN')}`;
+
+    const elWebDue = document.getElementById('fin-website-due');
+    if (elWebDue) elWebDue.textContent = `₹${totalOutstanding.toLocaleString('en-IN')}`;
 
     // Overall Dashboard Total KPI update (shows Today's or Lifetime)
     const elDashRev = document.getElementById('kpi-revenue');
@@ -1926,7 +2089,7 @@ function renderWebsiteRevenue() {
         if (filteredOrders.length === 0) {
             finTbody.innerHTML = `
                 <tr>
-                    <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
+                        <td colspan="10" style="text-align:center; padding:40px; color:var(--text-muted);">
                         <div style="font-size:32px; margin-bottom:8px;">🛒</div>
                         <div style="font-size:14px; font-weight:700; color:#fff; margin-bottom:4px;">No Orders in ${activePeriodLabel}</div>
                         <div style="font-size:12px; color:var(--text-dim);">No customer orders were placed in this selected timeframe. Try choosing another timeframe tab.</div>
@@ -1943,6 +2106,9 @@ function renderWebsiteRevenue() {
                 const netFood = Math.max(0, itemSubtotal - discount) || (ord.finalTotal ? Math.max(0, Number(ord.finalTotal) - Number(ord.deliveryCharge || 0)) : 0);
                 const delFee = Number(ord.deliveryCharge || 0);
                 const grandTotal = Number(ord.finalTotal || (netFood + delFee));
+                const recordedPaid = Number(ord.amountPaid || 0);
+                const paid = recordedPaid || (ord.paymentCollectedByStore ? grandTotal : 0);
+                const due = Math.max(0, grandTotal - paid);
                 const status = (ord.status || 'pending').toLowerCase();
                 const statusBadge = status === 'delivered' ? 'badge-open' : (status === 'cancelled' ? 'badge-closed' : (status === 'accepted' || status === 'confirmed' ? 'badge-active' : (status === 'dispatched' ? 'badge-info' : 'badge-new')));
 
@@ -1958,6 +2124,8 @@ function renderWebsiteRevenue() {
                         <td style="font-weight:800; color:var(--brand-gold);">₹${netFood}</td>
                         <td style="color:var(--brand-orange); font-weight:600;">₹${delFee}</td>
                         <td style="font-weight:900; color:#fff;">₹${grandTotal}</td>
+                        <td style="color:#34d399; font-weight:700;">₹${paid}</td>
+                        <td style="color:${due > 0 ? '#fbbf24' : '#94a3b8'}; font-weight:700;">₹${due}</td>
                         <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
                     </tr>
                 `;
@@ -6142,7 +6310,8 @@ window.confirmOrderAndWhatsApp = async function() {
             const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
             const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
-            const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
+            const payment = window.getStoredOrderPaymentDetails(order);
+            const paymentNote = payment.status === 'paid' ? `Paid ₹${payment.paid} ✅` : `₹${payment.due} due (${order.paymentMethod || 'COD'})`;
 
             const msg = `${orderTypeHeader}\n\n` +
                         `Hi *${order.customerName || 'Customer'}*,\n` +
@@ -6572,6 +6741,13 @@ window.openDispatchModal = async function(orderId = null) {
 
     const savedAmountPaid = Math.max(0, Number(order.amountPaid || 0));
     const savedPaymentStatus = String(order.paymentStatus || '').toLowerCase();
+    const paymentMethodSelect = document.getElementById('dispatch-payment-method');
+    if (paymentMethodSelect) {
+        const lastPayment = Array.isArray(order.paymentTransactions) ? order.paymentTransactions.at(-1) : null;
+        paymentMethodSelect.value = ['cash', 'upi', 'other'].includes(lastPayment?.method)
+            ? lastPayment.method
+            : (order.paymentMethod === 'UPI' ? 'upi' : 'cash');
+    }
     const payCollectRadio = document.getElementById('dispatch-pay-collect');
     const payPartialRadio = document.getElementById('dispatch-pay-partial');
     const payPrepaidRadio = document.getElementById('dispatch-pay-prepaid');
@@ -6579,7 +6755,7 @@ window.openDispatchModal = async function(orderId = null) {
     if (savedPaymentStatus === 'partial' || (savedAmountPaid > 0 && savedAmountPaid < totalVal)) {
         if (payPartialRadio) payPartialRadio.checked = true;
         if (partialAmountInput) partialAmountInput.value = savedAmountPaid;
-    } else if (order.paymentCollectedByStore || savedPaymentStatus === 'paid' || (order.paymentMethod === 'UPI' && order.paymentMode === 'full')) {
+    } else if (order.paymentCollectedByStore || savedPaymentStatus === 'paid') {
         if (payPrepaidRadio) payPrepaidRadio.checked = true;
     } else {
         if (payCollectRadio) payCollectRadio.checked = true;
@@ -6607,8 +6783,8 @@ window.onDispatchPaymentChoiceChanged = function() {
 window.getStoredOrderPaymentDetails = function(order) {
     const total = Math.max(0, Number(order?.finalTotal || order?.subtotal || 0));
     let paid = Math.max(0, Number(order?.amountPaid || 0));
-    if (!paid && order?.paymentCollectedByStore) paid = total;
-    paid = Math.min(total, paid);
+    const hasPaymentHistory = Array.isArray(order?.paymentTransactions) && order.paymentTransactions.length > 0;
+    if (!paid && !hasPaymentHistory && order?.paymentCollectedByStore) paid = total;
     const due = Math.max(0, total - paid);
     const status = due === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending');
     return { total, paid, due, status };
@@ -6617,7 +6793,7 @@ window.getStoredOrderPaymentDetails = function(order) {
 window.getDispatchPaymentDetails = function(order) {
     const stored = window.getStoredOrderPaymentDetails(order);
     const selected = document.querySelector('input[name="dispatch-payment-choice"]:checked')?.value || 'collect';
-    let paid = 0;
+    let paid = stored.paid;
 
     if (selected === 'prepaid') {
         paid = stored.total;
@@ -6627,6 +6803,10 @@ window.getDispatchPaymentDetails = function(order) {
             window.showAdminToast(`Advance must be greater than ₹0 and less than total ₹${stored.total}`, 'warning');
             return null;
         }
+    }
+    if (paid < stored.paid) {
+        window.showAdminToast('Recorded payments cannot be reduced here; use the payment history to reconcile them', 'warning');
+        return null;
     }
 
     const due = Math.max(0, stored.total - paid);
@@ -6805,8 +6985,8 @@ window.sendTakeawayReadyWhatsApp = function(orderId) {
     const cleanCustPhone = String(targetPhone).replace(/\D/g, '').slice(-10);
     const custName = order.customerName || 'Customer';
     const finalTotal = Number(order.finalTotal || order.subtotal || 0);
-    const isPrepaid = order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full');
-    const paymentText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (Pay at Counter 💵)`;
+    const payment = window.getStoredOrderPaymentDetails(order);
+    const paymentText = payment.status === 'paid' ? `₹0 (Already Paid ✅)` : `₹${payment.due} (Pay at Counter 💵)`;
 
     const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
     const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
@@ -6964,7 +7144,8 @@ window.executeWhatsAppAction = function(actionType) {
             ? `*📍 Pickup Location:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n*⏱️ Ready for Pickup in:* ${estTime}` 
             : `*📍 Delivery Address:* ${order.customerAddress || order.deliveryAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
-        const paymentNote = (order.paymentMethod === 'UPI' || order.paymentCollectedByStore) ? 'Prepaid Online ✅' : 'Cash on Delivery (COD)';
+            const payment = window.getStoredOrderPaymentDetails(order);
+            const paymentNote = payment.status === 'paid' ? `Paid ₹${payment.paid} ✅` : `₹${payment.due} due (${order.paymentMethod || 'COD'})`;
 
         msg = `${orderTypeHeader}\n\n` +
               `Hi *${custName}*,\n` +
@@ -6985,11 +7166,17 @@ window.executeWhatsAppAction = function(actionType) {
             return;
         }
         const riderName = order.deliveryBoy?.name || order.assignedDeliveryBoy?.name || order.deliveryBoyName || 'Littiwale Direct Delivery';
-        const rawRiderPhone = order.deliveryBoy?.phone || order.assignedDeliveryBoy?.phone || order.deliveryBoyPhone || '6370680744';
-        const riderPhone = String(rawRiderPhone).replace(/\D/g, '').slice(-10) || '6370680744';
+        const rawRiderPhone = order.deliveryBoy?.phone || order.assignedDeliveryBoy?.phone || order.deliveryBoyPhone || '';
+        const riderPhone = String(rawRiderPhone).replace(/\D/g, '').slice(-10);
+        if (!/^\d{10}$/.test(riderPhone)) {
+            window.showAdminToast('Rider contact is unavailable. Assign a rider with a valid phone first.', 'warning');
+            return;
+        }
 
-        const isPrepaid = order.paymentCollectedByStore || (order.paymentMethod === 'UPI' && order.paymentMode === 'full');
-        const paymentStatusText = isPrepaid ? `₹0 (Already Paid Online ✅)` : `₹${finalTotal} (${order.paymentMethod || 'Cash on Delivery'} 💵)`;
+        const payment = window.getStoredOrderPaymentDetails(order);
+        const paymentStatusText = payment.status === 'paid'
+            ? `₹0 (₹${payment.paid} received)`
+            : `₹${payment.due} due (₹${payment.paid} received)`;
 
         msg = `🛵 *YOUR FOOD IS ON THE WAY! — LITTIWALE BARBIL*\n\n` +
               `Hi *${custName}*,\n` +
@@ -7037,12 +7224,29 @@ window.saveDeliveryBoyAssignment = async function() {
     if (!order || !order._id) return;
 
     const rider = window.getSelectedDispatchRider();
+    const storedPayment = window.getStoredOrderPaymentDetails(order);
     const payment = window.getDispatchPaymentDetails(order);
     if (!payment) return;
     const riderEarning = Math.max(0, Number(document.getElementById('dispatch-rider-earning')?.value || order.deliveryCharge || 0));
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
 
     try {
+        if (payment.paid > storedPayment.paid) {
+            const paymentResponse = await fetch(`${API_URL}/orders/${order._id}/payments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-pin': authPin, 'x-pin': authPin },
+                body: JSON.stringify({
+                    amount: payment.paid - storedPayment.paid,
+                    method: document.getElementById('dispatch-payment-method')?.value || 'cash',
+                    note: 'Received before rider assignment',
+                    collectedByStore: true
+                })
+            });
+            const paymentResult = await paymentResponse.json().catch(() => ({}));
+            if (!paymentResponse.ok) throw new Error(paymentResult.error || 'Could not save the advance payment');
+            Object.assign(order, paymentResult, { paymentCollectedByStore: true });
+        }
+
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
             method: 'PUT',
             headers: {
@@ -7057,23 +7261,13 @@ window.saveDeliveryBoyAssignment = async function() {
                     name: rider.name,
                     phone: String(rider.phone || '').replace(/\D/g, '').slice(-10),
                     earning: riderEarning
-                },
-                paymentMode: payment.mode,
-                amountPaid: payment.paid,
-                amountDue: payment.due,
-                paymentStatus: payment.status,
-                paymentCollectedByStore: payment.collectedByStore
+                }
             })
         });
 
         if (res.ok) {
             const shortId = String(order._id).slice(-6).toUpperCase();
             order.deliveryBoy = { id: rider.id, name: rider.name, phone: rider.phone, earning: riderEarning };
-            order.amountPaid = payment.paid;
-            order.amountDue = payment.due;
-            order.paymentStatus = payment.status;
-            order.paymentMode = payment.mode;
-            order.paymentCollectedByStore = payment.collectedByStore;
             window.currentDispatchOrder = order;
             window.showAdminToast(`🛵 Rider ${rider.name} assigned to Order #${shortId}!`, 'success');
             window.sendDeliveryBoyDispatchWhatsApp();
@@ -7162,6 +7356,10 @@ window.cancelOrderPrompt = function(orderId = null) {
         window.showAdminToast('Order not found', 'error');
         return;
     }
+    if (['dispatched', 'delivered', 'cancelled'].includes(String(order.status || '').toLowerCase())) {
+        window.showAdminToast('Orders can only be cancelled before the rider starts delivery', 'warning');
+        return;
+    }
 
     window.currentRejectOrder = order;
     const shortId = String(order._id).slice(-6).toUpperCase();
@@ -7213,6 +7411,7 @@ window.executeOrderCancellation = async function() {
         if (res.ok) {
             closeModal('order-reject-modal');
             closeModal('order-confirm-modal');
+            closeModal('order-quick-modal');
             window.showAdminToast(`❌ Order #${shortId} Rejected`, 'warning', 'Order Cancelled');
             window.fetchAndRenderOrders();
 
@@ -7235,7 +7434,8 @@ window.executeOrderCancellation = async function() {
                 }
             }
         } else {
-            window.showAdminToast('Failed to cancel order. Please verify Admin PIN.', 'error');
+            const errorPayload = await res.json().catch(() => ({}));
+            window.showAdminToast(errorPayload.error || 'Failed to cancel order. Please verify Admin PIN.', 'error');
         }
     } catch(e) {
         console.error('Cancel order error:', e);

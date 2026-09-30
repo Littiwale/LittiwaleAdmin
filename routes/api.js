@@ -34,9 +34,29 @@ function ensureOrderPaymentColumns() {
              ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'pending',
              ADD COLUMN IF NOT EXISTS "paymentMode" TEXT NOT NULL DEFAULT 'full',
              ADD COLUMN IF NOT EXISTS "paymentCollectedByStore" BOOLEAN NOT NULL DEFAULT FALSE,
+             ADD COLUMN IF NOT EXISTS "paymentTransactions" JSONB NOT NULL DEFAULT '[]'::jsonb,
+             ADD COLUMN IF NOT EXISTS "amountRefunded" NUMERIC NOT NULL DEFAULT 0,
+             ADD COLUMN IF NOT EXISTS "refundTransactions" JSONB NOT NULL DEFAULT '[]'::jsonb,
+             ADD COLUMN IF NOT EXISTS "discountHistory" JSONB NOT NULL DEFAULT '[]'::jsonb,
+             ADD COLUMN IF NOT EXISTS "discountReason" TEXT NOT NULL DEFAULT '',
              ADD COLUMN IF NOT EXISTS "dispatchedAt" TIMESTAMPTZ,
              ADD COLUMN IF NOT EXISTS "estimatedTime" TEXT`
-        ).catch(error => {
+        ).then(() => supabaseDb.query(
+            `UPDATE orders
+             SET "amountPaid" = COALESCE(NULLIF("finalTotal", 0), total, subtotal, 0),
+                 "amountDue" = 0,
+                 "paymentStatus" = 'paid',
+                 "paymentTransactions" = jsonb_build_array(jsonb_build_object(
+                     'amount', COALESCE(NULLIF("finalTotal", 0), total, subtotal, 0),
+                     'method', 'other',
+                     'note', 'Migrated legacy store-recorded payment',
+                     'source', 'migration',
+                     'recordedAt', NOW()
+                 ))
+             WHERE "paymentCollectedByStore" = TRUE
+               AND "amountPaid" = 0
+               AND COALESCE(jsonb_array_length("paymentTransactions"), 0) = 0`
+        )).catch(error => {
             orderPaymentColumnsReady = null;
             throw error;
         });
@@ -1005,6 +1025,7 @@ router.delete('/reels/:id', checkPin, async (req, res) => {
 // ==========================================
 router.get('/orders', async (req, res) => {
     try {
+        await ensureOrderPaymentColumns();
         const sbRes = await supabaseDb.query('SELECT * FROM orders ORDER BY id DESC');
         const orders = (sbRes.rows || []).map(o => {
             const address = o.customerAddress || o.deliveryAddress || o.address || '';
@@ -1035,6 +1056,7 @@ router.get('/orders', async (req, res) => {
 
 router.get('/orders/:id', async (req, res) => {
     try {
+        await ensureOrderPaymentColumns();
         const rawId = req.params.id;
         const cleanId = rawId.replace(/^#/, '').trim();
         const sbRes = await supabaseDb.query(
@@ -1078,6 +1100,7 @@ router.get('/orders/:id', async (req, res) => {
 
 router.get('/orders/customer/:phoneOrEmail', async (req, res) => {
     try {
+        await ensureOrderPaymentColumns();
         const param = decodeURIComponent(req.params.phoneOrEmail).trim();
         let orders = [];
         let customer = null;
@@ -2412,6 +2435,7 @@ async function sendNewOrderResendEmail(ord) {
 
 router.post('/orders', async (req, res) => {
     try {
+        await ensureOrderPaymentColumns();
         const payload = req.body;
         const newOrderId = `LW-${Date.now().toString().slice(-6)}`;
         const orderId = payload.orderId || newOrderId;
@@ -2443,13 +2467,13 @@ router.post('/orders', async (req, res) => {
         }
 
         await supabaseDb.query(
-            `INSERT INTO orders (_id, "orderId", "customerName", "customerPhone", "customerAddress", items, total, "finalTotal", subtotal, "deliveryCharge", discount, "orderType", status, store, "paymentMethod", "deliveryNotes", notes, "createdAt")
-             VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())`,
+            `INSERT INTO orders (_id, "orderId", "customerName", "customerPhone", "customerAddress", items, total, "finalTotal", subtotal, "deliveryCharge", discount, "orderType", status, store, "paymentMethod", "paymentMode", "amountPaid", "amountDue", "paymentStatus", "deliveryNotes", notes, "createdAt")
+             VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 0, $16, 'pending', $17, $18, NOW())`,
             [
                 orderId, customerName, customerPhone, customerAddress,
                 JSON.stringify(payload.items || []), total, finalTotal, subtotal, deliveryCharge, discount,
                 orderType, payload.status || 'pending', store,
-                paymentMethod, notes, notes
+                paymentMethod, payload.paymentMode === 'items' ? 'items' : 'full', finalTotal, notes, notes
             ]
         );
 
@@ -2528,11 +2552,228 @@ router.post('/orders', async (req, res) => {
     }
 });
 
+async function recordOrderPayment(orderId, req, res, riderOnly) {
+    const amount = Number(req.body.amount);
+    const method = String(req.body.method || 'cash').toLowerCase();
+    const note = String(req.body.note || '').trim().slice(0, 300);
+    const collectedByStore = !riderOnly && req.body.collectedByStore === true;
+    if (!Number.isFinite(amount) || amount === 0 || (riderOnly && amount < 0)) {
+        return res.status(400).json({ success: false, error: 'Enter a positive received amount' });
+    }
+    if (amount < 0 && !note) {
+        return res.status(400).json({ success: false, error: 'Add a reason for the payment correction' });
+    }
+    if (!['cash', 'upi', 'other'].includes(method)) {
+        return res.status(400).json({ success: false, error: 'Choose cash, UPI, or other payment method' });
+    }
+
+    await ensureOrderPaymentColumns();
+    const client = await supabaseDb.pool.connect();
+    try {
+        await client.query('BEGIN');
+        const orderResult = await client.query(
+            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+            [orderId]
+        );
+        const order = orderResult.rows?.[0];
+        if (!order) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+        if (String(order.status || '').toLowerCase() === 'cancelled') {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ success: false, error: 'Cannot record payment for a cancelled order' });
+        }
+        if (riderOnly) {
+            const assigned = parseDeliveryBoy(order.deliveryBoy);
+            const sameId = String(assigned.id || '') === String(req.rider.riderId || '');
+            const assignedPhone = String(assigned.phone || '').replace(/\D/g, '').slice(-10);
+            const riderPhone = String(req.rider.phone || '').replace(/\D/g, '').slice(-10);
+            if (!sameId && (!assignedPhone || assignedPhone !== riderPhone)) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ success: false, error: 'This order is assigned to another rider' });
+            }
+            if (!['dispatched', 'delivered'].includes(String(order.status || '').toLowerCase())) {
+                await client.query('ROLLBACK');
+                return res.status(409).json({ success: false, error: 'Payment can be recorded after the rider starts delivery' });
+            }
+        }
+
+        const total = Number(order.finalTotal || order.total || order.subtotal || 0);
+        const paid = Math.max(0, Number(order.amountPaid || 0) || (order.paymentCollectedByStore ? Number(order.finalTotal || order.total || order.subtotal || 0) : 0));
+        if (amount < -paid) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ success: false, error: `Correction cannot exceed the recorded payment of ₹${paid}` });
+        }
+        const nextPaid = Math.max(0, paid + amount);
+        const due = Math.max(0, total - nextPaid);
+        const paymentStatus = due === 0 ? 'paid' : (nextPaid > 0 ? 'partial' : 'pending');
+        const transaction = {
+            amount,
+            type: amount < 0 ? 'adjustment' : 'receipt',
+            method,
+            note,
+            source: riderOnly ? 'rider' : 'admin',
+            actor: riderOnly ? String(req.rider.riderId) : String(req.user?.name || 'Admin'),
+            recordedAt: new Date().toISOString()
+        };
+
+        const updateResult = await client.query(
+            `UPDATE orders
+             SET "amountPaid" = $1,
+                 "amountDue" = $2,
+                 "paymentStatus" = $3,
+                 "paymentTransactions" = COALESCE("paymentTransactions", '[]'::jsonb) || $4::jsonb,
+                 "paymentCollectedByStore" = CASE WHEN $5 THEN TRUE WHEN $1 = 0 THEN FALSE ELSE COALESCE("paymentCollectedByStore", FALSE) END
+             WHERE id = $6
+             RETURNING "amountPaid", "amountDue", "paymentStatus", "paymentTransactions"`,
+            [nextPaid, due, paymentStatus, JSON.stringify([transaction]), collectedByStore, order.id]
+        );
+        await client.query('COMMIT');
+        return res.json({ success: true, ...updateResult.rows[0], total, overpaidAmount: Math.max(0, nextPaid - total) });
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('Order payment update error:', error);
+        return res.status(400).json({ success: false, error: error.message });
+    } finally {
+        client.release();
+    }
+}
+
+router.post('/orders/:id/payments', checkPin, (req, res) => recordOrderPayment(req.params.id, req, res, false));
+router.post('/rider/orders/:id/payments', riderAuth, (req, res) => recordOrderPayment(req.params.id, req, res, true));
+
+router.post('/orders/:id/refunds', checkPin, async (req, res) => {
+    const amount = Number(req.body.amount);
+    const reason = String(req.body.reason || '').trim().slice(0, 300);
+    if (!Number.isFinite(amount) || amount <= 0 || !reason) {
+        return res.status(400).json({ success: false, error: 'Enter a refund amount and reason' });
+    }
+
+    await ensureOrderPaymentColumns();
+    const client = await supabaseDb.pool.connect();
+    try {
+        await client.query('BEGIN');
+        const orderResult = await client.query(
+            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+            [req.params.id]
+        );
+        const order = orderResult.rows?.[0];
+        if (!order) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+        if (String(order.status || '').toLowerCase() !== 'cancelled') {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ success: false, error: 'Refunds can only be recorded for cancelled orders' });
+        }
+        const paid = Math.max(0, Number(order.amountPaid || 0) || (order.paymentCollectedByStore ? Number(order.finalTotal || order.total || order.subtotal || 0) : 0));
+        const refunded = Math.max(0, Number(order.amountRefunded || 0));
+        if (amount > paid - refunded) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ success: false, error: `Refund cannot exceed the remaining received amount of ₹${Math.max(0, paid - refunded)}` });
+        }
+        const transaction = {
+            amount,
+            reason,
+            actor: String(req.user?.name || 'Admin'),
+            recordedAt: new Date().toISOString()
+        };
+        const updateResult = await client.query(
+            `UPDATE orders
+             SET "amountRefunded" = $1,
+                 "refundTransactions" = COALESCE("refundTransactions", '[]'::jsonb) || $2::jsonb
+             WHERE id = $3
+             RETURNING "amountRefunded", "refundTransactions"`,
+            [refunded + amount, JSON.stringify([transaction]), order.id]
+        );
+        await client.query('COMMIT');
+        return res.json({ success: true, ...updateResult.rows[0], refundableAmount: paid - refunded - amount });
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('Order refund update error:', error);
+        return res.status(400).json({ success: false, error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+router.post('/orders/:id/discount', checkPin, async (req, res) => {
+    const discount = Number(req.body.discount);
+    const reason = String(req.body.reason || '').trim().slice(0, 300);
+    if (!Number.isFinite(discount) || discount < 0) {
+        return res.status(400).json({ success: false, error: 'Discount must be a valid non-negative amount' });
+    }
+    if (discount > 0 && !reason) {
+        return res.status(400).json({ success: false, error: 'Add a reason for the discount' });
+    }
+
+    const client = await supabaseDb.pool.connect();
+    try {
+        await ensureOrderPaymentColumns();
+        await client.query('BEGIN');
+        const orderResult = await client.query(
+            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+            [req.params.id]
+        );
+        const order = orderResult.rows?.[0];
+        if (!order) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+        if (['cancelled', 'dispatched', 'delivered'].includes(String(order.status || '').toLowerCase())) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ success: false, error: 'Discounts can only be changed before dispatch' });
+        }
+        const subtotal = Number(order.subtotal || order.finalTotal || order.total || 0);
+        const deliveryCharge = Number(order.deliveryCharge || 0);
+        if (discount > subtotal) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ success: false, error: 'Discount cannot exceed the food subtotal' });
+        }
+        const finalTotal = Math.max(0, subtotal - discount + deliveryCharge);
+        const amountPaid = Math.max(0, Number(order.amountPaid || 0));
+        const amountDue = Math.max(0, finalTotal - amountPaid);
+        const paymentStatus = amountDue === 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
+        const historyEntry = {
+            previousDiscount: Number(order.discount || 0),
+            discount,
+            reason,
+            actor: String(req.user?.name || 'Admin'),
+            recordedAt: new Date().toISOString()
+        };
+        const updateResult = await client.query(
+            `UPDATE orders
+             SET discount = $1,
+                 "discountReason" = $2,
+                 "discountHistory" = COALESCE("discountHistory", '[]'::jsonb) || $3::jsonb,
+                 "finalTotal" = $4,
+                 total = $4,
+                 "amountDue" = $5,
+                 "paymentStatus" = $6
+             WHERE id = $7
+             RETURNING discount, "discountReason", "discountHistory", "finalTotal", "amountPaid", "amountDue", "paymentStatus"`,
+            [discount, reason, JSON.stringify([historyEntry]), finalTotal, amountDue, paymentStatus, order.id]
+        );
+        await client.query('COMMIT');
+        return res.json({ success: true, ...updateResult.rows[0] });
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('Order discount update error:', error);
+        return res.status(400).json({ success: false, error: error.message });
+    } finally {
+        client.release();
+    }
+});
+
 router.put('/orders/:id', checkPin, async (req, res) => {
     try {
         await ensureOrderPaymentColumns();
         const id = req.params.id;
-        const { status, deliveryCharge, finalTotal, subtotal, discount, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, riderEmail, estimatedTime, paymentCollectedByStore, paymentMode, amountPaid, amountDue, paymentStatus, dispatchedAt } = req.body;
+        const { status, deliveryCharge, finalTotal, subtotal, cancelReason, deliveryNotes, orderType, customerAddress, deliveryAddress, address, deliveryBoy, riderEmail, estimatedTime, dispatchedAt } = req.body;
+        if (['discount', 'paymentCollectedByStore', 'paymentMode', 'amountPaid', 'amountDue', 'paymentStatus'].some(field => req.body[field] !== undefined)) {
+            return res.status(400).json({ success: false, error: 'Use the audited discount or payment endpoint for financial changes' });
+        }
         const hasAddressUpdate = customerAddress !== undefined || deliveryAddress !== undefined || address !== undefined;
         const updatedAddress = customerAddress || deliveryAddress || address;
         const normalizedRiderEmail = String(riderEmail || '').trim().toLowerCase();
@@ -2588,37 +2829,6 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             updates.push(`"estimatedTime" = $${idx++}`);
             values.push(String(estimatedTime).trim());
         }
-        if (paymentCollectedByStore !== undefined) {
-            updates.push(`"paymentCollectedByStore" = $${idx++}`);
-            values.push(Boolean(paymentCollectedByStore));
-        }
-        if (paymentMode !== undefined) {
-            updates.push(`"paymentMode" = $${idx++}`);
-            values.push(String(paymentMode));
-        }
-        if (amountPaid !== undefined) {
-            const paid = Number(amountPaid);
-            if (!Number.isFinite(paid) || paid < 0) {
-                return res.status(400).json({ success: false, error: 'Advance payment must be a valid non-negative amount' });
-            }
-            updates.push(`"amountPaid" = $${idx++}`);
-            values.push(paid);
-        }
-        if (amountDue !== undefined) {
-            const due = Number(amountDue);
-            if (!Number.isFinite(due) || due < 0) {
-                return res.status(400).json({ success: false, error: 'Balance payment must be a valid non-negative amount' });
-            }
-            updates.push(`"amountDue" = $${idx++}`);
-            values.push(due);
-        }
-        if (paymentStatus !== undefined) {
-            if (!['pending', 'partial', 'paid'].includes(String(paymentStatus))) {
-                return res.status(400).json({ success: false, error: 'Invalid payment status' });
-            }
-            updates.push(`"paymentStatus" = $${idx++}`);
-            values.push(String(paymentStatus));
-        }
         if (dispatchedAt !== undefined) {
             updates.push(`"dispatchedAt" = $${idx++}`);
             values.push(dispatchedAt);
@@ -2637,21 +2847,40 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             updates.push(`subtotal = $${idx++}`);
             values.push(Number(subtotal));
         }
-        if (discount !== undefined) {
-            updates.push(`discount = $${idx++}`);
-            values.push(Number(discount));
-        }
         if (cancelReason !== undefined) {
             updates.push(`"cancelReason" = $${idx++}`);
             values.push(cancelReason);
         }
 
         if (updates.length > 0) {
+            if (finalTotal !== undefined || deliveryCharge !== undefined || subtotal !== undefined) {
+                const currentOrderRes = await supabaseDb.query(
+                    `SELECT subtotal, discount, "deliveryCharge", "finalTotal", total, "amountPaid", "paymentCollectedByStore", "paymentMode", "paymentStatus" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                    [id]
+                );
+                const currentOrder = currentOrderRes.rows?.[0] || {};
+                const nextSubtotal = Number(subtotal ?? currentOrder.subtotal ?? 0);
+                const nextDiscount = Number(currentOrder.discount || 0);
+                const nextDeliveryCharge = Number(deliveryCharge ?? currentOrder.deliveryCharge ?? 0);
+                const nextTotal = Number(finalTotal ?? Math.max(0, nextSubtotal - nextDiscount + nextDeliveryCharge));
+                const paid = Math.max(0, Number(currentOrder.amountPaid || 0) || (currentOrder.paymentCollectedByStore || (currentOrder.paymentMode === 'full' && currentOrder.paymentStatus === 'paid') ? nextTotal : 0));
+                const due = Math.max(0, nextTotal - paid);
+                updates.push(`"amountDue" = $${idx++}`);
+                values.push(due);
+                updates.push(`"paymentStatus" = $${idx++}`);
+                values.push(due === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending'));
+            }
             values.push(id);
-            await supabaseDb.query(
-                `UPDATE orders SET ${updates.join(', ')} WHERE "orderId" = $${idx} OR _id = $${idx} OR id::text = $${idx}`,
-                values
+            const cancelableStatuses = ['pending', 'accepted', 'confirmed', 'preparing'];
+            const cancelGuard = status === 'cancelled' ? ` AND status = ANY($${idx + 1}::text[])` : '';
+            const updateValues = status === 'cancelled' ? [...values, cancelableStatuses] : values;
+            const updateResult = await supabaseDb.query(
+                `UPDATE orders SET ${updates.join(', ')} WHERE ("orderId" = $${idx} OR _id = $${idx} OR id::text = $${idx})${cancelGuard}`,
+                updateValues
             );
+            if (status === 'cancelled' && updateResult.rowCount === 0) {
+                return res.status(409).json({ success: false, error: 'Only pending or accepted orders can be cancelled before dispatch' });
+            }
         }
 
         if (deliveryBoy?.name) {
@@ -2734,10 +2963,16 @@ router.put('/orders/:id/status', checkPin, async (req, res) => {
     try {
         const { status } = req.body;
         const id = req.params.id;
-        await supabaseDb.query(
-            `UPDATE orders SET status = $1 WHERE "orderId" = $2 OR _id = $2 OR id::text = $2`,
-            [status, id]
+        const cancelableStatuses = ['pending', 'accepted', 'confirmed', 'preparing'];
+        const statusGuard = status === 'cancelled' ? ` AND status = ANY($3::text[])` : '';
+        const updateParams = status === 'cancelled' ? [status, id, cancelableStatuses] : [status, id];
+        const updateResult = await supabaseDb.query(
+            `UPDATE orders SET status = $1 WHERE ("orderId" = $2 OR _id = $2 OR id::text = $2)${statusGuard}`,
+            updateParams
         );
+        if (status === 'cancelled' && updateResult.rowCount === 0) {
+            return res.status(409).json({ success: false, error: 'Only pending or accepted orders can be cancelled before dispatch' });
+        }
 
         // If status changed, send Real-time Status Update Email (Delivered, Dispatched, Accepted, Cooking, etc.)
         if (status) {
@@ -2987,8 +3222,10 @@ router.put('/rider/password', riderAuth, async (req, res) => {
 
 router.get('/rider/orders', riderAuth, async (req, res) => {
     try {
+        await ensureOrderPaymentColumns();
         const sbRes = await supabaseDb.query('SELECT * FROM orders ORDER BY id DESC LIMIT 300');
         const orders = (sbRes.rows || []).filter(order => {
+            if (String(order.status || '').toLowerCase() === 'cancelled') return false;
             const assigned = parseDeliveryBoy(order.deliveryBoy);
             return String(assigned.id || '') === String(req.rider.riderId) || String(assigned.phone || '').replace(/\D/g, '').slice(-10) === String(req.rider.phone || '').slice(-10);
         }).map(order => {
@@ -3023,8 +3260,20 @@ router.patch('/rider/orders/:id/status', riderAuth, async (req, res) => {
         const assigned = parseDeliveryBoy(order.deliveryBoy);
         if (String(assigned.id || '') !== String(req.rider.riderId)) return res.status(403).json({ success: false, error: 'This order is assigned to another rider' });
         if (order.status === 'delivered') return res.json({ success: true, status: 'delivered' });
+        if (order.status === 'cancelled') return res.status(409).json({ success: false, error: 'This order was cancelled by admin' });
+        if (status === 'dispatched' && !['accepted', 'confirmed', 'preparing'].includes(String(order.status || '').toLowerCase())) {
+            return res.status(409).json({ success: false, error: 'Order must be accepted before delivery starts' });
+        }
+        if (status === 'delivered' && String(order.status || '').toLowerCase() !== 'dispatched') {
+            return res.status(409).json({ success: false, error: 'Order must be out for delivery before completion' });
+        }
+        const currentStatus = String(order.status || '').toLowerCase();
         const updatedRider = { ...assigned, ...(status === 'dispatched' ? { pickedUpAt: new Date().toISOString() } : { deliveredAt: new Date().toISOString() }) };
-        await supabaseDb.query(`UPDATE orders SET status = $1, "deliveryBoy" = $2 WHERE "orderId" = $3 OR _id = $3 OR id::text = $3`, [status, JSON.stringify(updatedRider), id]);
+        const updateResult = await supabaseDb.query(
+            `UPDATE orders SET status = $1, "deliveryBoy" = $2 WHERE ("orderId" = $3 OR _id = $3 OR id::text = $3) AND status = $4`,
+            [status, JSON.stringify(updatedRider), id, currentStatus]
+        );
+        if (updateResult.rowCount === 0) return res.status(409).json({ success: false, error: 'Order status changed. Refresh before updating delivery.' });
         res.json({ success: true, status });
     } catch (err) {
         console.error('Rider order status error:', err);
