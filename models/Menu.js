@@ -15,6 +15,8 @@ const menuSchema = new mongoose.Schema({
     note: { type: String },
     isCombo: { type: Boolean, default: false },
     isCraziestDeal: { type: Boolean, default: false },
+    options: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    variant: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now }
 });
 

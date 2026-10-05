@@ -2851,6 +2851,8 @@ td strong {
   /* Full-bleed, touch-friendly modal experience on mobile */
   .modal {
     padding: 8px !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
     align-items: flex-end !important;
   }
   .modal-content {
@@ -2883,6 +2885,79 @@ td strong {
   }
   #dispatch-custom-rider-fields {
     grid-template-columns: 1fr !important;
+  }
+}
+
+.admin-flow-modal-content {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+  max-height: 90vh !important;
+  overflow: hidden !important;
+}
+
+.admin-flow-modal-scrollable {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.admin-flow-modal-footer {
+  flex: 0 0 auto;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom, 12px));
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #12131a;
+}
+
+#quick-order-action-footer,
+#ord-modal-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#quick-order-action-footer button,
+#ord-modal-action-buttons button {
+  flex: 0 0 auto !important;
+  width: 100%;
+  min-height: 48px !important;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.admin-dispatch-footer {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-dispatch-footer button:first-child {
+  flex: 1;
+}
+
+.admin-dispatch-footer button:last-child {
+  flex: 2;
+}
+
+@media (max-width: 768px) {
+  .admin-flow-modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: min(92dvh, 760px) !important;
+    max-height: 92dvh !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+
+  .admin-flow-modal-footer {
+    padding: 10px 12px max(12px, env(safe-area-inset-bottom, 12px));
+  }
+
+  .admin-dispatch-footer button {
+    min-width: 0;
+    padding: 10px 8px;
+    white-space: normal;
   }
 }
 
@@ -3493,12 +3568,14 @@ td strong {
 
   .admin-create-order-footer button:first-child {
     flex: 1 !important;
+    min-height: 48px !important;
     padding: 12px 10px !important;
     font-size: 13px !important;
   }
 
   .admin-create-order-footer button:last-child {
     flex: 2 !important;
+    min-height: 48px !important;
     padding: 12px 14px !important;
     font-size: 13.5px !important;
     font-weight: 900 !important;

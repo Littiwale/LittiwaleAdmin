@@ -2043,6 +2043,16 @@
                             <textarea id="menu-desc" class="form-control" rows="2" placeholder="2 pcs coal roasted litti served with spicy baingan chokha, aloo chokha & chutney." oninput="updateLivePreview()"></textarea>
                         </div>
 
+                        <div class="form-group">
+                            <label class="form-label">Variant / Serving Note</label>
+                            <input type="text" id="menu-variant" class="form-control" placeholder="e.g. Half / Full or serving details">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Selectable Options</label>
+                            <textarea id="menu-options" class="form-control" rows="4" placeholder="One option per line; optionally add a description after |. Example: Rice + Dal | Steamed rice with tadka dal"></textarea>
+                        </div>
+
                         <!-- Dietary & Location Availability -->
                         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
                             <div class="form-group">
@@ -2394,7 +2404,7 @@
 
     <!-- Order Confirmation & WhatsApp Reply Modal -->
     <div id="order-confirm-modal" class="modal hidden">
-        <div class="modal-content" style="max-width:580px; padding:0; overflow:hidden;">
+        <div class="modal-content admin-flow-modal-content" style="max-width:580px; padding:0; overflow:hidden;">
             <div class="modal-header" style="padding:18px 24px; border-bottom:1px solid var(--border-card); background:var(--bg-card-inner);">
                 <div>
                     <h3 class="modal-title" id="order-modal-title" style="display:flex; align-items:center; gap:8px;">
@@ -2405,7 +2415,7 @@
                 <button type="button" class="modal-close-btn" onclick="closeModal('order-confirm-modal')">✕</button>
             </div>
 
-            <div style="padding:20px 24px; max-height:75vh; overflow-y:auto;">
+            <div class="admin-flow-modal-scrollable" style="padding:20px 24px;">
                 <!-- Customer & Location Card -->
                 <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:10px; padding:14px 16px; margin-bottom:18px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -2468,7 +2478,8 @@
                     </div>
                 </div>
 
-                <!-- Dynamic Lifecycle Action Buttons -->
+            </div>
+            <div class="admin-flow-modal-footer">
                 <div id="ord-modal-action-buttons" style="display:flex; flex-direction:column; gap:10px;">
                     <button type="button" class="btn btn-secondary" style="background:rgba(16, 185, 129, 0.15); border:1.5px solid rgba(16, 185, 129, 0.4); color:#10b981; font-weight:800; font-size:13px; padding:10px; display:flex; align-items:center; justify-content:center; gap:8px;" onclick="window.openA4InvoiceModal(window.currentSelectedOrder)">
                         <span>📄 View & Print Official Bill (A4 PDF)</span>
@@ -2483,7 +2494,7 @@
 
     <!-- 📦 Order Dispatch & Delivery Assignment Modal -->
     <div id="order-dispatch-modal" class="modal hidden">
-        <div class="modal-content" style="max-width:540px; padding:0; overflow:hidden; border-radius:16px; border:1px solid rgba(59,130,246,0.3); background:#12131a; box-shadow:0 25px 60px rgba(0,0,0,0.85);">
+        <div class="modal-content admin-flow-modal-content" style="max-width:540px; padding:0; overflow:hidden; border-radius:16px; border:1px solid rgba(59,130,246,0.3); background:#12131a; box-shadow:0 25px 60px rgba(0,0,0,0.85);">
             <div class="modal-header" style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); background:linear-gradient(135deg, rgba(59,130,246,0.15), rgba(37,99,235,0.08)); display:flex; justify-content:space-between; align-items:center;">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <div style="width:36px; height:36px; border-radius:10px; background:rgba(59,130,246,0.2); display:flex; align-items:center; justify-content:center; font-size:18px;">
@@ -2497,7 +2508,7 @@
                 <button type="button" class="modal-close-btn" onclick="closeModal('order-dispatch-modal')">✕</button>
             </div>
 
-            <div style="padding:20px; max-height:75vh; overflow-y:auto;">
+            <div class="admin-flow-modal-scrollable" style="padding:20px;">
                 <!-- Customer Quick Summary -->
                 <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:10px; padding:12px 14px; margin-bottom:16px; font-size:12.5px;">
                     <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
@@ -2579,20 +2590,19 @@
                     <div style="font-size:11px; color:#94a3b8; margin-top:5px;">This amount will appear in the assigned rider's earnings.</div>
                 </div>
 
-                <!-- Confirm & Save Status -->
-                <div style="display:flex; gap:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.08);">
-                    <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closeModal('order-dispatch-modal')">Cancel</button>
-                    <button type="button" class="btn btn-primary" style="flex:2; background:linear-gradient(135deg, #3b82f6, #2563eb); font-weight:900;" onclick="saveDeliveryBoyAssignment()">
-                        ✅ Save Delivery Boy Assignment
-                    </button>
-                </div>
+            </div>
+            <div class="admin-flow-modal-footer admin-dispatch-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('order-dispatch-modal')">Cancel</button>
+                <button type="button" class="btn btn-primary" style="background:linear-gradient(135deg, #3b82f6, #2563eb); font-weight:900;" onclick="saveDeliveryBoyAssignment()">
+                    ✅ Save Delivery Boy Assignment
+                </button>
             </div>
         </div>
     </div>
 
     <!-- ⚡ Quick Order Details & Action Steps Modal (Mobile First) -->
     <div id="order-quick-modal" class="modal hidden">
-        <div class="modal-content" style="max-width:560px; padding:0; overflow:hidden; border-radius:18px; border:1.5px solid rgba(249,115,22,0.3); background:#12131a; box-shadow:0 25px 70px rgba(0,0,0,0.9);">
+        <div class="modal-content admin-flow-modal-content" style="max-width:560px; padding:0; overflow:hidden; border-radius:18px; border:1.5px solid rgba(249,115,22,0.3); background:#12131a; box-shadow:0 25px 70px rgba(0,0,0,0.9);">
             <div class="modal-header" style="padding:16px 20px; border-bottom:1px solid rgba(255,255,255,0.08); background:linear-gradient(135deg, rgba(249,115,22,0.15), rgba(234,88,12,0.06)); display:flex; justify-content:space-between; align-items:center;">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <div style="width:38px; height:38px; border-radius:10px; background:rgba(249,115,22,0.2); display:flex; align-items:center; justify-content:center; font-size:18px;">
@@ -2609,7 +2619,7 @@
                 <button type="button" class="modal-close-btn" onclick="closeModal('order-quick-modal')">✕</button>
             </div>
 
-            <div style="padding:16px 18px; max-height:80vh; overflow-y:auto;">
+            <div class="admin-flow-modal-scrollable" style="padding:16px 18px;">
                 <!-- ⚡ Primary Workflow Next Action Step Container -->
                 <div id="quick-order-primary-action-card" style="margin-bottom:14px;">
                     <!-- Injected dynamically based on current status -->
@@ -2735,6 +2745,9 @@
                         📄 View Official Bill
                     </button>
                 </div>
+            </div>
+            <div class="admin-flow-modal-footer">
+                <div id="quick-order-action-footer"></div>
             </div>
         </div>
     </div>

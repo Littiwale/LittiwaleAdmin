@@ -1114,6 +1114,11 @@ window.openOrderQuickModal = function(orderId) {
         }
     }
 
+    const quickActionFooter = document.getElementById('quick-order-action-footer');
+    if (actionCard && quickActionFooter) {
+        quickActionFooter.replaceChildren(...Array.from(actionCard.querySelectorAll('button')));
+    }
+
     // 3. Customer Info
     const custName = ord.customerName || 'Customer';
     const targetPhone = ord.whatsappPhone || ord.customerPhone || '';
@@ -3525,6 +3530,25 @@ document.getElementById('menu-filter-diet')?.addEventListener('change', () => {
     renderMenuGrid();
 });
 
+function formatMenuOptionsForEditor(options) {
+    if (!Array.isArray(options)) return '';
+    return options.map(option => {
+        const normalized = typeof option === 'string' ? { label: option } : (option || {});
+        const label = String(normalized.label || '').trim();
+        const desc = String(normalized.desc || '').trim();
+        return label ? `${label}${desc ? ` | ${desc}` : ''}` : '';
+    }).filter(Boolean).join('\n');
+}
+
+function parseMenuOptionsFromEditor(value) {
+    return String(value || '').split(/\r?\n/).map(line => {
+        const [label, ...descriptionParts] = line.split('|');
+        const cleanLabel = label.trim();
+        const desc = descriptionParts.join('|').trim();
+        return cleanLabel ? (desc ? { label: cleanLabel, desc } : cleanLabel) : null;
+    }).filter(Boolean);
+}
+
 document.getElementById('menu-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('menu-id').value;
@@ -3533,6 +3557,8 @@ document.getElementById('menu-form').addEventListener('submit', async (e) => {
         category: document.getElementById('menu-category').value,
         price: document.getElementById('menu-price').value,
         description: document.getElementById('menu-desc').value,
+        variant: document.getElementById('menu-variant').value,
+        options: parseMenuOptionsFromEditor(document.getElementById('menu-options').value),
         isAvailable: document.querySelector('input[name="menu-avail-input"]:checked').value === 'true',
         dietaryPreference: document.querySelector('input[name="menu-diet"]:checked').value,
         isSpicy: document.getElementById('menu-spicy').checked,
@@ -3563,6 +3589,11 @@ window.editMenu = async function(id) {
     document.getElementById('menu-category').value = item.category;
     document.getElementById('menu-price').value = item.price;
     document.getElementById('menu-desc').value = item.description || '';
+    document.getElementById('menu-variant').value = item.variant || '';
+    const editableOptions = Array.isArray(item.options) && item.options.length
+        ? item.options
+        : window.getAdminOrderDishOptions(item);
+    document.getElementById('menu-options').value = formatMenuOptionsForEditor(editableOptions);
     
     const isAvail = item.isAvailable !== false;
     const availRadio = document.querySelector(`input[name="menu-avail-input"][value="${isAvail}"]`);
@@ -7623,15 +7654,16 @@ window.openCreateOrderModal = async function() {
     window.setAdminOrderType('delivery');
     window.setAdminOrderPayment('COD');
 
-    // Ensure menu dishes loaded
-    if (!window.cachedMenuItems || window.cachedMenuItems.length === 0) {
+    // Refresh menu on every open so recent edits are reflected in order entry.
+    try {
+        const res = await fetch(`${API_URL}/menu?fresh=${Date.now()}`, { cache: 'no-store' });
+        const data = await res.json();
+        window.cachedMenuItems = Array.isArray(data) ? data : (data.items || []);
         try {
-            const res = await fetch(`${API_URL}/menu`);
-            const data = await res.json();
-            window.cachedMenuItems = Array.isArray(data) ? data : (data.items || []);
-        } catch(e) {
-            console.warn('Failed to pre-fetch menu for order modal:', e);
-        }
+            localStorage.setItem('lw_admin_menu_cache', JSON.stringify(window.cachedMenuItems));
+        } catch (error) {}
+    } catch(e) {
+        console.warn('Failed to refresh menu for order modal; using cached menu:', e);
     }
 
     // Populate initial dishes list (first 15 dishes)
@@ -7950,6 +7982,10 @@ window.getAdminOrderDishOptions = function(dish) {
     const name = String(dish?.name || '').toLowerCase();
     const category = String(dish?.category || '').toLowerCase();
     const isThali = name.includes('thali') || category.includes('thali');
+    const savedOptions = Array.isArray(dish?.options)
+        ? dish.options.map(option => typeof option === 'string' ? { label: option, desc: '' } : option).filter(option => option?.label)
+        : [];
+    if (savedOptions.length) return savedOptions;
     if (isThali) {
         return [
             { label: 'Rice + Dal', desc: 'Steamed Basmati Rice with Homestyle Tadka Dal' },

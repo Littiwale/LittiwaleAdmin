@@ -160,6 +160,32 @@ async function deleteAssetFromSupabase(imageUrl) {
 let memoryMenuCache = null;
 let memoryMenuCacheTime = 0;
 const MENU_CACHE_TTL = 30000;
+let menuVariantColumnsReady;
+
+function ensureMenuVariantColumns() {
+    if (!menuVariantColumnsReady) {
+        menuVariantColumnsReady = supabaseDb.query(
+            `ALTER TABLE menus
+             ADD COLUMN IF NOT EXISTS options JSONB NOT NULL DEFAULT '[]'::jsonb,
+             ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT ''`
+        ).catch(error => {
+            menuVariantColumnsReady = null;
+            throw error;
+        });
+    }
+    return menuVariantColumnsReady;
+}
+
+function normalizeMenuOptions(options) {
+    if (!Array.isArray(options)) return [];
+    return options.map(option => {
+        if (typeof option === 'string') return option.trim();
+        if (!option || typeof option !== 'object') return '';
+        const label = String(option.label || '').trim();
+        const desc = String(option.desc || '').trim();
+        return label ? { label, desc } : '';
+    }).filter(Boolean);
+}
 
 function invalidateMenuCache() {
     memoryMenuCache = null;
@@ -428,7 +454,8 @@ router.delete('/categories/:id', checkPin, async (req, res) => {
 // ==========================================
 router.get('/menu', async (req, res) => {
     try {
-        res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120, stale-while-revalidate=600');
+        await ensureMenuVariantColumns();
+        res.setHeader('Cache-Control', 'no-store');
         const now = Date.now();
         if (memoryMenuCache && (now - memoryMenuCacheTime < MENU_CACHE_TTL)) {
             return res.json(memoryMenuCache);
@@ -472,8 +499,11 @@ router.get('/deals', async (req, res) => {
 
 router.post('/menu', checkPin, async (req, res) => {
     try {
+        await ensureMenuVariantColumns();
         invalidateMenuCache();
         const payload = { ...req.body };
+        payload.options = normalizeMenuOptions(payload.options);
+        payload.variant = String(payload.variant || '').trim();
         const catSlug = toSlug(payload.category || 'general');
 
         if (payload.image && payload.image.startsWith('data:image/')) {
@@ -484,16 +514,17 @@ router.post('/menu', checkPin, async (req, res) => {
         payload._id = newItemId;
 
         await supabaseDb.query(
-            `INSERT INTO menus (_id, name, description, price, category, image, "isAvailable", "dietaryPreference", "isSpicy", "spicyLevel", "locationAvailability", "originalPrice", note, "isCombo", "isCraziestDeal", keywords)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            `INSERT INTO menus (_id, name, description, price, category, image, "isAvailable", "dietaryPreference", "isSpicy", "spicyLevel", "locationAvailability", "originalPrice", note, "isCombo", "isCraziestDeal", keywords, options, variant)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18)
              ON CONFLICT (_id) DO UPDATE SET
-             name = EXCLUDED.name, description = EXCLUDED.description, price = EXCLUDED.price, category = EXCLUDED.category, image = EXCLUDED.image, "isAvailable" = EXCLUDED."isAvailable", "dietaryPreference" = EXCLUDED."dietaryPreference", "isSpicy" = EXCLUDED."isSpicy", "spicyLevel" = EXCLUDED."spicyLevel", "locationAvailability" = EXCLUDED."locationAvailability", "originalPrice" = EXCLUDED."originalPrice", note = EXCLUDED.note, "isCombo" = EXCLUDED."isCombo", "isCraziestDeal" = EXCLUDED."isCraziestDeal", keywords = EXCLUDED.keywords`,
+             name = EXCLUDED.name, description = EXCLUDED.description, price = EXCLUDED.price, category = EXCLUDED.category, image = EXCLUDED.image, "isAvailable" = EXCLUDED."isAvailable", "dietaryPreference" = EXCLUDED."dietaryPreference", "isSpicy" = EXCLUDED."isSpicy", "spicyLevel" = EXCLUDED."spicyLevel", "locationAvailability" = EXCLUDED."locationAvailability", "originalPrice" = EXCLUDED."originalPrice", note = EXCLUDED.note, "isCombo" = EXCLUDED."isCombo", "isCraziestDeal" = EXCLUDED."isCraziestDeal", keywords = EXCLUDED.keywords, options = EXCLUDED.options, variant = EXCLUDED.variant`,
             [
                 newItemId, payload.name, payload.description || '', Number(payload.price || 0), payload.category,
                 payload.image || '', payload.isAvailable !== false, payload.dietaryPreference || 'veg',
                 Boolean(payload.isSpicy), Number(payload.spicyLevel || 1), payload.locationAvailability || 'both',
                 payload.originalPrice ? Number(payload.originalPrice) : null, payload.note || '',
-                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || ''
+                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || '',
+                JSON.stringify(payload.options), payload.variant
             ]
         );
 
@@ -507,8 +538,11 @@ router.post('/menu', checkPin, async (req, res) => {
 
 router.put('/menu/:id', checkPin, async (req, res) => {
     try {
+        await ensureMenuVariantColumns();
         invalidateMenuCache();
         const payload = { ...req.body };
+        payload.options = normalizeMenuOptions(payload.options);
+        payload.variant = String(payload.variant || '').trim();
         const catSlug = toSlug(payload.category || 'general');
 
         if (payload.image && payload.image.startsWith('data:image/')) {
@@ -519,14 +553,16 @@ router.put('/menu/:id', checkPin, async (req, res) => {
             `UPDATE menus SET
              name = $1, description = $2, price = $3, category = $4, image = $5, "isAvailable" = $6,
              "dietaryPreference" = $7, "isSpicy" = $8, "spicyLevel" = $9, "locationAvailability" = $10,
-             "originalPrice" = $11, note = $12, "isCombo" = $13, "isCraziestDeal" = $14, keywords = $15
-             WHERE _id = $16`,
+             "originalPrice" = $11, note = $12, "isCombo" = $13, "isCraziestDeal" = $14, keywords = $15,
+             options = $16::jsonb, variant = $17
+             WHERE _id = $18`,
             [
                 payload.name, payload.description || '', Number(payload.price || 0), payload.category,
                 payload.image || '', payload.isAvailable !== false, payload.dietaryPreference || 'veg',
                 Boolean(payload.isSpicy), Number(payload.spicyLevel || 1), payload.locationAvailability || 'both',
                 payload.originalPrice ? Number(payload.originalPrice) : null, payload.note || '',
-                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || '', req.params.id
+                Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || '',
+                JSON.stringify(payload.options), payload.variant, req.params.id
             ]
         );
 
