@@ -7155,6 +7155,51 @@ window.executeWhatsAppAction = function(actionType) {
     const selectedPhone = targetPhoneInput?.value || order.whatsappPhone || order.customerPhone || '';
     const cleanPhone = String(selectedPhone).replace(/\D/g, '').slice(-10);
 
+    if (actionType === 'kitchen') {
+        const recipient = document.querySelector('input[name="wa-kitchen-recipient"]:checked')?.value;
+        if (!recipient) {
+            window.showAdminToast('Please select a kitchen WhatsApp number', 'warning');
+            return;
+        }
+
+        const isTakeawayOrder = ['takeaway', 'pickup'].includes(String(order.orderType || '').toLowerCase());
+        const orderTypeLabel = isTakeawayOrder ? 'SELF PICKUP' : (String(order.orderType || 'delivery').toUpperCase());
+        const customerPhone = String(order.whatsappPhone || order.customerPhone || '').replace(/\D/g, '').slice(-10);
+        const customerAddress = order.customerAddress || order.deliveryAddress || order.address || 'ADDRESS NOT PROVIDED';
+        const kitchenItems = (order.items || []).map(item => `• ${item.quantity || 1}x ${item.name} (₹${item.subtotal || (Number(item.price || 0) * Number(item.quantity || 1))})`).join('\n') || '• Order Items';
+        const kitchenSubtotal = Number(order.subtotal || order.finalTotal || 0);
+        const kitchenDeliveryCharge = isTakeawayOrder ? 0 : Number(order.deliveryCharge || 0);
+        const kitchenDiscount = Number(order.discount || 0);
+        const kitchenPayment = window.getStoredOrderPaymentDetails(order);
+        const kitchenPaymentStatus = kitchenPayment.status === 'paid'
+            ? `PAID IN FULL — ₹${kitchenPayment.paid} ✅ (${order.paymentMethod || 'Recorded payment'})`
+            : kitchenPayment.paid > 0
+                ? `PARTIALLY PAID — ₹${kitchenPayment.paid} received | ₹${kitchenPayment.due} due (${order.paymentMethod || 'Payment method not recorded'})`
+                : `NOT PAID — ₹${kitchenPayment.due} due (${order.paymentMethod || 'COD'})`;
+        const kitchenMessage = `*🍳 NEW ORDER FOR KITCHEN — LITTIWALE BARBIL*\n\n` +
+            `*🧾 Order No.:* #${shortId}\n` +
+            `*📦 Order Type:* ${orderTypeLabel}\n` +
+            `*👤 Customer:* ${custName}\n` +
+            `*📞 Phone / WhatsApp:* ${customerPhone ? `+91 ${customerPhone}` : 'NOT PROVIDED'}\n` +
+            (isTakeawayOrder
+                ? `*📍 Pickup:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n\n`
+                : `*📍 Delivery Address:* ${customerAddress}\n\n`) +
+            `*📋 Order Items:*\n${kitchenItems}\n\n` +
+            `*💰 BILL & PAYMENT:*\n` +
+            `• Food Subtotal: ₹${kitchenSubtotal}\n` +
+            (kitchenDiscount > 0 ? `• Discount: -₹${kitchenDiscount}\n` : '') +
+            (isTakeawayOrder ? `• Delivery Charge: ₹0 (Self Pickup)\n` : `• Delivery Charge: ₹${kitchenDeliveryCharge}\n`) +
+            `*Grand Total: ₹${kitchenPayment.total}*\n` +
+            `*Payment:* ${kitchenPaymentStatus}\n\n` +
+            `Please prepare this order. Customer and order details are included for any further handoff.\n\n` +
+            `*— Littiwale Orders Desk*`;
+
+        window.open(`https://wa.me/${recipient}?text=${encodeURIComponent(kitchenMessage)}`, '_blank');
+        closeModal('order-whatsapp-action-modal');
+        window.showAdminToast(`Kitchen order message opened for #${shortId}`, 'success');
+        return;
+    }
+
     if (!/^\d{10}$/.test(cleanPhone)) {
         window.showAdminToast('Please enter a valid 10-digit WhatsApp number', 'warning');
         if (targetPhoneInput) {
