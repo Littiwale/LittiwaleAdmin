@@ -2844,6 +2844,10 @@ router.put('/orders/:id', checkPin, async (req, res) => {
         const updates = [];
         const values = [];
         let idx = 1;
+        const hasBillUpdate = finalTotal !== undefined || deliveryCharge !== undefined || subtotal !== undefined;
+        if (hasBillUpdate && ['cancelled', 'dispatched', 'delivered'].includes(String(status || '').toLowerCase())) {
+            return res.status(409).json({ success: false, error: 'The bill must be finalized before dispatch' });
+        }
 
         if (status !== undefined) {
             updates.push(`status = $${idx++}`);
@@ -2889,12 +2893,18 @@ router.put('/orders/:id', checkPin, async (req, res) => {
         }
 
         if (updates.length > 0) {
-            if (finalTotal !== undefined || deliveryCharge !== undefined || subtotal !== undefined) {
+            if (hasBillUpdate) {
                 const currentOrderRes = await supabaseDb.query(
-                    `SELECT subtotal, discount, "deliveryCharge", "finalTotal", total, "amountPaid", "paymentCollectedByStore", "paymentMode", "paymentStatus" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                    `SELECT status, subtotal, discount, "deliveryCharge", "finalTotal", total, "amountPaid", "paymentCollectedByStore", "paymentMode", "paymentStatus" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
                     [id]
                 );
-                const currentOrder = currentOrderRes.rows?.[0] || {};
+                const currentOrder = currentOrderRes.rows?.[0];
+                if (!currentOrder) {
+                    return res.status(404).json({ success: false, error: 'Order not found' });
+                }
+                if (['cancelled', 'dispatched', 'delivered'].includes(String(currentOrder.status || '').toLowerCase())) {
+                    return res.status(409).json({ success: false, error: 'The bill is locked after dispatch' });
+                }
                 const nextSubtotal = Number(subtotal ?? currentOrder.subtotal ?? 0);
                 const nextDiscount = Number(currentOrder.discount || 0);
                 const nextDeliveryCharge = Number(deliveryCharge ?? currentOrder.deliveryCharge ?? 0);
@@ -2909,13 +2919,17 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             values.push(id);
             const cancelableStatuses = ['pending', 'accepted', 'confirmed', 'preparing'];
             const cancelGuard = status === 'cancelled' ? ` AND status = ANY($${idx + 1}::text[])` : '';
+            const billLockGuard = hasBillUpdate ? ` AND status NOT IN ('cancelled', 'dispatched', 'delivered')` : '';
             const updateValues = status === 'cancelled' ? [...values, cancelableStatuses] : values;
             const updateResult = await supabaseDb.query(
-                `UPDATE orders SET ${updates.join(', ')} WHERE ("orderId" = $${idx} OR _id = $${idx} OR id::text = $${idx})${cancelGuard}`,
+                `UPDATE orders SET ${updates.join(', ')} WHERE ("orderId" = $${idx} OR _id = $${idx} OR id::text = $${idx})${cancelGuard}${billLockGuard}`,
                 updateValues
             );
             if (status === 'cancelled' && updateResult.rowCount === 0) {
                 return res.status(409).json({ success: false, error: 'Only pending or accepted orders can be cancelled before dispatch' });
+            }
+            if (hasBillUpdate && updateResult.rowCount === 0) {
+                return res.status(409).json({ success: false, error: 'The bill is locked after dispatch' });
             }
         }
 

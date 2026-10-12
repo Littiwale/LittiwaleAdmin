@@ -1015,6 +1015,12 @@ window.openOrderQuickModal = function(orderId) {
                         </div>
                         `}
 
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:10px;">
+                            <label for="quick-accept-discount-input" style="color:#22c55e; font-weight:800; font-size:13px; margin:0;">🏷️ Discount (₹):</label>
+                            <input type="number" id="quick-accept-discount-input" class="form-control" style="width:110px; text-align:right; font-weight:900; font-size:15px; padding:6px 10px; color:#22c55e; background:#1e1e28; border:1.5px solid rgba(34,197,94,0.55); border-radius:8px;" value="${discount}" min="0" oninput="window.recalcQuickDelCharge('${ord._id}')">
+                        </div>
+                        <input type="text" id="quick-accept-discount-reason" class="form-control" maxlength="300" placeholder="Reason for discount (required when changing it)" style="margin-bottom:10px; font-size:12px; padding:7px 10px;">
+
                         <div style="display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px dashed rgba(255,255,255,0.1); font-size:14px;">
                             <span style="color:#fff; font-weight:800;">Grand Total Payable:</span>
                             <strong style="color:var(--brand-gold); font-size:18px;" id="quick-grand-total-val">₹${currentFinalTotal}</strong>
@@ -1040,6 +1046,8 @@ window.openOrderQuickModal = function(orderId) {
                     </div>
                 </div>
             `;
+            const acceptDiscountReason = document.getElementById('quick-accept-discount-reason');
+            if (acceptDiscountReason) acceptDiscountReason.value = ord.discountReason || '';
         } else if (status === 'accepted' || status === 'confirmed' || status === 'preparing') {
             const isTakeaway = ['takeaway', 'pickup'].includes(String(ord.orderType || '').toLowerCase());
             if (isTakeaway) {
@@ -1251,7 +1259,7 @@ window.openOrderQuickModal = function(orderId) {
     const refundAmountInput = document.getElementById('quick-refund-amount');
     if (refundAmountInput) refundAmountInput.placeholder = `Max ₹${Math.max(0, ordPaid - refunded)}`;
     const discountTools = document.getElementById('quick-discount-tools');
-    if (discountTools) discountTools.style.display = status === 'cancelled' || status === 'delivered' ? 'none' : 'grid';
+    if (discountTools) discountTools.style.display = ['cancelled', 'dispatched', 'delivered'].includes(status) ? 'none' : 'grid';
     const paymentAmountInput = document.getElementById('quick-payment-amount');
     if (paymentAmountInput) paymentAmountInput.value = '';
     const discountInput = document.getElementById('quick-discount-input');
@@ -1311,7 +1319,8 @@ window.recalcQuickDelCharge = function(orderId) {
     if (!ord) return;
 
     const subtotal = Number(ord.subtotal || ord.finalTotal || 0);
-    const discount = Number(ord.discount || 0);
+    const discountInput = document.getElementById('quick-accept-discount-input');
+    const discount = discountInput ? Math.max(0, Number(discountInput.value) || 0) : Number(ord.discount || 0);
     const isTakeaway = (ord.orderType === 'takeaway');
     const delCharge = isTakeaway ? 0 : (Number(document.getElementById('quick-del-charge-input')?.value) || 0);
     const finalTotal = Math.max(0, subtotal - discount + delCharge);
@@ -1328,6 +1337,22 @@ window.recalcQuickDelCharge = function(orderId) {
     }
     const mainTotalEl = document.getElementById('quick-order-grand-total');
     if (mainTotalEl) mainTotalEl.textContent = `₹${finalTotal}`;
+    const summaryDiscountRow = document.getElementById('quick-summary-discount-row');
+    const summaryDiscountEl = document.getElementById('quick-summary-discount');
+    if (summaryDiscountRow && summaryDiscountEl) {
+        summaryDiscountRow.style.display = discount > 0 ? 'flex' : 'none';
+        summaryDiscountEl.textContent = `-₹${discount}`;
+    }
+    const hasPaymentHistory = Array.isArray(ord.paymentTransactions) && ord.paymentTransactions.length > 0;
+    const paid = Math.max(0, Number(ord.amountPaid || 0) || (!hasPaymentHistory && ord.paymentCollectedByStore ? finalTotal : 0));
+    const due = Math.max(0, finalTotal - paid);
+    const refunded = Math.max(0, Number(ord.amountRefunded || 0));
+    const paidEl = document.getElementById('quick-summary-paid');
+    const dueEl = document.getElementById('quick-summary-due');
+    if (paidEl) paidEl.textContent = refunded > 0 ? `₹${paid} (₹${refunded} refunded)` : `₹${paid}`;
+    if (dueEl) dueEl.textContent = (ord.status || '').toLowerCase() === 'cancelled'
+        ? 'Cancelled'
+        : (paid > finalTotal ? `₹0 (₹${paid - finalTotal} credit)` : `₹${due}`);
 };
 
 window.recordQuickOrderPayment = async function() {
@@ -1374,13 +1399,7 @@ window.saveQuickOrderDiscount = async function() {
 
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     try {
-        const response = await fetch(`${API_URL}/orders/${order._id}/discount`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-admin-pin': authPin, 'x-pin': authPin },
-            body: JSON.stringify({ discount, reason })
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.error || 'Could not apply discount');
+        const result = await window.persistOrderDiscount(order, discount, reason, authPin);
         Object.assign(order, result);
         window.showAdminToast('Discount saved and bill total recalculated', 'success');
         window.openOrderQuickModal(order._id);
@@ -1388,6 +1407,17 @@ window.saveQuickOrderDiscount = async function() {
     } catch (error) {
         window.showAdminToast(error.message || 'Could not apply discount', 'error');
     }
+};
+
+window.persistOrderDiscount = async function(order, discount, reason, authPin) {
+    const response = await fetch(`${API_URL}/orders/${order._id}/discount`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-pin': authPin, 'x-pin': authPin },
+        body: JSON.stringify({ discount, reason })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not apply discount');
+    return result;
 };
 
 window.recordQuickOrderRefund = async function() {
@@ -1544,12 +1574,27 @@ window.confirmQuickOrder = async function(orderId) {
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     const delCharge = isTakeaway ? 0 : (Number(document.getElementById('quick-del-charge-input')?.value) || 0);
     const subtotal = Number(order.subtotal || order.finalTotal || 0);
-    const discount = Number(order.discount || 0);
-    const finalTotal = Math.max(0, subtotal - discount + delCharge);
+    const discount = Number(document.getElementById('quick-accept-discount-input')?.value ?? order.discount ?? 0);
+    const discountReason = document.getElementById('quick-accept-discount-reason')?.value?.trim() || '';
+    if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) {
+        window.showAdminToast('Discount must be between ₹0 and the food subtotal', 'warning');
+        return;
+    }
     const estTime = window.readEstimatedTimeRange('quick-est-time-min', 'quick-est-time-max');
     if (!estTime) return;
 
+    let discountApplied = false;
     try {
+        if (discount !== Number(order.discount || 0)) {
+            if (discount > 0 && !discountReason) {
+                window.showAdminToast('Add a reason for the discount', 'warning');
+                return;
+            }
+            const discountResult = await window.persistOrderDiscount(order, discount, discountReason, authPin);
+            Object.assign(order, discountResult);
+            discountApplied = true;
+        }
+        const finalTotal = Math.max(0, subtotal - Number(order.discount || 0) + delCharge);
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
             method: 'PUT',
             headers: {
@@ -1606,10 +1651,16 @@ window.confirmQuickOrder = async function(orderId) {
                 window.open(waUrl, '_blank');
             }
         } else {
-            window.showAdminToast('Failed to confirm order. Please check PIN.', 'error');
+            const errorPayload = await res.json().catch(() => ({}));
+            window.showAdminToast(
+                discountApplied
+                    ? `Discount saved, but order confirmation failed: ${errorPayload.error || 'Please check PIN.'}`
+                    : (errorPayload.error || 'Failed to confirm order. Please check PIN.'),
+                'error'
+            );
         }
     } catch(e) {
-        window.showAdminToast('Error confirming order', 'error');
+        window.showAdminToast(discountApplied ? 'Discount saved, but order confirmation failed' : (e.message || 'Error confirming order'), 'error');
     }
 };
 
@@ -6112,6 +6163,8 @@ window.openOrderConfirmModal = function(orderId) {
     const ordTypeEl = document.getElementById('ord-modal-order-type');
     const statusBadgeEl = document.getElementById('ord-modal-status-badge');
     const delChargeEl = document.getElementById('ord-modal-del-charge');
+    const discountEl = document.getElementById('ord-modal-discount');
+    const discountReasonEl = document.getElementById('ord-modal-discount-reason');
     const delLockBadge = document.getElementById('ord-modal-del-lock-badge');
     const dispatchBtn = document.getElementById('ord-modal-btn-dispatch');
     const estLabel = document.getElementById('ord-modal-est-label');
@@ -6139,6 +6192,14 @@ window.openOrderConfirmModal = function(orderId) {
     }
 
     const isPending = (order.status || 'pending').toLowerCase() === 'pending';
+    if (discountEl) {
+        discountEl.value = Number(order.discount || 0);
+        discountEl.disabled = !isPending;
+    }
+    if (discountReasonEl) {
+        discountReasonEl.value = order.discountReason || '';
+        discountReasonEl.disabled = !isPending;
+    }
 
     // Handle Takeaway Delivery Charge Lock & Confirmed Status Locking
     if (delChargeEl) {
@@ -6292,7 +6353,7 @@ window.recalcOrderModalTotal = function() {
     if (!order) return;
 
     const subtotal = Number(order.subtotal || order.finalTotal || 0);
-    const discount = Number(order.discount || 0);
+    const discount = Math.max(0, Number(document.getElementById('ord-modal-discount')?.value) || 0);
     const isTakeaway = (order.orderType === 'takeaway');
     const delCharge = isTakeaway ? 0 : (Number(document.getElementById('ord-modal-del-charge')?.value) || 0);
     const finalTotal = Math.max(0, subtotal - discount + delCharge);
@@ -6309,10 +6370,30 @@ window.confirmOrderAndWhatsApp = async function() {
     const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
     const delCharge = isTakeaway ? 0 : (Number(document.getElementById('ord-modal-del-charge')?.value) || 0);
     const subtotal = Number(order.subtotal || order.finalTotal || 0);
-    const discount = Number(order.discount || 0);
-    const finalTotal = Math.max(0, subtotal - discount + delCharge);
+    const discount = Number(document.getElementById('ord-modal-discount')?.value);
+    const discountReason = document.getElementById('ord-modal-discount-reason')?.value?.trim() || '';
     const estTime = window.readEstimatedTimeRange('ord-modal-est-time-min', 'ord-modal-est-time-max');
     if (!estTime) return;
+    if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) {
+        window.showAdminToast('Discount must be between ₹0 and the food subtotal', 'warning');
+        return;
+    }
+    let discountApplied = false;
+    if (discount !== Number(order.discount || 0)) {
+        if (discount > 0 && !discountReason) {
+            window.showAdminToast('Add a reason for the discount', 'warning');
+            return;
+        }
+        try {
+            const discountResult = await window.persistOrderDiscount(order, discount, discountReason, authPin);
+            Object.assign(order, discountResult);
+            discountApplied = true;
+        } catch (error) {
+            window.showAdminToast(error.message || 'Could not apply discount', 'error');
+            return;
+        }
+    }
+    const finalTotal = Math.max(0, subtotal - Number(order.discount || 0) + delCharge);
 
     try {
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
@@ -6371,11 +6452,17 @@ window.confirmOrderAndWhatsApp = async function() {
             const whatsappUrl = `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`;
             window.open(whatsappUrl, '_blank');
         } else {
-            window.showAdminToast('Failed to confirm order. Please verify Admin PIN.', 'error');
+            const errorPayload = await res.json().catch(() => ({}));
+            window.showAdminToast(
+                discountApplied
+                    ? `Discount saved, but order confirmation failed: ${errorPayload.error || 'Please verify Admin PIN.'}`
+                    : (errorPayload.error || 'Failed to confirm order. Please verify Admin PIN.'),
+                'error'
+            );
         }
     } catch(e) {
         console.error('Confirm order error:', e);
-        window.showAdminToast('Error confirming order', 'error');
+        window.showAdminToast(discountApplied ? 'Discount saved, but order confirmation failed' : 'Error confirming order', 'error');
     }
 };
 
@@ -7166,6 +7253,10 @@ window.executeWhatsAppAction = function(actionType) {
         const orderTypeLabel = isTakeawayOrder ? 'SELF PICKUP' : (String(order.orderType || 'delivery').toUpperCase());
         const customerPhone = String(order.whatsappPhone || order.customerPhone || '').replace(/\D/g, '').slice(-10);
         const customerAddress = order.customerAddress || order.deliveryAddress || order.address || 'ADDRESS NOT PROVIDED';
+        const assignedRider = order.deliveryBoy || order.assignedDeliveryBoy;
+        const riderDetails = assignedRider?.name || assignedRider?.phone
+            ? `*🛵 Delivery Boy:* ${assignedRider.name || 'Not provided'}\n*📞 Delivery Boy Phone:* ${assignedRider.phone || 'Not provided'}\n`
+            : '';
         const kitchenItems = (order.items || []).map(item => `• ${item.quantity || 1}x ${item.name} (₹${item.subtotal || (Number(item.price || 0) * Number(item.quantity || 1))})`).join('\n') || '• Order Items';
         const kitchenSubtotal = Number(order.subtotal || order.finalTotal || 0);
         const kitchenDeliveryCharge = isTakeawayOrder ? 0 : Number(order.deliveryCharge || 0);
@@ -7181,6 +7272,7 @@ window.executeWhatsAppAction = function(actionType) {
             `*📦 Order Type:* ${orderTypeLabel}\n` +
             `*👤 Customer:* ${custName}\n` +
             `*📞 Phone / WhatsApp:* ${customerPhone ? `+91 ${customerPhone}` : 'NOT PROVIDED'}\n` +
+            riderDetails +
             (isTakeawayOrder
                 ? `*📍 Pickup:* Littiwale Cloud Kitchen, Ward No. 7, Punjabi Para, Barbil\n\n`
                 : `*📍 Delivery Address:* ${customerAddress}\n\n`) +
@@ -9264,6 +9356,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, 300);
 });
-
-
-

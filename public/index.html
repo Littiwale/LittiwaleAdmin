@@ -2450,17 +2450,20 @@
                         <span style="font-weight:700; color:#fff;" id="ord-modal-subtotal">₹0</span>
                     </div>
 
-                    <div id="ord-modal-discount-row" style="display:none; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:13px; color:#22c55e;">
-                        <span id="ord-modal-discount-label">🏷️ Coupon Discount:</span>
-                        <strong id="ord-modal-discount-val">-₹0</strong>
-                    </div>
-
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:12px;">
                         <label for="ord-modal-del-charge" style="color:var(--brand-orange); font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px;">
                             <span>🛵 Delivery Charge (₹):</span>
                             <span id="ord-modal-del-lock-badge" style="display:none; font-size:10.5px; background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); padding:2px 6px; border-radius:4px;">🔒 Takeaway Locked</span>
                         </label>
                         <input type="number" id="ord-modal-del-charge" class="form-control" style="width:110px; text-align:right; font-weight:800; padding:6px 10px;" value="0" min="0" oninput="recalcOrderModalTotal()">
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:12px; font-size:13px; color:#22c55e;">
+                        <label for="ord-modal-discount" style="font-weight:700;">🏷️ Discount (₹):</label>
+                        <input type="number" id="ord-modal-discount" class="form-control" style="width:110px; text-align:right; font-weight:800; padding:6px 10px; color:#22c55e;" value="0" min="0" oninput="recalcOrderModalTotal()">
+                    </div>
+                    <div style="margin-bottom:10px;">
+                        <input type="text" id="ord-modal-discount-reason" class="form-control" maxlength="300" placeholder="Reason for discount (required when changing it)" style="font-size:12px; padding:7px 10px;">
                     </div>
 
                     <div style="display:flex; justify-content:space-between; align-items:center; padding-top:10px; border-top:1px dashed var(--border-card); font-size:15px;">
