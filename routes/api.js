@@ -2644,6 +2644,9 @@ async function recordOrderPayment(orderId, req, res, riderOnly) {
         const nextPaid = Math.max(0, paid + amount);
         const due = Math.max(0, total - nextPaid);
         const paymentStatus = due === 0 ? 'paid' : (nextPaid > 0 ? 'partial' : 'pending');
+        const paymentCollectedByStoreAfterUpdate = collectedByStore
+            ? true
+            : (nextPaid === 0 ? false : Boolean(order.paymentCollectedByStore));
         const transaction = {
             amount,
             type: amount < 0 ? 'adjustment' : 'receipt',
@@ -2660,10 +2663,10 @@ async function recordOrderPayment(orderId, req, res, riderOnly) {
                  "amountDue" = $2,
                  "paymentStatus" = $3,
                  "paymentTransactions" = COALESCE("paymentTransactions", '[]'::jsonb) || $4::jsonb,
-                 "paymentCollectedByStore" = CASE WHEN $5 THEN TRUE WHEN $1 = 0 THEN FALSE ELSE COALESCE("paymentCollectedByStore", FALSE) END
+                 "paymentCollectedByStore" = $5
              WHERE id = $6
              RETURNING "amountPaid", "amountDue", "paymentStatus", "paymentTransactions"`,
-            [nextPaid, due, paymentStatus, JSON.stringify([transaction]), collectedByStore, order.id]
+            [nextPaid, due, paymentStatus, JSON.stringify([transaction]), paymentCollectedByStoreAfterUpdate, order.id]
         );
         await client.query('COMMIT');
         return res.json({ success: true, ...updateResult.rows[0], total, overpaidAmount: Math.max(0, nextPaid - total) });
