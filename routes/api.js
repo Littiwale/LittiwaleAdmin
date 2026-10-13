@@ -1097,11 +1097,11 @@ router.get('/orders/:id', async (req, res) => {
         const cleanId = rawId.replace(/^#/, '').trim();
         const sbRes = await supabaseDb.query(
             `SELECT * FROM orders 
-             WHERE "orderId" = $1 
-                OR _id = $1 
-                OR id::text = $1 
-                OR "orderId" LIKE $2 
-                OR _id LIKE $2 
+             WHERE "orderId"::text = $1::text
+                OR _id::text = $1::text
+                OR id::text = $1::text
+                OR "orderId"::text LIKE $2::text
+                OR _id::text LIKE $2::text
              ORDER BY id DESC LIMIT 1`,
             [cleanId, `%${cleanId}`]
         );
@@ -2608,7 +2608,7 @@ async function recordOrderPayment(orderId, req, res, riderOnly) {
     try {
         await client.query('BEGIN');
         const orderResult = await client.query(
-            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+            `SELECT * FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1 FOR UPDATE`,
             [orderId]
         );
         const order = orderResult.rows?.[0];
@@ -2691,7 +2691,7 @@ router.post('/orders/:id/refunds', checkPin, async (req, res) => {
     try {
         await client.query('BEGIN');
         const orderResult = await client.query(
-            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+            `SELECT * FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1 FOR UPDATE`,
             [req.params.id]
         );
         const order = orderResult.rows?.[0];
@@ -2749,7 +2749,7 @@ router.post('/orders/:id/discount', checkPin, async (req, res) => {
         await ensureOrderPaymentColumns();
         await client.query('BEGIN');
         const orderResult = await client.query(
-            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1 FOR UPDATE`,
+            `SELECT * FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1 FOR UPDATE`,
             [req.params.id]
         );
         const order = orderResult.rows?.[0];
@@ -2821,7 +2821,7 @@ router.put('/orders/:id', checkPin, async (req, res) => {
 
         if (deliveryBoy !== undefined) {
             const previousOrderRes = await supabaseDb.query(
-                `SELECT "deliveryBoy" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                `SELECT "deliveryBoy" FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1`,
                 [id]
             );
             previousRider = parseDeliveryBoy(previousOrderRes.rows?.[0]?.deliveryBoy);
@@ -2833,7 +2833,7 @@ router.put('/orders/:id', checkPin, async (req, res) => {
 
         if (orderType === 'delivery' && !hasAddressUpdate) {
             const currentOrder = await supabaseDb.query(
-                `SELECT "customerAddress" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                `SELECT "customerAddress" FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1`,
                 [id]
             );
             if (!String(currentOrder.rows?.[0]?.customerAddress || '').trim()) {
@@ -2895,7 +2895,7 @@ router.put('/orders/:id', checkPin, async (req, res) => {
         if (updates.length > 0) {
             if (hasBillUpdate) {
                 const currentOrderRes = await supabaseDb.query(
-                    `SELECT status, subtotal, discount, "deliveryCharge", "finalTotal", total, "amountPaid", "paymentCollectedByStore", "paymentMode", "paymentStatus" FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                    `SELECT status, subtotal, discount, "deliveryCharge", "finalTotal", total, "amountPaid", "paymentCollectedByStore", "paymentMode", "paymentStatus" FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1`,
                     [id]
                 );
                 const currentOrder = currentOrderRes.rows?.[0];
@@ -2922,7 +2922,7 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             const billLockGuard = hasBillUpdate ? ` AND status NOT IN ('cancelled', 'dispatched', 'delivered')` : '';
             const updateValues = status === 'cancelled' ? [...values, cancelableStatuses] : values;
             const updateResult = await supabaseDb.query(
-                `UPDATE orders SET ${updates.join(', ')} WHERE ("orderId" = $${idx} OR _id = $${idx} OR id::text = $${idx})${cancelGuard}${billLockGuard}`,
+                `UPDATE orders SET ${updates.join(', ')} WHERE ("orderId"::text = $${idx}::text OR _id::text = $${idx}::text OR id::text = $${idx}::text)${cancelGuard}${billLockGuard}`,
                 updateValues
             );
             if (status === 'cancelled' && updateResult.rowCount === 0) {
@@ -2942,7 +2942,7 @@ router.put('/orders/:id', checkPin, async (req, res) => {
                 (async () => {
                     try {
                         const orderRes = await supabaseDb.query(
-                            `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                            `SELECT * FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1`,
                             [id]
                         );
                         const fullOrder = orderRes.rows?.[0];
@@ -2978,7 +2978,7 @@ router.put('/orders/:id', checkPin, async (req, res) => {
             (async () => {
                 try {
                     const orderRes = await supabaseDb.query(
-                        `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                        `SELECT * FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1`,
                         [id]
                     );
                     if (orderRes.rows.length > 0) {
@@ -3017,7 +3017,7 @@ router.put('/orders/:id/status', checkPin, async (req, res) => {
         const statusGuard = status === 'cancelled' ? ` AND status = ANY($3::text[])` : '';
         const updateParams = status === 'cancelled' ? [status, id, cancelableStatuses] : [status, id];
         const updateResult = await supabaseDb.query(
-            `UPDATE orders SET status = $1 WHERE ("orderId" = $2 OR _id = $2 OR id::text = $2)${statusGuard}`,
+            `UPDATE orders SET status = $1 WHERE ("orderId"::text = $2::text OR _id::text = $2::text OR id::text = $2::text)${statusGuard}`,
             updateParams
         );
         if (status === 'cancelled' && updateResult.rowCount === 0) {
@@ -3029,7 +3029,7 @@ router.put('/orders/:id/status', checkPin, async (req, res) => {
             (async () => {
                 try {
                     const orderRes = await supabaseDb.query(
-                        `SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`,
+                        `SELECT * FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1`,
                         [id]
                     );
                     if (orderRes.rows.length > 0) {
@@ -3061,7 +3061,7 @@ router.put('/orders/:id/status', checkPin, async (req, res) => {
 router.delete('/orders/:id', checkPin, async (req, res) => {
     try {
         await supabaseDb.query(
-            `DELETE FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1`,
+            `DELETE FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text`,
             [req.params.id]
         );
         console.log(`✅ Order "${req.params.id}" deleted from Supabase PostgreSQL!`);
@@ -3304,7 +3304,7 @@ router.patch('/rider/orders/:id/status', riderAuth, async (req, res) => {
         const status = requestedStatus === 'out_for_delivery' ? 'dispatched' : requestedStatus;
         if (!['dispatched', 'delivered'].includes(status)) return res.status(400).json({ success: false, error: 'Invalid rider status' });
         const id = req.params.id;
-        const orderRes = await supabaseDb.query(`SELECT * FROM orders WHERE "orderId" = $1 OR _id = $1 OR id::text = $1 LIMIT 1`, [id]);
+        const orderRes = await supabaseDb.query(`SELECT * FROM orders WHERE "orderId"::text = $1::text OR _id::text = $1::text OR id::text = $1::text LIMIT 1`, [id]);
         const order = orderRes.rows?.[0];
         if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
         const assigned = parseDeliveryBoy(order.deliveryBoy);
@@ -3320,7 +3320,7 @@ router.patch('/rider/orders/:id/status', riderAuth, async (req, res) => {
         const currentStatus = String(order.status || '').toLowerCase();
         const updatedRider = { ...assigned, ...(status === 'dispatched' ? { pickedUpAt: new Date().toISOString() } : { deliveredAt: new Date().toISOString() }) };
         const updateResult = await supabaseDb.query(
-            `UPDATE orders SET status = $1, "deliveryBoy" = $2 WHERE ("orderId" = $3 OR _id = $3 OR id::text = $3) AND status = $4`,
+            `UPDATE orders SET status = $1, "deliveryBoy" = $2 WHERE ("orderId"::text = $3::text OR _id::text = $3::text OR id::text = $3::text) AND status = $4`,
             [status, JSON.stringify(updatedRider), id, currentStatus]
         );
         if (updateResult.rowCount === 0) return res.status(409).json({ success: false, error: 'Order status changed. Refresh before updating delivery.' });

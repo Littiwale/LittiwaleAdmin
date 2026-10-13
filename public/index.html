@@ -2481,6 +2481,31 @@
                     </div>
                 </div>
 
+                <div id="ord-accept-payment-panel" style="margin-bottom:16px; padding:12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-card); border-radius:10px;">
+                    <div style="font-size:12px; font-weight:800; color:#fbbf24; margin-bottom:8px;">💰 Payment received before acceptance</div>
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; color:#e2e8f0;">
+                        <input type="radio" name="ord-accept-payment-choice" value="collect" checked onchange="window.onAcceptPaymentChoiceChanged('ord-accept-payment-panel')">
+                        Collect remaining amount on delivery / pickup
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; color:#e2e8f0;">
+                        <input type="radio" name="ord-accept-payment-choice" value="partial" onchange="window.onAcceptPaymentChoiceChanged('ord-accept-payment-panel')">
+                        Partial payment / advance received
+                    </label>
+                    <input type="number" data-accept-payment-amount min="0" step="0.01" class="form-control" placeholder="Total received so far (₹)" style="display:none; margin:0 0 8px 24px; width:calc(100% - 24px); padding:8px;">
+                    <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; color:#e2e8f0;">
+                        <input type="radio" name="ord-accept-payment-choice" value="prepaid" onchange="window.onAcceptPaymentChoiceChanged('ord-accept-payment-panel')">
+                        ✅ Already paid in full (customer owes ₹0)
+                    </label>
+                    <label style="display:flex; align-items:center; gap:8px; font-size:11px; color:#94a3b8;">
+                        Method received
+                        <select data-accept-payment-method class="form-control" style="max-width:130px; padding:6px;">
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </label>
+                </div>
+
             </div>
             <div class="admin-flow-modal-footer">
                 <div id="ord-modal-action-buttons" style="display:flex; flex-direction:column; gap:10px;">
@@ -2558,7 +2583,7 @@
                             <input type="radio" name="dispatch-payment-choice" id="dispatch-pay-collect" value="collect" checked onchange="window.onDispatchPaymentChoiceChanged()" style="accent-color:#f59e0b; width:16px; height:16px; margin-top:2px;">
                             <div>
                                 <strong style="color:#f59e0b;" id="dispatch-collect-cash-label">💵 Collect Cash from Customer (₹0)</strong>
-                                <div style="font-size:11px; color:#94a3b8;">Driver will collect full cash amount on delivery</div>
+                                <div style="font-size:11px; color:#94a3b8;">Driver will collect any unpaid balance on delivery</div>
                             </div>
                         </label>
                         <label style="display:flex; align-items:flex-start; gap:10px; font-size:12.5px; color:#fff; cursor:pointer; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06);">

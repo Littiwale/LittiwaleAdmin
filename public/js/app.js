@@ -1027,6 +1027,31 @@ window.openOrderQuickModal = function(orderId) {
                         </div>
                     </div>
 
+                    <div id="quick-accept-payment-panel" style="margin-bottom:14px; padding:12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+                        <div style="font-size:12px; font-weight:800; color:#fbbf24; margin-bottom:8px;">💰 Payment received before acceptance</div>
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; color:#e2e8f0;">
+                            <input type="radio" name="quick-accept-payment-choice" value="collect" checked onchange="window.onAcceptPaymentChoiceChanged('quick-accept-payment-panel')">
+                            Collect remaining amount on delivery / pickup
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; color:#e2e8f0;">
+                            <input type="radio" name="quick-accept-payment-choice" value="partial" onchange="window.onAcceptPaymentChoiceChanged('quick-accept-payment-panel')">
+                            Partial payment / advance received
+                        </label>
+                        <input type="number" data-accept-payment-amount min="0" step="0.01" class="form-control" placeholder="Total received so far (₹)" style="display:none; margin:0 0 8px 24px; width:calc(100% - 24px); padding:8px;">
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12px; color:#e2e8f0;">
+                            <input type="radio" name="quick-accept-payment-choice" value="prepaid" onchange="window.onAcceptPaymentChoiceChanged('quick-accept-payment-panel')">
+                            ✅ Already paid in full (customer owes ₹0)
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; font-size:11px; color:#94a3b8;">
+                            Method received
+                            <select data-accept-payment-method class="form-control" style="max-width:130px; padding:6px;">
+                                <option value="cash">Cash</option>
+                                <option value="upi">UPI</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </label>
+                    </div>
+
                     <!-- Prep Time Input -->
                     <div style="margin-bottom:14px;">
                         <label style="font-size:11.5px; font-weight:700; color:#94a3b8; margin-bottom:4px; display:block;">⏱️ Estimated ${isTakeaway ? 'Prep / Pickup' : 'Prep / Delivery'} Time</label>
@@ -1048,6 +1073,7 @@ window.openOrderQuickModal = function(orderId) {
             `;
             const acceptDiscountReason = document.getElementById('quick-accept-discount-reason');
             if (acceptDiscountReason) acceptDiscountReason.value = ord.discountReason || '';
+            window.initializeAcceptPaymentChoices(ord, 'quick-accept-payment-panel');
         } else if (status === 'accepted' || status === 'confirmed' || status === 'preparing') {
             const isTakeaway = ['takeaway', 'pickup'].includes(String(ord.orderType || '').toLowerCase());
             if (isTakeaway) {
@@ -1584,6 +1610,7 @@ window.confirmQuickOrder = async function(orderId) {
     if (!estTime) return;
 
     let discountApplied = false;
+    let paymentSaved = false;
     try {
         if (discount !== Number(order.discount || 0)) {
             if (discount > 0 && !discountReason) {
@@ -1595,6 +1622,13 @@ window.confirmQuickOrder = async function(orderId) {
             discountApplied = true;
         }
         const finalTotal = Math.max(0, subtotal - Number(order.discount || 0) + delCharge);
+        const payment = window.getAcceptPaymentDetails(order, finalTotal, 'quick-accept-payment-panel');
+        if (!payment) return;
+        if (payment.paid > window.getStoredOrderPaymentDetails(order).paid) {
+            const paymentResult = await window.recordAcceptOrderPayment(order, payment, authPin, 'quick-accept-payment-panel');
+            Object.assign(order, paymentResult, { paymentCollectedByStore: true });
+            paymentSaved = true;
+        }
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
             method: 'PUT',
             headers: {
@@ -1631,7 +1665,11 @@ window.confirmQuickOrder = async function(orderId) {
                 : `*📍 Delivery Address:* ${order.customerAddress || order.deliveryAddress || order.address || 'ADDRESS NOT PROVIDED - CALL CUSTOMER BEFORE DISPATCH'}\n*⏱️ Estimated Delivery:* ${estTime}`;
 
             const paymentDetails = window.getStoredOrderPaymentDetails({ ...order, finalTotal, total: finalTotal });
-            const paymentNote = paymentDetails.status === 'paid' ? `Paid ₹${paymentDetails.paid} ✅` : `₹${paymentDetails.due} due (${order.paymentMethod || 'COD'})`;
+            const paymentNote = paymentDetails.status === 'paid'
+                ? `Paid ₹${paymentDetails.paid} ✅`
+                : paymentDetails.paid > 0
+                    ? `₹${paymentDetails.paid} received, ₹${paymentDetails.due} due`
+                    : `₹${paymentDetails.due} due (${order.paymentMethod || 'COD'})`;
 
             const msg = `${orderTypeHeader}\n\n` +
                         `Hi *${order.customerName || 'Customer'}*,\n` +
@@ -1652,15 +1690,12 @@ window.confirmQuickOrder = async function(orderId) {
             }
         } else {
             const errorPayload = await res.json().catch(() => ({}));
-            window.showAdminToast(
-                discountApplied
-                    ? `Discount saved, but order confirmation failed: ${errorPayload.error || 'Please check PIN.'}`
-                    : (errorPayload.error || 'Failed to confirm order. Please check PIN.'),
-                'error'
-            );
+            const savedMessage = paymentSaved ? 'Payment saved, but order confirmation failed: ' : discountApplied ? 'Discount saved, but order confirmation failed: ' : '';
+            window.showAdminToast(`${savedMessage}${errorPayload.error || 'Failed to confirm order. Please check PIN.'}`, 'error');
         }
     } catch(e) {
-        window.showAdminToast(discountApplied ? 'Discount saved, but order confirmation failed' : (e.message || 'Error confirming order'), 'error');
+        const savedMessage = paymentSaved ? 'Payment saved, but order confirmation failed: ' : discountApplied ? 'Discount saved, but order confirmation failed: ' : '';
+        window.showAdminToast(`${savedMessage}${e.message || 'Error confirming order'}`, 'error');
     }
 };
 
@@ -6201,6 +6236,12 @@ window.openOrderConfirmModal = function(orderId) {
         discountReasonEl.disabled = !isPending;
     }
 
+    const acceptPaymentPanel = document.getElementById('ord-accept-payment-panel');
+    if (acceptPaymentPanel) {
+        acceptPaymentPanel.style.display = isPending ? 'block' : 'none';
+        window.initializeAcceptPaymentChoices(order, 'ord-accept-payment-panel');
+    }
+
     // Handle Takeaway Delivery Charge Lock & Confirmed Status Locking
     if (delChargeEl) {
         if (isTakeaway) {
@@ -6395,7 +6436,15 @@ window.confirmOrderAndWhatsApp = async function() {
     }
     const finalTotal = Math.max(0, subtotal - Number(order.discount || 0) + delCharge);
 
+    let paymentSaved = false;
     try {
+        const payment = window.getAcceptPaymentDetails(order, finalTotal, 'ord-accept-payment-panel');
+        if (!payment) return;
+        if (payment.paid > window.getStoredOrderPaymentDetails(order).paid) {
+            const paymentResult = await window.recordAcceptOrderPayment(order, payment, authPin, 'ord-accept-payment-panel');
+            Object.assign(order, paymentResult, { paymentCollectedByStore: true });
+            paymentSaved = true;
+        }
         const res = await fetch(`${API_URL}/orders/${order._id}`, {
             method: 'PUT',
             headers: {
@@ -6433,8 +6482,12 @@ window.confirmOrderAndWhatsApp = async function() {
             const baseUrl = typeof window.getFrontendBaseUrl === 'function' ? window.getFrontendBaseUrl() : 'https://littiwale.co.in';
             const trackingLink = `${baseUrl}/track.html?id=${order._id}`;
 
-            const payment = window.getStoredOrderPaymentDetails({ ...order, finalTotal, total: finalTotal });
-            const paymentNote = payment.status === 'paid' ? `Paid ₹${payment.paid} ✅` : `₹${payment.due} due (${order.paymentMethod || 'COD'})`;
+            const paymentDetails = window.getStoredOrderPaymentDetails({ ...order, finalTotal, total: finalTotal });
+            const paymentNote = paymentDetails.status === 'paid'
+                ? `Paid ₹${paymentDetails.paid} ✅`
+                : paymentDetails.paid > 0
+                    ? `₹${paymentDetails.paid} received, ₹${paymentDetails.due} due`
+                    : `₹${paymentDetails.due} due (${order.paymentMethod || 'COD'})`;
 
             const msg = `${orderTypeHeader}\n\n` +
                         `Hi *${order.customerName || 'Customer'}*,\n` +
@@ -6453,16 +6506,13 @@ window.confirmOrderAndWhatsApp = async function() {
             window.open(whatsappUrl, '_blank');
         } else {
             const errorPayload = await res.json().catch(() => ({}));
-            window.showAdminToast(
-                discountApplied
-                    ? `Discount saved, but order confirmation failed: ${errorPayload.error || 'Please verify Admin PIN.'}`
-                    : (errorPayload.error || 'Failed to confirm order. Please verify Admin PIN.'),
-                'error'
-            );
+            const savedMessage = paymentSaved ? 'Payment saved, but order confirmation failed: ' : discountApplied ? 'Discount saved, but order confirmation failed: ' : '';
+            window.showAdminToast(`${savedMessage}${errorPayload.error || 'Failed to confirm order. Please verify Admin PIN.'}`, 'error');
         }
     } catch(e) {
         console.error('Confirm order error:', e);
-        window.showAdminToast(discountApplied ? 'Discount saved, but order confirmation failed' : 'Error confirming order', 'error');
+        const savedMessage = paymentSaved ? 'Payment saved, but order confirmation failed: ' : discountApplied ? 'Discount saved, but order confirmation failed: ' : '';
+        window.showAdminToast(`${savedMessage}${e.message || 'Error confirming order'}`, 'error');
     }
 };
 
@@ -6907,6 +6957,12 @@ window.onDispatchPaymentChoiceChanged = function() {
     const partialRadio = document.getElementById('dispatch-pay-partial');
     const amountInput = document.getElementById('dispatch-amount-paid');
     if (amountInput) amountInput.style.display = partialRadio?.checked ? 'block' : 'none';
+    const order = window.currentDispatchOrder;
+    const collectLabel = document.getElementById('dispatch-collect-cash-label');
+    if (order && collectLabel) {
+        const payment = window.getStoredOrderPaymentDetails(order);
+        collectLabel.textContent = `💵 Collect Cash from Customer (₹${payment.due})`;
+    }
 };
 
 window.getStoredOrderPaymentDetails = function(order) {
@@ -6917,6 +6973,84 @@ window.getStoredOrderPaymentDetails = function(order) {
     const due = Math.max(0, total - paid);
     const status = due === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending');
     return { total, paid, due, status };
+};
+
+window.initializeAcceptPaymentChoices = function(order, panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+
+    const payment = window.getStoredOrderPaymentDetails(order);
+    const choice = payment.status === 'paid' ? 'prepaid' : (payment.status === 'partial' ? 'partial' : 'collect');
+    const radio = panel.querySelector(`input[type="radio"][value="${choice}"]`);
+    if (radio) radio.checked = true;
+
+    const amountInput = panel.querySelector('[data-accept-payment-amount]');
+    if (amountInput) amountInput.value = payment.paid > 0 ? String(payment.paid) : '';
+
+    const methodInput = panel.querySelector('[data-accept-payment-method]');
+    const lastPayment = Array.isArray(order?.paymentTransactions) ? order.paymentTransactions.at(-1) : null;
+    const savedMethod = String(lastPayment?.method || '').toLowerCase();
+    const orderMethod = String(order?.paymentMethod || '').toLowerCase();
+    if (methodInput) {
+        methodInput.value = ['cash', 'upi', 'other'].includes(savedMethod)
+            ? savedMethod
+            : (orderMethod === 'upi' ? 'upi' : 'cash');
+    }
+    window.onAcceptPaymentChoiceChanged(panelId);
+};
+
+window.onAcceptPaymentChoiceChanged = function(panelId) {
+    const panel = document.getElementById(panelId);
+    const amountInput = panel?.querySelector('[data-accept-payment-amount]');
+    const partialSelected = panel?.querySelector('input[type="radio"][value="partial"]')?.checked;
+    if (amountInput) amountInput.style.display = partialSelected ? 'block' : 'none';
+};
+
+window.getAcceptPaymentDetails = function(order, total, panelId) {
+    const panel = document.getElementById(panelId);
+    const stored = window.getStoredOrderPaymentDetails(order);
+    const selected = panel?.querySelector('input[type="radio"]:checked')?.value || 'collect';
+    let paid = stored.paid;
+
+    if (selected === 'prepaid') {
+        paid = Math.max(stored.paid, total);
+    } else if (selected === 'partial') {
+        paid = Number(panel?.querySelector('[data-accept-payment-amount]')?.value || 0);
+        if (!Number.isFinite(paid) || paid <= 0 || paid >= total || paid < stored.paid) {
+            window.showAdminToast(`Advance must be at least ₹${stored.paid} and less than total ₹${total}`, 'warning');
+            return null;
+        }
+    }
+
+    const due = Math.max(0, total - paid);
+    return {
+        total,
+        paid,
+        due,
+        status: due === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending')
+    };
+};
+
+window.recordAcceptOrderPayment = async function(order, payment, authPin, panelId) {
+    const stored = window.getStoredOrderPaymentDetails(order);
+    const panel = document.getElementById(panelId);
+    const method = panel?.querySelector('[data-accept-payment-method]')?.value || 'cash';
+    const amount = payment.paid - stored.paid;
+    if (amount <= 0) return {};
+
+    const response = await fetch(`${API_URL}/orders/${order._id}/payments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-pin': authPin, 'x-pin': authPin },
+        body: JSON.stringify({
+            amount,
+            method,
+            note: payment.status === 'paid' ? 'Already paid before order acceptance' : 'Advance received before order acceptance',
+            collectedByStore: true
+        })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || 'Could not save the payment received');
+    return result;
 };
 
 window.getDispatchPaymentDetails = function(order) {
@@ -7262,10 +7396,13 @@ window.executeWhatsAppAction = function(actionType) {
         const kitchenDeliveryCharge = isTakeawayOrder ? 0 : Number(order.deliveryCharge || 0);
         const kitchenDiscount = Number(order.discount || 0);
         const kitchenPayment = window.getStoredOrderPaymentDetails(order);
+        const lastPayment = Array.isArray(order.paymentTransactions) ? order.paymentTransactions.at(-1) : null;
+        const recordedMethod = String(lastPayment?.method || '').toUpperCase();
+        const kitchenMethod = recordedMethod || order.paymentMethod || 'Payment method not recorded';
         const kitchenPaymentStatus = kitchenPayment.status === 'paid'
-            ? `PAID IN FULL — ₹${kitchenPayment.paid} ✅ (${order.paymentMethod || 'Recorded payment'})`
+            ? `PAID IN FULL — ₹${kitchenPayment.paid} ✅ (${kitchenMethod})`
             : kitchenPayment.paid > 0
-                ? `PARTIALLY PAID — ₹${kitchenPayment.paid} received | ₹${kitchenPayment.due} due (${order.paymentMethod || 'Payment method not recorded'})`
+                ? `PARTIALLY PAID — ₹${kitchenPayment.paid} received | ₹${kitchenPayment.due} due (${kitchenMethod})`
                 : `NOT PAID — ₹${kitchenPayment.due} due (${order.paymentMethod || 'COD'})`;
         const kitchenMessage = `*🍳 NEW ORDER FOR KITCHEN — LITTIWALE BARBIL*\n\n` +
             `*🧾 Order No.:* #${shortId}\n` +
