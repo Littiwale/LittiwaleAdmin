@@ -2813,6 +2813,9 @@ router.put('/orders/:id', checkPin, async (req, res) => {
         if (['discount', 'paymentCollectedByStore', 'paymentMode', 'amountPaid', 'amountDue', 'paymentStatus'].some(field => req.body[field] !== undefined)) {
             return res.status(400).json({ success: false, error: 'Use the audited discount or payment endpoint for financial changes' });
         }
+        if (deliveryCharge !== undefined && (String(deliveryCharge).trim() === '' || !Number.isFinite(Number(deliveryCharge)) || Number(deliveryCharge) < 0)) {
+            return res.status(400).json({ success: false, error: 'Delivery charge must be a valid amount of ₹0 or more' });
+        }
         const hasAddressUpdate = customerAddress !== undefined || deliveryAddress !== undefined || address !== undefined;
         const updatedAddress = customerAddress || deliveryAddress || address;
         const normalizedRiderEmail = String(riderEmail || '').trim().toLowerCase();

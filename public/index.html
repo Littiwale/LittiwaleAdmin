@@ -2653,6 +2653,15 @@
                     <!-- Injected dynamically based on current status -->
                 </div>
 
+                <div id="quick-delivery-charge-editor" style="display:none; background:rgba(249,115,22,0.08); border:1px solid rgba(249,115,22,0.3); border-radius:12px; padding:12px 14px; margin-bottom:14px;">
+                    <div style="font-size:12px; font-weight:800; color:var(--brand-orange); margin-bottom:8px;">🛵 Change Delivery Charge (before dispatch)</div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="number" id="quick-edit-delivery-charge" class="form-control" min="0" step="1" style="max-width:130px; font-weight:800;" oninput="window.previewQuickDeliveryCharge()">
+                        <button type="button" class="btn btn-primary" style="font-weight:800; white-space:nowrap;" onclick="window.saveQuickDeliveryCharge()">Save Fee & Total</button>
+                    </div>
+                    <div id="quick-edit-delivery-charge-preview" style="font-size:11.5px; color:#cbd5e1; margin-top:7px;"></div>
+                </div>
+
                 <!-- 🛵🔄🛍️ Order Type Quick Switcher (Delivery <-> Takeaway with Auto Bill Adjustment) -->
                 <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:10px 14px; margin-bottom:14px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">

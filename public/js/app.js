@@ -956,6 +956,14 @@ window.openOrderQuickModal = function(orderId) {
 
     // 1.1 Order Type Quick Switcher Buttons Active State & Dispatch Lock
     const isDispatchedOrDone = (status === 'dispatched' || status === 'delivered' || status === 'cancelled');
+    const deliveryChargeEditor = document.getElementById('quick-delivery-charge-editor');
+    const deliveryChargeInput = document.getElementById('quick-edit-delivery-charge');
+    if (deliveryChargeEditor) {
+        deliveryChargeEditor.style.display = status !== 'pending' && !isTakeaway && !isDispatchedOrDone ? 'block' : 'none';
+    }
+    if (deliveryChargeInput) deliveryChargeInput.value = Number(ord.deliveryCharge || 0);
+    window.previewQuickDeliveryCharge();
+
     const hintEl = document.getElementById('quick-order-type-hint');
     if (hintEl) {
         hintEl.textContent = isDispatchedOrDone ? '🔒 Locked (Rider Assigned / Out for Delivery)' : '⚡ Instant Bill Recalculation';
@@ -1337,6 +1345,77 @@ window.openOrderQuickModal = function(orderId) {
     }
 
     openModal('order-quick-modal');
+};
+
+window.previewQuickDeliveryCharge = function() {
+    const input = document.getElementById('quick-edit-delivery-charge');
+    const preview = document.getElementById('quick-edit-delivery-charge-preview');
+    const orderId = window.currentQuickOrderId;
+    const order = (window.cachedOrders || []).find(item => String(item._id) === String(orderId)) ||
+        (window.cachedOrders || []).find(item => String(item.id) === String(orderId));
+    if (!input || !preview || !order) return;
+
+    const charge = Number(input.value);
+    if (!input.value.trim() || !Number.isFinite(charge) || charge < 0) {
+        preview.textContent = 'Enter a valid delivery charge (₹0 or more).';
+        return;
+    }
+    const storedSubtotal = Number(order.subtotal);
+    const subtotal = Number.isFinite(storedSubtotal) && order.subtotal !== null && order.subtotal !== ''
+        ? storedSubtotal
+        : Math.max(0, Number(order.finalTotal || order.total || 0) - Number(order.deliveryCharge || 0) + Number(order.discount || 0));
+    const discount = Number(order.discount || 0);
+    preview.textContent = `Updated order total: ₹${Math.max(0, subtotal - discount + charge)}`;
+};
+
+window.saveQuickDeliveryCharge = async function() {
+    const orderId = window.currentQuickOrderId;
+    const order = (window.cachedOrders || []).find(item => String(item._id) === String(orderId)) ||
+        (window.cachedOrders || []).find(item => String(item.id) === String(orderId));
+    const input = document.getElementById('quick-edit-delivery-charge');
+    const deliveryCharge = Number(input?.value);
+    if (!order || !input?.value.trim() || !Number.isFinite(deliveryCharge) || deliveryCharge < 0) {
+        window.showAdminToast('Enter a valid delivery charge (₹0 or more)', 'warning');
+        return;
+    }
+
+    const status = String(order.status || 'pending').toLowerCase();
+    if (['dispatched', 'delivered', 'cancelled'].includes(status)) {
+        window.showAdminToast('Delivery charge cannot be changed after dispatch or completion', 'warning');
+        return;
+    }
+    if (['takeaway', 'pickup'].includes(String(order.orderType || '').toLowerCase())) {
+        window.showAdminToast('Switch the order to delivery before setting a delivery charge', 'warning');
+        return;
+    }
+
+    const storedSubtotal = Number(order.subtotal);
+    const subtotal = Number.isFinite(storedSubtotal) && order.subtotal !== null && order.subtotal !== ''
+        ? storedSubtotal
+        : Math.max(0, Number(order.finalTotal || order.total || 0) - Number(order.deliveryCharge || 0) + Number(order.discount || 0));
+    const discount = Number(order.discount || 0);
+    const finalTotal = Math.max(0, subtotal - discount + deliveryCharge);
+    const authPin = sessionStorage.getItem('adminPin') || localStorage.getItem('adminPin') || '1234';
+    try {
+        const response = await fetch(`${API_URL}/orders/${order._id || order.id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-pin': authPin,
+                'x-pin': authPin
+            },
+            body: JSON.stringify({ deliveryCharge, finalTotal })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Could not update delivery charge');
+
+        Object.assign(order, { deliveryCharge, finalTotal, total: finalTotal });
+        window.showAdminToast('Delivery charge and order total updated', 'success');
+        window.openOrderQuickModal(order._id || order.id);
+        window.fetchAndRenderOrders();
+    } catch (error) {
+        window.showAdminToast(error.message || 'Could not update delivery charge', 'error');
+    }
 };
 
 window.recalcQuickDelCharge = function(orderId) {
