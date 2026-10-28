@@ -6,6 +6,16 @@
 (function() {
   let audioCtx = null;
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[character]);
+  }
+
   function initAudio() {
     if (!audioCtx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -233,7 +243,7 @@
     const items = orderData.items || [];
     const itemsRows = items.length > 0 ? items.map(item => `
       <tr>
-        <td>${item.quantity || 1}x ${item.name || 'Dish Item'}</td>
+        <td>${item.quantity || 1}x ${escapeHtml(item.name || 'Dish Item')}</td>
         <td>₹${Number(item.price || 0) * (item.quantity || 1)}</td>
       </tr>
     `).join('') : `
@@ -577,7 +587,7 @@
       <tr style="border-bottom: 1px solid #e5e7eb;">
         <td style="padding: 10px 12px; text-align: center; color: #4b5563; font-size: 13px;">${idx + 1}</td>
         <td style="padding: 10px 12px; font-size: 13.5px; font-weight: 600; color: #111827;">
-          ${it.name || 'Dish Item'}
+          ${escapeHtml(it.name || 'Dish Item')}
           ${it.note ? `<div style="font-size: 11.5px; color: #d97706; font-weight: 500;">${it.note}</div>` : ''}
         </td>
         <td style="padding: 10px 12px; text-align: center; color: #374151; font-size: 13.5px;">${it.quantity || 1}</td>

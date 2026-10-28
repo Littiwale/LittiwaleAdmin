@@ -1241,7 +1241,7 @@ window.openOrderQuickModal = function(orderId) {
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
                     <div>
                         <strong style="color:#fff;">${it.quantity}x</strong> 
-                        <span style="color:#cbd5e1; margin-left:4px;">${it.name}</span>
+                        <span style="color:#cbd5e1; margin-left:4px;">${window.escapeAdminOrderHtml(it.name)}</span>
                     </div>
                     <strong style="color:var(--brand-gold);">₹${it.subtotal || (it.price * it.quantity)}</strong>
                 </div>
@@ -6376,7 +6376,7 @@ window.openOrderConfirmModal = function(orderId) {
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:6px;">
                     <div>
                         <span style="font-weight:700; color:#fff;">${it.quantity}x</span> 
-                        <span style="color:var(--text-main); margin-left:4px;">${it.name}</span>
+                        <span style="color:var(--text-main); margin-left:4px;">${window.escapeAdminOrderHtml(it.name)}</span>
                     </div>
                     <div style="font-weight:700; color:var(--brand-gold);">₹${it.subtotal || (it.price * it.quantity)}</div>
                 </div>
@@ -7989,8 +7989,19 @@ window.addEventListener('appinstalled', () => {
 // ==========================================================================
 let adminOrderSelectedItems = [];
 let adminOrderPhoneDebounceTimer = null;
+let adminOrderCustomItemSequence = 0;
 let currentAdminOrderType = 'delivery';
 let currentAdminOrderPayment = 'COD';
+
+window.escapeAdminOrderHtml = function(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[character]);
+};
 
 window.openCreateOrderModal = async function() {
     // 1. Reset state
@@ -8007,6 +8018,8 @@ window.openCreateOrderModal = async function() {
     const notesInput = document.getElementById('create-order-notes');
     const phoneStatus = document.getElementById('create-order-phone-status');
     const searchDishInput = document.getElementById('admin-order-search-dish');
+    const customNameInput = document.getElementById('admin-order-custom-name');
+    const customPriceInput = document.getElementById('admin-order-custom-price');
     const deliveryFeeInput = document.getElementById('admin-order-delivery-fee');
     const discountInput = document.getElementById('admin-order-discount');
 
@@ -8017,6 +8030,9 @@ window.openCreateOrderModal = async function() {
     if (landmarkInput) landmarkInput.value = '';
     if (notesInput) notesInput.value = '';
     if (searchDishInput) searchDishInput.value = '';
+    if (customNameInput) customNameInput.value = '';
+    if (customPriceInput) customPriceInput.value = '';
+    adminOrderCustomItemSequence = 0;
     if (deliveryFeeInput) deliveryFeeInput.value = '30';
     if (discountInput) discountInput.value = '0';
     if (phoneStatus) {
@@ -8418,6 +8434,39 @@ window.addAdminOrderItem = function(id, name, price, selectedOption = '') {
     window.recalcAdminOrderBill();
 };
 
+window.addAdminOrderCustomItem = function() {
+    const nameInput = document.getElementById('admin-order-custom-name');
+    const priceInput = document.getElementById('admin-order-custom-price');
+    const name = String(nameInput?.value || '').trim();
+    const priceValue = String(priceInput?.value || '').trim();
+    const price = Number(priceValue);
+    const showError = message => {
+        if (typeof window.showAdminToast === 'function') {
+            window.showAdminToast(message, 'error');
+        } else {
+            alert(message);
+        }
+    };
+
+    if (!name) {
+        showError('Please enter the custom dish name');
+        nameInput?.focus();
+        return;
+    }
+
+    if (!priceValue || !Number.isFinite(price) || price < 0) {
+        showError('Please enter a valid non-negative dish price');
+        priceInput?.focus();
+        return;
+    }
+
+    adminOrderCustomItemSequence += 1;
+    window.addAdminOrderItem(`custom-${Date.now()}-${adminOrderCustomItemSequence}`, name, price);
+    nameInput.value = '';
+    priceInput.value = '';
+    nameInput.focus();
+};
+
 window.updateAdminOrderItemQty = function(index, delta) {
     if (!adminOrderSelectedItems[index]) return;
     adminOrderSelectedItems[index].quantity += delta;
@@ -8448,7 +8497,7 @@ window.renderAdminOrderSelectedItems = function() {
     if (adminOrderSelectedItems.length === 0) {
         container.innerHTML = `
             <div style="text-align:center; padding:20px; color:#64748b; font-size:12.5px;">
-                No dishes selected yet. Search and click "+ Add" above.
+                No dishes selected yet. Search the menu or add a custom dish above.
             </div>
         `;
         return;
@@ -8458,7 +8507,7 @@ window.renderAdminOrderSelectedItems = function() {
         <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid rgba(255,255,255,0.04); gap:8px; min-width:0; box-sizing:border-box;">
             <div style="flex:1; min-width:0; overflow:hidden;">
                 <div style="font-size:12.5px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                    ${item.name}
+                    ${window.escapeAdminOrderHtml(item.name)}
                 </div>
                 <div style="font-size:11px; color:#94a3b8;">
                     ₹${item.price} each × ${item.quantity} = <strong style="color:#fbbf24;">₹${item.price * item.quantity}</strong>
@@ -8765,7 +8814,7 @@ window.renderStaffLiveQueue = function() {
         const items = Array.isArray(ord.items) ? ord.items : [];
         const itemsSummary = items.map(it => `
             <span style="display:inline-flex; align-items:center; background:rgba(255,255,255,0.06); padding:3px 8px; border-radius:6px; font-size:12px; color:#f1f5f9; border:1px solid rgba(255,255,255,0.08);">
-                <strong style="color:#fb923c; margin-right:4px;">${it.quantity || 1}x</strong> ${it.name}
+                <strong style="color:#fb923c; margin-right:4px;">${it.quantity || 1}x</strong> ${window.escapeAdminOrderHtml(it.name)}
             </span>
         `).join(' ');
 
@@ -8902,7 +8951,7 @@ window.buildThermalReceiptHTML = function(order, isPrintIframe = false) {
         <div style="display:flex; justify-content:space-between; align-items:flex-start; font-size:12px; color:#000000 !important; font-weight:800; margin-bottom:6px;">
             <div style="display:flex; align-items:flex-start; gap:6px; max-width:76%;">
                 <span style="font-weight:900; color:#000000 !important; border:1px solid #000000; padding:1px 5px; border-radius:4px; font-size:10.5px; background:#fff; flex-shrink:0;">${it.quantity || 1}x</span>
-                <span style="font-weight:800; line-height:1.3; color:#000000 !important; word-break:break-word;">${it.name}</span>
+                <span style="font-weight:800; line-height:1.3; color:#000000 !important; word-break:break-word;">${window.escapeAdminOrderHtml(it.name)}</span>
             </div>
             <span style="font-weight:900; color:#000000 !important; font-size:12.5px; flex-shrink:0; margin-left:6px;">₹${it.subtotal || ((Number(it.price || 0)) * (Number(it.quantity || 1)))}</span>
         </div>
@@ -9432,7 +9481,7 @@ window.renderBillingTab = async function() {
 
         const itemsSummary = items.map(it => `
             <span style="display:inline-flex; align-items:center; background:rgba(255,255,255,0.06); padding:3px 8px; border-radius:6px; font-size:12px; color:#f1f5f9; border:1px solid rgba(255,255,255,0.08);">
-                <strong style="color:#fb923c; margin-right:4px;">${it.quantity || 1}x</strong> ${it.name}
+                <strong style="color:#fb923c; margin-right:4px;">${it.quantity || 1}x</strong> ${window.escapeAdminOrderHtml(it.name)}
             </span>
         `).join(' ');
 

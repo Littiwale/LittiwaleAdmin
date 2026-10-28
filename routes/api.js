@@ -2271,10 +2271,17 @@ async function sendNewOrderResendEmail(ord) {
         const isCOD = String(ord.paymentMethod || '').toUpperCase() === 'COD';
         const formattedDate = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
         const itemsList = Array.isArray(ord.items) ? ord.items : [];
+        const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, character => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[character]);
         const itemsHtml = itemsList.map(it => `
             <tr style="border-bottom: 1px solid #f1f5f9;">
                 <td style="padding: 10px 0; color: #1e293b; font-size: 14px; font-weight: 600;">
-                    ${it.name}
+                    ${escapeHtml(it.name)}
                 </td>
                 <td style="padding: 10px 0; text-align: center; color: #475569; font-size: 13px; font-weight: 700;">
                     ${it.quantity || 1}
