@@ -2040,7 +2040,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Starting Price (₹)</label>
-                            <input type="number" id="menu-price" class="form-control" placeholder="120" min="0" step="0.01" oninput="updateLivePreview()">
+                            <input type="number" id="menu-price" class="form-control" placeholder="120" min="0" step="0.01" oninput="updateLivePreview(); syncMenuVariantBasePrices()">
                         </div>
 
                         <!-- Description -->
@@ -2058,14 +2058,14 @@
                             <label class="form-label">Priced Variants</label>
                             <div id="menu-variants-list" style="display:flex; flex-direction:column; gap:8px;"></div>
                             <button type="button" class="btn btn-secondary" style="margin-top:8px;" onclick="showMenuPricedVariantChoices()">+ Add Priced Variant</button>
-                            <small style="display:block; color:var(--text-dim); margin-top:5px;">Add an existing variant type (for example Half / Full) or create a new one. Set the price for this dish; each variant can be stocked separately.</small>
+                            <small style="display:block; color:var(--text-dim); margin-top:5px;">Add an existing variant type (for example Half / Full) or create a new one. Choices below automatically create a variant with this dish price; each price and stock can be changed separately.</small>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Selectable Choices (same dish price)</label>
+                            <label class="form-label">Choices (auto-create priced variants)</label>
                             <div id="menu-options-list" style="display:flex; flex-direction:column; gap:8px;"></div>
                             <button type="button" class="btn btn-secondary" style="margin-top:8px;" onclick="addMenuOptionRow()">+ Create New Choice</button>
-                            <small style="display:block; color:var(--text-dim); margin-top:5px;">For choices like Thali: Rice + Dal, Roti, or Mix. Customers select one at the dish price above. Use Priced Variants when each choice has its own price.</small>
+                            <small style="display:block; color:var(--text-dim); margin-top:5px;">Add choices such as Thali combinations here. A matching price and stock row is created automatically above; edit its price there if needed.</small>
                         </div>
 
                         <!-- Dietary & Location Availability -->

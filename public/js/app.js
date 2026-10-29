@@ -3785,6 +3785,7 @@ function addMenuOptionRow(option = {}) {
 
     const row = document.createElement('div');
     row.className = 'menu-option-row';
+    row.dataset.optionRowId = `menu-option-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     row.style.cssText = 'display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto; gap:8px; align-items:center;';
 
     const label = document.createElement('input');
@@ -3792,6 +3793,7 @@ function addMenuOptionRow(option = {}) {
     label.className = 'form-control menu-option-label';
     label.placeholder = 'Choice name (e.g. Rice + Dal)';
     label.value = typeof option === 'string' ? option : (option.label || '');
+    label.addEventListener('input', () => syncMenuOptionVariant(row, 'option'));
 
     const description = document.createElement('input');
     description.type = 'text';
@@ -3805,10 +3807,54 @@ function addMenuOptionRow(option = {}) {
     remove.textContent = '×';
     remove.setAttribute('aria-label', 'Remove choice');
     remove.title = 'Remove choice';
-    remove.addEventListener('click', () => row.remove());
+    remove.addEventListener('click', () => {
+        removeLinkedMenuVariant(row);
+        row.remove();
+    });
 
     row.append(label, description, remove);
     container.appendChild(row);
+    syncMenuOptionVariant(row, 'option');
+}
+
+function removeLinkedMenuVariant(optionRow) {
+    const optionRowId = optionRow.dataset.optionRowId;
+    if (!optionRowId) return;
+    document.querySelector(`#menu-variants-list .menu-variant-row[data-option-row-id="${optionRowId}"]`)?.remove();
+}
+
+function syncMenuOptionVariant(optionRow, source) {
+    const labelInput = optionRow.querySelector('.menu-option-label');
+    const label = labelInput.value.trim();
+    const optionRowId = optionRow.dataset.optionRowId;
+    if (!label || !optionRowId) return;
+
+    let variantRow = document.querySelector(`#menu-variants-list .menu-variant-row[data-option-row-id="${optionRowId}"]`);
+    if (!variantRow) {
+        variantRow = [...document.querySelectorAll('#menu-variants-list .menu-variant-row')]
+            .find(candidate => !candidate.dataset.optionRowId
+                && candidate.querySelector('.menu-variant-label').value.trim().toLowerCase() === label.toLowerCase());
+        if (variantRow) {
+            variantRow.dataset.optionRowId = optionRowId;
+        } else {
+            const basePrice = document.getElementById('menu-price').value;
+            addMenuVariantRow({
+                label,
+                price: basePrice === '' ? '' : Number(basePrice),
+                isAvailable: true
+            }, optionRowId, true);
+            return;
+        }
+    }
+
+    const variantLabel = variantRow.querySelector('.menu-variant-label');
+    if (variantLabel.value.trim() !== label) {
+        if (source === 'variant') {
+            labelInput.value = variantLabel.value;
+        } else {
+            variantLabel.value = label;
+        }
+    }
 }
 
 function getMenuOptionsFromEditor() {
@@ -3832,6 +3878,24 @@ function setMenuOptionsInEditor(options) {
     if (!container) return;
     container.replaceChildren();
     if (Array.isArray(options)) options.forEach(option => addMenuOptionRow(option));
+}
+
+function syncMenuVariantBasePrices() {
+    const basePrice = document.getElementById('menu-price').value;
+    document.querySelectorAll('#menu-variants-list .menu-variant-row[data-auto-price="true"] .menu-variant-price')
+        .forEach(input => {
+            input.value = basePrice;
+        });
+}
+
+function syncAllMenuOptionVariants() {
+    document.querySelectorAll('#menu-options-list .menu-option-row').forEach(row => {
+        if (row.querySelector('.menu-option-label').value.trim()) {
+            syncMenuOptionVariant(row, 'option');
+        } else {
+            removeLinkedMenuVariant(row);
+        }
+    });
 }
 
 function getExistingMenuVariantLabels() {
@@ -3929,12 +3993,16 @@ function showMenuPricedVariantChoices() {
     container.appendChild(panel);
 }
 
-function addMenuVariantRow(variant = {}) {
+function addMenuVariantRow(variant = {}, optionRowId = '', autoPrice = false) {
     const container = document.getElementById('menu-variants-list');
     if (!container) return;
 
     const row = document.createElement('div');
     row.className = 'menu-variant-row';
+    if (optionRowId) row.dataset.optionRowId = optionRowId;
+    row.dataset.autoPrice = autoPrice ? 'true' : 'false';
+    row.dataset.variantImage = variant.image || '';
+    row.dataset.variantDescription = variant.description || '';
     row.style.cssText = 'display:grid; grid-template-columns:minmax(0,1fr) 110px auto auto; gap:8px; align-items:center;';
 
     const label = document.createElement('input');
@@ -3942,6 +4010,12 @@ function addMenuVariantRow(variant = {}) {
     label.className = 'form-control menu-variant-label';
     label.placeholder = 'Variant name (e.g. 1 Pav)';
     label.value = variant.label || '';
+    label.addEventListener('input', () => {
+        const linkedOption = row.dataset.optionRowId
+            ? document.querySelector(`#menu-options-list .menu-option-row[data-option-row-id="${row.dataset.optionRowId}"]`)
+            : null;
+        if (linkedOption) syncMenuOptionVariant(linkedOption, 'variant');
+    });
 
     const price = document.createElement('input');
     price.type = 'number';
@@ -3950,20 +4024,9 @@ function addMenuVariantRow(variant = {}) {
     price.min = '0';
     price.step = '0.01';
     price.value = variant.price ?? '';
-
-    const image = document.createElement('input');
-    image.type = 'url';
-    image.className = 'form-control menu-variant-image';
-    image.placeholder = 'Variant image URL (optional)';
-    image.value = variant.image || '';
-    image.style.gridColumn = '1 / 3';
-
-    const description = document.createElement('input');
-    description.type = 'text';
-    description.className = 'form-control menu-variant-description';
-    description.placeholder = 'Variant description (optional)';
-    description.value = variant.description || '';
-    description.style.gridColumn = '3 / 5';
+    price.addEventListener('input', () => {
+        row.dataset.autoPrice = 'false';
+    });
 
     const stockLabel = document.createElement('label');
     stockLabel.style.cssText = 'display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:11px;';
@@ -3979,9 +4042,15 @@ function addMenuVariantRow(variant = {}) {
     remove.textContent = '×';
     remove.setAttribute('aria-label', 'Remove variant');
     remove.title = 'Remove variant';
-    remove.addEventListener('click', () => row.remove());
+    remove.addEventListener('click', () => {
+        const linkedOption = row.dataset.optionRowId
+            ? document.querySelector(`#menu-options-list .menu-option-row[data-option-row-id="${row.dataset.optionRowId}"]`)
+            : null;
+        linkedOption?.remove();
+        row.remove();
+    });
 
-    row.append(label, price, stockLabel, remove, image, description);
+    row.append(label, price, stockLabel, remove);
     container.appendChild(row);
 }
 
@@ -4004,12 +4073,15 @@ function getMenuVariantsFromEditor() {
             return null;
         }
         labels.add(normalizedLabel);
+        const optionRow = row.dataset.optionRowId
+            ? document.querySelector(`#menu-options-list .menu-option-row[data-option-row-id="${row.dataset.option-row-id}"]`)
+            : null;
         variants.push({
             label,
             price,
             isAvailable: row.querySelector('.menu-variant-stock').checked,
-            image: row.querySelector('.menu-variant-image').value.trim(),
-            description: row.querySelector('.menu-variant-description').value.trim()
+            image: row.dataset.variantImage || '',
+            description: optionRow?.querySelector('.menu-option-description').value.trim() || row.dataset.variantDescription || ''
         });
     }
     return variants;
@@ -4018,6 +4090,7 @@ function getMenuVariantsFromEditor() {
 document.getElementById('menu-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('menu-id').value;
+    syncAllMenuOptionVariants();
     const variants = getMenuVariantsFromEditor();
     if (!variants) return;
     const options = getMenuOptionsFromEditor();
