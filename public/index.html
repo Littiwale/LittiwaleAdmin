@@ -2024,7 +2024,7 @@
                         </div>
 
                         <!-- Category & Price Row -->
-                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
                             <div class="form-group">
                                 <label class="form-label">Category *</label>
                                 <select id="menu-category" class="form-control" required onchange="updateLivePreview()">
@@ -2032,9 +2032,15 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Price (₹) *</label>
-                                <input type="number" id="menu-price" class="form-control" placeholder="120" required oninput="updateLivePreview()">
+                                <label class="form-label">Subcategory</label>
+                                <select id="menu-subcategory" class="form-control">
+                                    <option value="">-- No subcategory --</option>
+                                </select>
                             </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Starting Price (₹)</label>
+                            <input type="number" id="menu-price" class="form-control" placeholder="120" min="0" step="0.01" oninput="updateLivePreview()">
                         </div>
 
                         <!-- Description -->
@@ -2046,6 +2052,13 @@
                         <div class="form-group">
                             <label class="form-label">Variant / Serving Note</label>
                             <input type="text" id="menu-variant" class="form-control" placeholder="e.g. Half / Full or serving details">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Priced Variants</label>
+                            <div id="menu-variants-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+                            <button type="button" class="btn btn-secondary" style="margin-top:8px;" onclick="addMenuVariantRow()">+ Add Priced Variant</button>
+                            <small style="display:block; color:var(--text-dim); margin-top:5px;">Example: 1 Pav — ₹79, 2 Pav — ₹109. Each variant can be stocked separately.</small>
                         </div>
 
                         <div class="form-group">
@@ -2168,14 +2181,20 @@
 
             <!-- Add Category Form -->
             <form id="category-form" style="margin-bottom:20px; padding:14px; background:var(--bg-card-inner); border-radius:var(--radius-md);">
-                <input type="hidden" id="cat-id">
+                <input type="hidden" id="category-id">
                 <div style="display:grid; grid-template-columns: 1fr 100px 140px; gap:10px;">
-                    <input type="text" id="cat-name" class="form-control" placeholder="Category Name" required>
-                    <input type="number" id="cat-order" class="form-control" placeholder="Order (1)" value="1" required>
-                    <select id="cat-location-avail" class="form-control">
+                    <input type="text" id="category-name" class="form-control" placeholder="Category Name" required>
+                    <input type="number" id="category-order" class="form-control" placeholder="Order (1)" value="1" required>
+                    <select id="category-location" class="form-control">
                         <option value="both">🌐 Both</option>
                         <option value="cloud_only">☁️ Cloud</option>
                         <option value="outlet_only">🏪 Outlet</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top:10px;">
+                    <label class="form-label" for="category-parent-id">Parent category (leave empty for a top-level category)</label>
+                    <select id="category-parent-id" class="form-control">
+                        <option value="">-- Top-level category --</option>
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary" style="width:100%; margin-top:10px;">

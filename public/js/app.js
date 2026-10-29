@@ -3408,6 +3408,12 @@ function closeModal(modalId) {
         currentBase64Image = '';
         document.getElementById('menu-id').value = '';
         document.getElementById('menu-modal-title').textContent = 'Add Menu Item';
+        document.getElementById('menu-name').value = '';
+        document.getElementById('menu-price').value = '';
+        document.getElementById('menu-desc').value = '';
+        document.getElementById('menu-variant').value = '';
+        document.getElementById('menu-options').value = '';
+        document.getElementById('menu-variants-list').replaceChildren();
         document.querySelector('input[name="menu-diet"][value="veg"]').checked = true;
         document.getElementById('menu-spicy').checked = false;
         document.querySelector('input[name="menu-avail-input"][value="true"]').checked = true;
@@ -3418,6 +3424,11 @@ function closeModal(modalId) {
     }
     if (modalId === 'category-modal') {
         document.getElementById('category-id').value = '';
+        document.getElementById('category-name').value = '';
+        document.getElementById('category-order').value = '1';
+        document.getElementById('category-location').value = 'cloud_only';
+        document.getElementById('category-parent-id').value = '';
+        document.querySelector('#category-form button[type="submit"]').textContent = 'ADD';
     }
     if (modalId === 'announcement-modal') {
         document.getElementById('announcement-id').value = '';
@@ -3545,7 +3556,7 @@ function updateCategoryFilterOptions() {
     const availableCategories = new Set();
     const categories = window.cachedCategories || [];
     
-    categories.forEach(cat => {
+    categories.filter(cat => !cat.parentId).forEach(cat => {
         if (cat.name && (cat.name === 'Craziest Deals of the Hour' || cat.name.toLowerCase().includes('craziest deal'))) return;
         if (locFilter === 'all' || cat.locationAvailability === locFilter || cat.locationAvailability === 'both' || !cat.locationAvailability) {
             availableCategories.add(cat.name);
@@ -3725,15 +3736,87 @@ function parseMenuOptionsFromEditor(value) {
     }).filter(Boolean);
 }
 
+function addMenuVariantRow(variant = {}) {
+    const container = document.getElementById('menu-variants-list');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'menu-variant-row';
+    row.style.cssText = 'display:grid; grid-template-columns:minmax(0,1fr) 110px auto auto; gap:8px; align-items:center;';
+
+    const label = document.createElement('input');
+    label.type = 'text';
+    label.className = 'form-control menu-variant-label';
+    label.placeholder = 'Variant name (e.g. 1 Pav)';
+    label.value = variant.label || '';
+
+    const price = document.createElement('input');
+    price.type = 'number';
+    price.className = 'form-control menu-variant-price';
+    price.placeholder = 'Price';
+    price.min = '0';
+    price.step = '0.01';
+    price.value = variant.price ?? '';
+
+    const stockLabel = document.createElement('label');
+    stockLabel.style.cssText = 'display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:11px;';
+    const stock = document.createElement('input');
+    stock.type = 'checkbox';
+    stock.className = 'menu-variant-stock';
+    stock.checked = variant.isAvailable !== false;
+    stockLabel.append(stock, document.createTextNode('In stock'));
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn btn-secondary';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', 'Remove variant');
+    remove.title = 'Remove variant';
+    remove.addEventListener('click', () => row.remove());
+
+    row.append(label, price, stockLabel, remove);
+    container.appendChild(row);
+}
+
+function getMenuVariantsFromEditor() {
+    const rows = [...document.querySelectorAll('#menu-variants-list .menu-variant-row')];
+    const variants = [];
+    for (const [index, row] of rows.entries()) {
+        const label = row.querySelector('.menu-variant-label').value.trim();
+        const rawPrice = row.querySelector('.menu-variant-price').value;
+        if (!label && !rawPrice) continue;
+        const price = Number(rawPrice);
+        if (!label || rawPrice === '' || !Number.isFinite(price) || price < 0) {
+            showToast(`Enter a name and a valid price for variant ${index + 1}.`, 'error');
+            return null;
+        }
+        variants.push({
+            label,
+            price,
+            isAvailable: row.querySelector('.menu-variant-stock').checked
+        });
+    }
+    return variants;
+}
+
 document.getElementById('menu-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('menu-id').value;
+    const variants = getMenuVariantsFromEditor();
+    if (!variants) return;
+    const enteredPrice = document.getElementById('menu-price').value;
+    if (!variants.length && (enteredPrice === '' || !Number.isFinite(Number(enteredPrice)) || Number(enteredPrice) < 0)) {
+        showToast('Enter a valid dish price or add priced variants.', 'error');
+        return;
+    }
     const body = {
         name: document.getElementById('menu-name').value,
         category: document.getElementById('menu-category').value,
-        price: document.getElementById('menu-price').value,
+        subcategory: document.getElementById('menu-subcategory').value,
+        price: variants.length ? Math.min(...variants.map(variant => variant.price)) : Number(enteredPrice),
         description: document.getElementById('menu-desc').value,
         variant: document.getElementById('menu-variant').value,
+        variants,
         options: parseMenuOptionsFromEditor(document.getElementById('menu-options').value),
         isAvailable: document.querySelector('input[name="menu-avail-input"]:checked').value === 'true',
         dietaryPreference: document.querySelector('input[name="menu-diet"]:checked').value,
@@ -3763,9 +3846,13 @@ window.editMenu = async function(id) {
     document.getElementById('menu-id').value = item._id;
     document.getElementById('menu-name').value = item.name;
     document.getElementById('menu-category').value = item.category;
+    updateMenuSubcategoryOptions(item.category);
+    document.getElementById('menu-subcategory').value = item.subcategory || '';
     document.getElementById('menu-price').value = item.price;
     document.getElementById('menu-desc').value = item.description || '';
     document.getElementById('menu-variant').value = item.variant || '';
+    document.getElementById('menu-variants-list').replaceChildren();
+    (Array.isArray(item.variants) ? item.variants : []).forEach(variant => addMenuVariantRow(variant));
     const editableOptions = Array.isArray(item.options) && item.options.length
         ? item.options
         : window.getAdminOrderDishOptions(item);
@@ -4006,7 +4093,7 @@ async function loadCategories() {
                     row.innerHTML = `
                         <div style="display:flex; align-items:center; gap:12px;">
                             <span style="color:#9ca3af; font-size:12px; font-weight:800; background:#12141b; padding:4px 8px; border-radius:6px; border:1px solid #252830;">#${item.displayOrder}</span>
-                            <strong style="color:#fff; font-size:14px;">${item.name}</strong>
+                            <strong style="color:#fff; font-size:14px;">${item.parentId ? '↳ ' : ''}${item.parentId ? (items.find(parent => parent._id === item.parentId)?.name || '') + ' / ' : ''}${item.name}</strong>
                             <span style="font-size:10px; font-weight:800; text-transform:uppercase; color:${locColor}; background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px;">${locBadge}</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px;">
@@ -4028,17 +4115,55 @@ async function loadCategories() {
         if (select) {
             const currentVal = select.value;
             select.innerHTML = '<option value="">-- Select Category --</option>';
-            items.forEach(cat => {
+            items.filter(cat => !cat.parentId).forEach(cat => {
                 const opt = document.createElement('option');
                 opt.value = cat.name;
                 opt.textContent = cat.name;
                 select.appendChild(opt);
             });
             if (currentVal) select.value = currentVal;
+            updateMenuSubcategoryOptions(select.value);
+        }
+
+        const parentSelect = document.getElementById('category-parent-id');
+        if (parentSelect) {
+            const currentParent = parentSelect.value;
+            parentSelect.innerHTML = '<option value="">-- Top-level category --</option>';
+            items.filter(cat => !cat.parentId).forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat._id;
+                option.textContent = cat.name;
+                parentSelect.appendChild(option);
+            });
+            if (items.some(cat => cat._id === currentParent && !cat.parentId)) parentSelect.value = currentParent;
         }
 
     } catch (e) { console.error(e); }
 }
+
+function updateMenuSubcategoryOptions(categoryName, selectedSubcategory = '') {
+    const select = document.getElementById('menu-subcategory');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- No subcategory --</option>';
+    (window.cachedCategories || [])
+        .filter(category => {
+            if (!category.parentId) return false;
+            const parent = window.cachedCategories.find(item => item._id === category.parentId);
+            return parent?.name === categoryName;
+        })
+        .sort((a, b) => Number(a.displayOrder || 0) - Number(b.displayOrder || 0))
+        .forEach(category => {
+            const option = document.createElement('option');
+            option.value = category.name;
+            option.textContent = category.name;
+            select.appendChild(option);
+        });
+    select.value = selectedSubcategory;
+}
+
+document.getElementById('menu-category')?.addEventListener('change', event => {
+    updateMenuSubcategoryOptions(event.target.value);
+});
 
 document.getElementById('category-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4046,7 +4171,8 @@ document.getElementById('category-form').addEventListener('submit', async (e) =>
     const body = {
         name: document.getElementById('category-name').value,
         displayOrder: document.getElementById('category-order').value || 0,
-        locationAvailability: document.getElementById('category-location').value || 'both'
+        locationAvailability: document.getElementById('category-location').value || 'both',
+        parentId: document.getElementById('category-parent-id').value || ''
     };
 
     if (id) {
@@ -4058,8 +4184,9 @@ document.getElementById('category-form').addEventListener('submit', async (e) =>
     // Reset Form
     document.getElementById('category-id').value = '';
     document.getElementById('category-name').value = '';
-    document.getElementById('category-order').value = '0';
+    document.getElementById('category-order').value = '1';
     document.getElementById('category-location').value = 'both';
+    document.getElementById('category-parent-id').value = '';
     document.querySelector('#category-form button[type="submit"]').textContent = 'ADD';
 
     // Reload list without closing modal
@@ -4079,6 +4206,7 @@ async function editCategory(id) {
     document.getElementById('category-name').value = item.name;
     document.getElementById('category-order').value = item.displayOrder;
     document.getElementById('category-location').value = item.locationAvailability || 'both';
+    document.getElementById('category-parent-id').value = item.parentId || '';
     document.querySelector('#category-form button[type="submit"]').textContent = 'UPDATE';
 }
 

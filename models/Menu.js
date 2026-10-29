@@ -5,6 +5,7 @@ const menuSchema = new mongoose.Schema({
     description: { type: String },
     price: { type: Number, required: true },
     category: { type: String, required: true },
+    subcategory: { type: String, default: "" },
     image: { type: String },
     isAvailable: { type: Boolean, default: true },
     dietaryPreference: { type: String, enum: ["veg", "non-veg"], default: "veg" },
@@ -17,6 +18,14 @@ const menuSchema = new mongoose.Schema({
     isCraziestDeal: { type: Boolean, default: false },
     options: { type: [mongoose.Schema.Types.Mixed], default: [] },
     variant: { type: String, default: "" },
+    variants: {
+        type: [{
+            label: { type: String, required: true },
+            price: { type: Number, required: true, min: 0 },
+            isAvailable: { type: Boolean, default: true }
+        }],
+        default: []
+    },
     createdAt: { type: Date, default: Date.now }
 });
 

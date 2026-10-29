@@ -161,19 +161,36 @@ let memoryMenuCache = null;
 let memoryMenuCacheTime = 0;
 const MENU_CACHE_TTL = 30000;
 let menuVariantColumnsReady;
+let categoryColumnsReady;
 
 function ensureMenuVariantColumns() {
     if (!menuVariantColumnsReady) {
         menuVariantColumnsReady = supabaseDb.query(
             `ALTER TABLE menus
              ADD COLUMN IF NOT EXISTS options JSONB NOT NULL DEFAULT '[]'::jsonb,
-             ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT ''`
+             ADD COLUMN IF NOT EXISTS variant TEXT NOT NULL DEFAULT '',
+             ADD COLUMN IF NOT EXISTS variants JSONB NOT NULL DEFAULT '[]'::jsonb,
+             ADD COLUMN IF NOT EXISTS subcategory TEXT NOT NULL DEFAULT ''`
         ).catch(error => {
             menuVariantColumnsReady = null;
             throw error;
         });
     }
     return menuVariantColumnsReady;
+}
+
+function ensureCategoryColumns() {
+    if (!categoryColumnsReady) {
+        categoryColumnsReady = supabaseDb.query(
+            `ALTER TABLE categories
+             ADD COLUMN IF NOT EXISTS "locationAvailability" TEXT NOT NULL DEFAULT 'both',
+             ADD COLUMN IF NOT EXISTS "parentId" TEXT NOT NULL DEFAULT ''`
+        ).catch(error => {
+            categoryColumnsReady = null;
+            throw error;
+        });
+    }
+    return categoryColumnsReady;
 }
 
 function normalizeMenuOptions(options) {
@@ -185,6 +202,25 @@ function normalizeMenuOptions(options) {
         const desc = String(option.desc || '').trim();
         return label ? { label, desc } : '';
     }).filter(Boolean);
+}
+
+function normalizeMenuVariants(variants) {
+    if (!Array.isArray(variants)) return [];
+    return variants.map((variant, index) => {
+        if (!variant || typeof variant !== 'object') {
+            throw new Error(`Variant ${index + 1} must have a name and price`);
+        }
+        const label = String(variant.label || '').trim();
+        const price = Number(variant.price);
+        if (!label || variant.price === null || variant.price === '' || !Number.isFinite(price) || price < 0) {
+            throw new Error(`Variant ${index + 1} must have a name and a valid non-negative price`);
+        }
+        return {
+            label,
+            price,
+            isAvailable: variant.isAvailable !== false
+        };
+    });
 }
 
 function invalidateMenuCache() {
@@ -382,6 +418,7 @@ router.get('/config', (req, res) => {
 // ==========================================
 router.get('/categories', async (req, res) => {
     try {
+        await ensureCategoryColumns();
         res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
         const sbRes = await supabaseDb.query('SELECT * FROM categories ORDER BY "displayOrder" ASC, id ASC');
         res.json(sbRes.rows || []);
@@ -392,46 +429,132 @@ router.get('/categories', async (req, res) => {
 
 router.post('/categories', checkPin, async (req, res) => {
     try {
+        await ensureCategoryColumns();
         const payload = { ...req.body };
+        payload.name = String(payload.name || '').trim();
+        if (!payload.name) return res.status(400).json({ error: 'Category name is required' });
+        payload.parentId = String(payload.parentId || '').trim();
+        if (payload.parentId) {
+            const parent = await supabaseDb.query('SELECT _id, "parentId" FROM categories WHERE _id = $1', [payload.parentId]);
+            if (!parent.rows.length || parent.rows[0].parentId) {
+                return res.status(400).json({ error: 'Subcategories must belong directly to a top-level category' });
+            }
+        }
+        const locationAvailability = ['cloud_only', 'outlet_only', 'both'].includes(payload.locationAvailability)
+            ? payload.locationAvailability
+            : 'both';
         const newId = payload._id || `cat_${Date.now()}`;
         payload._id = newId;
 
         await supabaseDb.query(
-            `INSERT INTO categories (_id, name, description, image, "displayOrder", "isAvailable", "itemCount")
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (_id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, image = EXCLUDED.image, "displayOrder" = EXCLUDED."displayOrder"`,
-            [newId, payload.name, payload.description || '', payload.image || '', Number(payload.displayOrder || 0), payload.isAvailable !== false, Number(payload.itemCount || 0)]
+            `INSERT INTO categories (_id, name, description, image, "displayOrder", "isAvailable", "itemCount", "locationAvailability", "parentId")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (_id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, image = EXCLUDED.image, "displayOrder" = EXCLUDED."displayOrder", "locationAvailability" = EXCLUDED."locationAvailability", "parentId" = EXCLUDED."parentId"`,
+            [newId, payload.name, payload.description || '', payload.image || '', Number(payload.displayOrder || 0), payload.isAvailable !== false, Number(payload.itemCount || 0), locationAvailability, payload.parentId]
         );
 
+        invalidateMenuCache();
         console.log(`✅ Category "${payload.name}" saved to Supabase PostgreSQL!`);
-        res.status(201).json(payload);
+        res.status(201).json({ ...payload, locationAvailability });
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
 });
 
 router.put('/categories/:id', checkPin, async (req, res) => {
+    let client;
     try {
+        await ensureCategoryColumns();
         const payload = { ...req.body };
-        await supabaseDb.query(
-            `UPDATE categories SET name = $1, description = $2, image = $3, "displayOrder" = $4, "isAvailable" = $5 WHERE _id = $6`,
-            [payload.name, payload.description || '', payload.image || '', Number(payload.displayOrder || 0), payload.isAvailable !== false, req.params.id]
+        payload.name = String(payload.name || '').trim();
+        if (!payload.name) return res.status(400).json({ error: 'Category name is required' });
+        payload.parentId = String(payload.parentId || '').trim();
+        if (payload.parentId === req.params.id) {
+            return res.status(400).json({ error: 'A category cannot be its own parent' });
+        }
+        if (payload.parentId) {
+            const parent = await supabaseDb.query('SELECT _id, "parentId" FROM categories WHERE _id = $1', [payload.parentId]);
+            if (!parent.rows.length || parent.rows[0].parentId) {
+                return res.status(400).json({ error: 'Subcategories must belong directly to a top-level category' });
+            }
+        }
+        const locationAvailability = ['cloud_only', 'outlet_only', 'both'].includes(payload.locationAvailability)
+            ? payload.locationAvailability
+            : 'both';
+
+        client = await supabaseDb.pool.connect();
+        await client.query('BEGIN');
+        const existing = await client.query(
+            `SELECT c.name, c."parentId", old_parent.name AS "parentName"
+             FROM categories c
+             LEFT JOIN categories old_parent ON old_parent._id = c."parentId"
+             WHERE c._id = $1 FOR UPDATE OF c`,
+            [req.params.id]
         );
-        res.json({ success: true, ...payload });
+        if (!existing.rows.length) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Category not found' });
+        }
+        const previousName = existing.rows[0].name;
+        const previousParentId = existing.rows[0].parentId || '';
+        const previousParentName = existing.rows[0].parentName || '';
+        const newParent = payload.parentId
+            ? await client.query('SELECT name FROM categories WHERE _id = $1', [payload.parentId])
+            : { rows: [] };
+        const newParentName = newParent.rows[0]?.name || '';
+        await client.query(
+            `UPDATE categories SET name = $1, description = $2, image = $3, "displayOrder" = $4, "isAvailable" = $5, "locationAvailability" = $6, "parentId" = $7 WHERE _id = $8`,
+            [payload.name, payload.description || '', payload.image || '', Number(payload.displayOrder || 0), payload.isAvailable !== false, locationAvailability, payload.parentId, req.params.id]
+        );
+        if (previousParentId && payload.parentId) {
+            await client.query(
+                'UPDATE menus SET category = $1, subcategory = $2 WHERE category = $3 AND subcategory = $4',
+                [newParentName, payload.name, previousParentName, previousName]
+            );
+        } else if (previousParentId) {
+            await client.query(
+                'UPDATE menus SET category = $1, subcategory = $2 WHERE category = $3 AND subcategory = $4',
+                [payload.name, '', previousParentName, previousName]
+            );
+        } else if (payload.parentId) {
+            await client.query(
+                'UPDATE menus SET category = $1, subcategory = $2 WHERE category = $3',
+                [newParentName, payload.name, previousName]
+            );
+        } else if (previousName !== payload.name) {
+            await client.query('UPDATE menus SET category = $1 WHERE category = $2', [payload.name, previousName]);
+        }
+        await client.query('COMMIT');
+        invalidateMenuCache();
+        res.json({ success: true, ...payload, locationAvailability });
     } catch (err) {
+        if (client) await client.query('ROLLBACK').catch(rollbackError => console.error('Category update rollback error:', rollbackError));
         res.status(400).json({ error: err.message });
+    } finally {
+        if (client) client.release();
     }
 });
 
 router.put('/categories/:id/toggle-stock', checkPin, async (req, res) => {
     try {
+        await ensureCategoryColumns();
         const { isAvailable } = req.body;
         const catRes = await supabaseDb.query(`SELECT * FROM categories WHERE _id = $1`, [req.params.id]);
         if (!catRes.rows || catRes.rows.length === 0) return res.status(404).json({ error: 'Category not found' });
-        const categoryName = catRes.rows[0].name;
+        const category = catRes.rows[0];
 
         await supabaseDb.query(`UPDATE categories SET "isAvailable" = $1 WHERE _id = $2`, [isAvailable, req.params.id]);
-        await supabaseDb.query(`UPDATE menus SET "isAvailable" = $1 WHERE category = $2`, [isAvailable, categoryName]);
+        if (category.parentId) {
+            const parent = await supabaseDb.query('SELECT name FROM categories WHERE _id = $1', [category.parentId]);
+            if (parent.rows.length) {
+                await supabaseDb.query(
+                    `UPDATE menus SET "isAvailable" = $1 WHERE category = $2 AND subcategory = $3`,
+                    [isAvailable, parent.rows[0].name, category.name]
+                );
+            }
+        } else {
+            await supabaseDb.query(`UPDATE menus SET "isAvailable" = $1 WHERE category = $2`, [isAvailable, category.name]);
+        }
         invalidateMenuCache();
 
         res.json({ success: true, isAvailable });
@@ -442,7 +565,23 @@ router.put('/categories/:id/toggle-stock', checkPin, async (req, res) => {
 
 router.delete('/categories/:id', checkPin, async (req, res) => {
     try {
+        await ensureCategoryColumns();
+        const existing = await supabaseDb.query('SELECT name, "parentId" FROM categories WHERE _id = $1', [req.params.id]);
+        if (!existing.rows.length) return res.status(404).json({ error: 'Category not found' });
+        if (!existing.rows[0].parentId) {
+            const children = await supabaseDb.query('SELECT 1 FROM categories WHERE "parentId" = $1 LIMIT 1', [req.params.id]);
+            if (children.rows.length) return res.status(409).json({ error: 'Delete or move this category’s subcategories first' });
+        } else {
+            const parent = await supabaseDb.query('SELECT name FROM categories WHERE _id = $1', [existing.rows[0].parentId]);
+            if (parent.rows.length) {
+                await supabaseDb.query(
+                    'UPDATE menus SET subcategory = $3 WHERE category = $1 AND subcategory = $2',
+                    [parent.rows[0].name, existing.rows[0].name, '']
+                );
+            }
+        }
         await supabaseDb.query(`DELETE FROM categories WHERE _id = $1`, [req.params.id]);
+        invalidateMenuCache();
         res.json({ message: 'Category deleted' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -504,6 +643,7 @@ router.post('/menu', checkPin, async (req, res) => {
         const payload = { ...req.body };
         payload.options = normalizeMenuOptions(payload.options);
         payload.variant = String(payload.variant || '').trim();
+        payload.variants = normalizeMenuVariants(payload.variants);
         const catSlug = toSlug(payload.category || 'general');
 
         if (payload.image && payload.image.startsWith('data:image/')) {
@@ -514,17 +654,17 @@ router.post('/menu', checkPin, async (req, res) => {
         payload._id = newItemId;
 
         await supabaseDb.query(
-            `INSERT INTO menus (_id, name, description, price, category, image, "isAvailable", "dietaryPreference", "isSpicy", "spicyLevel", "locationAvailability", "originalPrice", note, "isCombo", "isCraziestDeal", keywords, options, variant)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb, $18)
+            `INSERT INTO menus (_id, name, description, price, category, subcategory, image, "isAvailable", "dietaryPreference", "isSpicy", "spicyLevel", "locationAvailability", "originalPrice", note, "isCombo", "isCraziestDeal", keywords, options, variant, variants)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20::jsonb)
              ON CONFLICT (_id) DO UPDATE SET
-             name = EXCLUDED.name, description = EXCLUDED.description, price = EXCLUDED.price, category = EXCLUDED.category, image = EXCLUDED.image, "isAvailable" = EXCLUDED."isAvailable", "dietaryPreference" = EXCLUDED."dietaryPreference", "isSpicy" = EXCLUDED."isSpicy", "spicyLevel" = EXCLUDED."spicyLevel", "locationAvailability" = EXCLUDED."locationAvailability", "originalPrice" = EXCLUDED."originalPrice", note = EXCLUDED.note, "isCombo" = EXCLUDED."isCombo", "isCraziestDeal" = EXCLUDED."isCraziestDeal", keywords = EXCLUDED.keywords, options = EXCLUDED.options, variant = EXCLUDED.variant`,
+             name = EXCLUDED.name, description = EXCLUDED.description, price = EXCLUDED.price, category = EXCLUDED.category, subcategory = EXCLUDED.subcategory, image = EXCLUDED.image, "isAvailable" = EXCLUDED."isAvailable", "dietaryPreference" = EXCLUDED."dietaryPreference", "isSpicy" = EXCLUDED."isSpicy", "spicyLevel" = EXCLUDED."spicyLevel", "locationAvailability" = EXCLUDED."locationAvailability", "originalPrice" = EXCLUDED."originalPrice", note = EXCLUDED.note, "isCombo" = EXCLUDED."isCombo", "isCraziestDeal" = EXCLUDED."isCraziestDeal", keywords = EXCLUDED.keywords, options = EXCLUDED.options, variant = EXCLUDED.variant, variants = EXCLUDED.variants`,
             [
-                newItemId, payload.name, payload.description || '', Number(payload.price || 0), payload.category,
+                newItemId, payload.name, payload.description || '', Number(payload.price || 0), payload.category, payload.subcategory || '',
                 payload.image || '', payload.isAvailable !== false, payload.dietaryPreference || 'veg',
                 Boolean(payload.isSpicy), Number(payload.spicyLevel || 1), payload.locationAvailability || 'both',
                 payload.originalPrice ? Number(payload.originalPrice) : null, payload.note || '',
                 Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || '',
-                JSON.stringify(payload.options), payload.variant
+                JSON.stringify(payload.options), payload.variant, JSON.stringify(payload.variants)
             ]
         );
 
@@ -543,6 +683,7 @@ router.put('/menu/:id', checkPin, async (req, res) => {
         const payload = { ...req.body };
         payload.options = normalizeMenuOptions(payload.options);
         payload.variant = String(payload.variant || '').trim();
+        payload.variants = normalizeMenuVariants(payload.variants);
         const catSlug = toSlug(payload.category || 'general');
 
         if (payload.image && payload.image.startsWith('data:image/')) {
@@ -551,18 +692,18 @@ router.put('/menu/:id', checkPin, async (req, res) => {
 
         await supabaseDb.query(
             `UPDATE menus SET
-             name = $1, description = $2, price = $3, category = $4, image = $5, "isAvailable" = $6,
-             "dietaryPreference" = $7, "isSpicy" = $8, "spicyLevel" = $9, "locationAvailability" = $10,
-             "originalPrice" = $11, note = $12, "isCombo" = $13, "isCraziestDeal" = $14, keywords = $15,
-             options = $16::jsonb, variant = $17
-             WHERE _id = $18`,
+             name = $1, description = $2, price = $3, category = $4, subcategory = $5, image = $6, "isAvailable" = $7,
+             "dietaryPreference" = $8, "isSpicy" = $9, "spicyLevel" = $10, "locationAvailability" = $11,
+             "originalPrice" = $12, note = $13, "isCombo" = $14, "isCraziestDeal" = $15, keywords = $16,
+             options = $17::jsonb, variant = $18, variants = $19::jsonb
+             WHERE _id = $20`,
             [
-                payload.name, payload.description || '', Number(payload.price || 0), payload.category,
+                payload.name, payload.description || '', Number(payload.price || 0), payload.category, payload.subcategory || '',
                 payload.image || '', payload.isAvailable !== false, payload.dietaryPreference || 'veg',
                 Boolean(payload.isSpicy), Number(payload.spicyLevel || 1), payload.locationAvailability || 'both',
                 payload.originalPrice ? Number(payload.originalPrice) : null, payload.note || '',
                 Boolean(payload.isCombo), Boolean(payload.isCraziestDeal), payload.keywords || '',
-                JSON.stringify(payload.options), payload.variant, req.params.id
+                JSON.stringify(payload.options), payload.variant, JSON.stringify(payload.variants), req.params.id
             ]
         );
 
