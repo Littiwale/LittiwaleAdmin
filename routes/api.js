@@ -218,7 +218,9 @@ function normalizeMenuVariants(variants) {
         return {
             label,
             price,
-            isAvailable: variant.isAvailable !== false
+            isAvailable: variant.isAvailable !== false,
+            image: String(variant.image || '').trim(),
+            description: String(variant.description || '').trim()
         };
     });
 }

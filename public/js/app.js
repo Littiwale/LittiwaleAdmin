@@ -3412,7 +3412,7 @@ function closeModal(modalId) {
         document.getElementById('menu-price').value = '';
         document.getElementById('menu-desc').value = '';
         document.getElementById('menu-variant').value = '';
-        document.getElementById('menu-options').value = '';
+        document.getElementById('menu-options-list').replaceChildren();
         document.getElementById('menu-variants-list').replaceChildren();
         document.querySelector('input[name="menu-diet"][value="veg"]').checked = true;
         document.getElementById('menu-spicy').checked = false;
@@ -3584,6 +3584,24 @@ function updateCategoryFilterOptions() {
     }
 }
 
+function getMenuDietaryPreference(item) {
+    const preference = String(item.dietaryPreference || '').toLowerCase();
+    if (preference === 'non-veg' || preference === 'nonveg') return 'non-veg';
+    if (preference === 'veg') return 'veg';
+    if (item.isNonVeg === true || item.veg === 'nonveg') return 'non-veg';
+    return 'veg';
+}
+
+function getMenuNonVegGroup(item) {
+    const searchText = `${item.name || ''} ${item.category || ''} ${item.subcategory || ''}`.toLowerCase();
+    if (/\b(chicken|murgh|murg)\b/.test(searchText)) return 0;
+    if (/\b(mutton|goat|keema)\b/.test(searchText)) return 1;
+    if (/\b(fish|machli)\b/.test(searchText)) return 2;
+    if (/\b(prawn|shrimp)\b/.test(searchText)) return 3;
+    if (/\begg\b/.test(searchText)) return 4;
+    return 5;
+}
+
 function renderMenuGrid(searchQuery = '') {
     const container = document.getElementById('menu-grid-container');
     if (!container) return; // Prevent error if run before DOM update
@@ -3600,7 +3618,8 @@ function renderMenuGrid(searchQuery = '') {
         if (item.category === 'Craziest Deals of the Hour' || (item.category && item.category.toLowerCase().includes('craziest deal')) || item.isCraziestDeal === true) return false;
         let matchLoc = (locFilter === 'all' || item.locationAvailability === locFilter || item.locationAvailability === 'both');
         let matchCat = (catFilter === 'all' || item.category === catFilter || (!item.category && catFilter === 'Uncategorized'));
-        let matchDiet = (dietFilter === 'all' || (dietFilter === 'veg' && item.isVeg) || (dietFilter === 'non-veg' && !item.isVeg));
+        const dietaryPreference = getMenuDietaryPreference(item);
+        let matchDiet = (dietFilter === 'all' || dietaryPreference === dietFilter);
         return matchLoc && matchCat && matchDiet;
     });
 
@@ -3627,12 +3646,15 @@ function renderMenuGrid(searchQuery = '') {
     const sortedCategories = Object.keys(grouped).sort((a, b) => {
         const catA = (window.cachedCategories || []).find(c => c.name === a) || { displayOrder: 999 };
         const catB = (window.cachedCategories || []).find(c => c.name === b) || { displayOrder: 999 };
-        return catA.displayOrder - catB.displayOrder;
+        const orderA = Number.isFinite(Number(catA.displayOrder)) ? Number(catA.displayOrder) : 999;
+        const orderB = Number.isFinite(Number(catB.displayOrder)) ? Number(catB.displayOrder) : 999;
+        return orderA - orderB
+            || a.localeCompare(b);
     });
 
-    // Render each category
+    // Render each category, then its subcategories with veg items before non-veg.
     for (const category of sortedCategories) {
-            const items = (grouped[category] || []).sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+            const items = grouped[category] || [];
             const section = document.createElement('div');
             
             const catObj = (window.cachedCategories || []).find(c => c.name === category);
@@ -3653,13 +3675,47 @@ function renderMenuGrid(searchQuery = '') {
             `;
             section.appendChild(header);
 
-            // Grid Container
-            const grid = document.createElement('div');
-            grid.style.display = 'grid';
-            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
-            grid.style.gap = '20px';
-
+            const groupedSubcategories = {};
             items.forEach(item => {
+                const subcategory = item.subcategory || 'No subcategory';
+                if (!groupedSubcategories[subcategory]) groupedSubcategories[subcategory] = [];
+                groupedSubcategories[subcategory].push(item);
+            });
+            const sortedSubcategories = Object.keys(groupedSubcategories).sort((a, b) => {
+                if (a === 'No subcategory') return 1;
+                if (b === 'No subcategory') return -1;
+                const parentCategory = (window.cachedCategories || []).find(c => c.name === category);
+                const subcatA = (window.cachedCategories || []).find(c => c.name === a && (!parentCategory || c.parentId === parentCategory._id || c.parentId === parentCategory.id));
+                const subcatB = (window.cachedCategories || []).find(c => c.name === b && (!parentCategory || c.parentId === parentCategory._id || c.parentId === parentCategory.id));
+                const orderA = Number.isFinite(Number(subcatA?.displayOrder)) ? Number(subcatA.displayOrder) : 999;
+                const orderB = Number.isFinite(Number(subcatB?.displayOrder)) ? Number(subcatB.displayOrder) : 999;
+                return orderA - orderB
+                    || a.localeCompare(b);
+            });
+
+            sortedSubcategories.forEach(subcategory => {
+                const subcategoryItems = groupedSubcategories[subcategory].sort((a, b) => {
+                    const dietOrderA = getMenuDietaryPreference(a) === 'non-veg' ? 1 : 0;
+                    const dietOrderB = getMenuDietaryPreference(b) === 'non-veg' ? 1 : 0;
+                    return dietOrderA - dietOrderB
+                        || (dietOrderA ? getMenuNonVegGroup(a) - getMenuNonVegGroup(b) : 0)
+                        || (Number(a.price) || 0) - (Number(b.price) || 0)
+                        || String(a.name || '').localeCompare(String(b.name || ''));
+                });
+                const subcategorySection = document.createElement('div');
+                subcategorySection.style.marginBottom = '20px';
+
+                const subcategoryHeader = document.createElement('h4');
+                subcategoryHeader.textContent = subcategory;
+                subcategoryHeader.style.cssText = 'font-size:14px; font-weight:700; color:#cbd5e1; margin:0 0 12px; padding-left:2px;';
+                subcategorySection.appendChild(subcategoryHeader);
+
+                const grid = document.createElement('div');
+                grid.style.display = 'grid';
+                grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
+                grid.style.gap = '20px';
+
+                subcategoryItems.forEach(item => {
                 const card = document.createElement('div');
                 card.style.background = '#12141b';
                 card.style.border = '1px solid #252830';
@@ -3673,6 +3729,7 @@ function renderMenuGrid(searchQuery = '') {
                 if (item.locationAvailability === 'cloud_only') locBadge = '☁️ CLOUD ONLY';
                 else if (item.locationAvailability === 'outlet_only') locBadge = '🏪 OUTLET ONLY';
                 else locBadge = '🌐 BOTH LOCATIONS';
+                const pricedVariants = Array.isArray(item.variants) ? item.variants : [];
 
                 card.innerHTML = `
                     <div style="width:100%; height:180px; background:#1a1c23; position:relative;">
@@ -3684,10 +3741,13 @@ function renderMenuGrid(searchQuery = '') {
                     <div style="padding:16px; flex:1; display:flex; flex-direction:column;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:8px;">
                             <h4 style="font-size:15px; font-weight:800; color:#fff; margin:0; line-height:1.3;">
-                                <span style="font-size:12px; margin-right:4px;">${item.dietaryPreference === 'non-veg' ? '🔴' : '🟢'}</span>
+                                <span style="font-size:12px; margin-right:4px;">${getMenuDietaryPreference(item) === 'non-veg' ? '🔴' : '🟢'}</span>
                                 ${item.name}
                             </h4>
-                            <span style="font-size:16px; font-weight:900; color:#f59e0b;">₹${item.price}</span>
+                            <div style="text-align:right; flex-shrink:0;">
+                                <span style="font-size:16px; font-weight:900; color:#f59e0b;">₹${item.price}</span>
+                                ${pricedVariants.length ? `<div style="font-size:10px; color:#9ca3af; margin-top:3px;">${pricedVariants.map(variant => `${variant.label} ₹${variant.price}`).join(' · ')}</div>` : ''}
+                            </div>
                         </div>
                         
                         <div style="display:flex; gap:8px; margin-top:auto; padding-top:16px; border-top:1px solid #1e2130;">
@@ -3699,7 +3759,9 @@ function renderMenuGrid(searchQuery = '') {
                 `;
                 grid.appendChild(card);
             });
-            section.appendChild(grid);
+                subcategorySection.appendChild(grid);
+                section.appendChild(subcategorySection);
+            });
             container.appendChild(section);
         }
 }
@@ -3717,23 +3779,154 @@ document.getElementById('menu-filter-diet')?.addEventListener('change', () => {
     renderMenuGrid();
 });
 
-function formatMenuOptionsForEditor(options) {
-    if (!Array.isArray(options)) return '';
-    return options.map(option => {
-        const normalized = typeof option === 'string' ? { label: option } : (option || {});
-        const label = String(normalized.label || '').trim();
-        const desc = String(normalized.desc || '').trim();
-        return label ? `${label}${desc ? ` | ${desc}` : ''}` : '';
-    }).filter(Boolean).join('\n');
+function addMenuOptionRow(option = {}) {
+    const container = document.getElementById('menu-options-list');
+    if (!container) return;
+
+    const row = document.createElement('div');
+    row.className = 'menu-option-row';
+    row.style.cssText = 'display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.4fr) auto; gap:8px; align-items:center;';
+
+    const label = document.createElement('input');
+    label.type = 'text';
+    label.className = 'form-control menu-option-label';
+    label.placeholder = 'Choice name (e.g. Rice + Dal)';
+    label.value = typeof option === 'string' ? option : (option.label || '');
+
+    const description = document.createElement('input');
+    description.type = 'text';
+    description.className = 'form-control menu-option-description';
+    description.placeholder = 'Description (optional)';
+    description.value = typeof option === 'string' ? '' : (option.desc || '');
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn btn-secondary';
+    remove.textContent = '×';
+    remove.setAttribute('aria-label', 'Remove choice');
+    remove.title = 'Remove choice';
+    remove.addEventListener('click', () => row.remove());
+
+    row.append(label, description, remove);
+    container.appendChild(row);
 }
 
-function parseMenuOptionsFromEditor(value) {
-    return String(value || '').split(/\r?\n/).map(line => {
-        const [label, ...descriptionParts] = line.split('|');
-        const cleanLabel = label.trim();
-        const desc = descriptionParts.join('|').trim();
-        return cleanLabel ? (desc ? { label: cleanLabel, desc } : cleanLabel) : null;
-    }).filter(Boolean);
+function getMenuOptionsFromEditor() {
+    const rows = [...document.querySelectorAll('#menu-options-list .menu-option-row')];
+    const options = [];
+    for (const [index, row] of rows.entries()) {
+        const label = row.querySelector('.menu-option-label').value.trim();
+        const desc = row.querySelector('.menu-option-description').value.trim();
+        if (!label && !desc) continue;
+        if (!label) {
+            showToast(`Enter a name for choice ${index + 1}.`, 'error');
+            return null;
+        }
+        options.push(desc ? { label, desc } : label);
+    }
+    return options;
+}
+
+function setMenuOptionsInEditor(options) {
+    const container = document.getElementById('menu-options-list');
+    if (!container) return;
+    container.replaceChildren();
+    if (Array.isArray(options)) options.forEach(option => addMenuOptionRow(option));
+}
+
+function getExistingMenuVariantLabels() {
+    const labels = new Set();
+    (window.cachedMenuItems || []).forEach(item => {
+        if (Array.isArray(item.variants)) {
+            item.variants.forEach(variant => {
+                const label = String(variant?.label || '').trim();
+                if (label) labels.add(label);
+            });
+        }
+        const label = String(item.variant || '').trim();
+        if (label) labels.add(label);
+    });
+    return [...labels].sort((a, b) => a.localeCompare(b));
+}
+
+function showMenuPricedVariantChoices() {
+    const container = document.getElementById('menu-variants-list');
+    if (!container) return;
+    container.querySelector('.menu-variant-choice-panel')?.remove();
+
+    const panel = document.createElement('div');
+    panel.className = 'menu-variant-choice-panel';
+    panel.style.cssText = 'display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid #2e3140; border-radius:10px; background:#12141b;';
+
+    const heading = document.createElement('strong');
+    heading.textContent = 'Add an existing variant type or create a new one';
+    heading.style.color = '#e5e7eb';
+    panel.appendChild(heading);
+
+    const currentLabels = new Set(
+        [...container.querySelectorAll('.menu-variant-label')]
+            .map(input => input.value.trim().toLowerCase())
+            .filter(Boolean)
+    );
+    const existingLabels = getExistingMenuVariantLabels()
+        .filter(label => !currentLabels.has(label.toLowerCase()));
+
+    if (existingLabels.length) {
+        const existingRow = document.createElement('div');
+        existingRow.style.cssText = 'display:flex; gap:8px; align-items:center;';
+
+        const select = document.createElement('select');
+        select.className = 'form-control';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Choose an existing variant type';
+        select.appendChild(placeholder);
+        existingLabels.forEach(label => {
+            const option = document.createElement('option');
+            option.value = label;
+            option.textContent = label;
+            select.appendChild(option);
+        });
+
+        const addExisting = document.createElement('button');
+        addExisting.type = 'button';
+        addExisting.className = 'btn btn-secondary';
+        addExisting.textContent = 'Use Existing';
+        addExisting.addEventListener('click', () => {
+            if (!select.value) {
+                showToast('Choose an existing variant type first.', 'error');
+                return;
+            }
+            addMenuVariantRow({ label: select.value });
+            panel.remove();
+            container.querySelector('.menu-variant-row:last-of-type .menu-variant-price')?.focus();
+        });
+        existingRow.append(select, addExisting);
+        panel.appendChild(existingRow);
+    }
+
+    const createRow = document.createElement('div');
+    createRow.style.cssText = 'display:flex; gap:8px; align-items:center;';
+    const createHint = document.createElement('span');
+    createHint.textContent = existingLabels.length ? 'Or add a variant type not in the list.' : 'No existing variant types found.';
+    createHint.style.cssText = 'flex:1; color:#9ca3af; font-size:12px;';
+    const createNew = document.createElement('button');
+    createNew.type = 'button';
+    createNew.className = 'btn btn-secondary';
+    createNew.textContent = 'Create New Variant';
+    createNew.addEventListener('click', () => {
+        addMenuVariantRow();
+        panel.remove();
+        container.querySelector('.menu-variant-row:last-of-type .menu-variant-label')?.focus();
+    });
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'btn btn-secondary';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => panel.remove());
+    createRow.append(createHint, createNew, cancel);
+    panel.appendChild(createRow);
+    container.appendChild(panel);
 }
 
 function addMenuVariantRow(variant = {}) {
@@ -3758,6 +3951,20 @@ function addMenuVariantRow(variant = {}) {
     price.step = '0.01';
     price.value = variant.price ?? '';
 
+    const image = document.createElement('input');
+    image.type = 'url';
+    image.className = 'form-control menu-variant-image';
+    image.placeholder = 'Variant image URL (optional)';
+    image.value = variant.image || '';
+    image.style.gridColumn = '1 / 3';
+
+    const description = document.createElement('input');
+    description.type = 'text';
+    description.className = 'form-control menu-variant-description';
+    description.placeholder = 'Variant description (optional)';
+    description.value = variant.description || '';
+    description.style.gridColumn = '3 / 5';
+
     const stockLabel = document.createElement('label');
     stockLabel.style.cssText = 'display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:11px;';
     const stock = document.createElement('input');
@@ -3774,13 +3981,14 @@ function addMenuVariantRow(variant = {}) {
     remove.title = 'Remove variant';
     remove.addEventListener('click', () => row.remove());
 
-    row.append(label, price, stockLabel, remove);
+    row.append(label, price, stockLabel, remove, image, description);
     container.appendChild(row);
 }
 
 function getMenuVariantsFromEditor() {
     const rows = [...document.querySelectorAll('#menu-variants-list .menu-variant-row')];
     const variants = [];
+    const labels = new Set();
     for (const [index, row] of rows.entries()) {
         const label = row.querySelector('.menu-variant-label').value.trim();
         const rawPrice = row.querySelector('.menu-variant-price').value;
@@ -3790,10 +3998,18 @@ function getMenuVariantsFromEditor() {
             showToast(`Enter a name and a valid price for variant ${index + 1}.`, 'error');
             return null;
         }
+        const normalizedLabel = label.toLowerCase();
+        if (labels.has(normalizedLabel)) {
+            showToast(`Variant "${label}" is listed more than once.`, 'error');
+            return null;
+        }
+        labels.add(normalizedLabel);
         variants.push({
             label,
             price,
-            isAvailable: row.querySelector('.menu-variant-stock').checked
+            isAvailable: row.querySelector('.menu-variant-stock').checked,
+            image: row.querySelector('.menu-variant-image').value.trim(),
+            description: row.querySelector('.menu-variant-description').value.trim()
         });
     }
     return variants;
@@ -3804,6 +4020,8 @@ document.getElementById('menu-form').addEventListener('submit', async (e) => {
     const id = document.getElementById('menu-id').value;
     const variants = getMenuVariantsFromEditor();
     if (!variants) return;
+    const options = getMenuOptionsFromEditor();
+    if (!options) return;
     const enteredPrice = document.getElementById('menu-price').value;
     if (!variants.length && (enteredPrice === '' || !Number.isFinite(Number(enteredPrice)) || Number(enteredPrice) < 0)) {
         showToast('Enter a valid dish price or add priced variants.', 'error');
@@ -3817,7 +4035,7 @@ document.getElementById('menu-form').addEventListener('submit', async (e) => {
         description: document.getElementById('menu-desc').value,
         variant: document.getElementById('menu-variant').value,
         variants,
-        options: parseMenuOptionsFromEditor(document.getElementById('menu-options').value),
+        options,
         isAvailable: document.querySelector('input[name="menu-avail-input"]:checked').value === 'true',
         dietaryPreference: document.querySelector('input[name="menu-diet"]:checked').value,
         isSpicy: document.getElementById('menu-spicy').checked,
@@ -3856,7 +4074,7 @@ window.editMenu = async function(id) {
     const editableOptions = Array.isArray(item.options) && item.options.length
         ? item.options
         : window.getAdminOrderDishOptions(item);
-    document.getElementById('menu-options').value = formatMenuOptionsForEditor(editableOptions);
+    setMenuOptionsInEditor(editableOptions);
     
     const isAvail = item.isAvailable !== false;
     const availRadio = document.querySelector(`input[name="menu-avail-input"][value="${isAvail}"]`);

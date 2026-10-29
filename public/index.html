@@ -2057,13 +2057,15 @@
                         <div class="form-group">
                             <label class="form-label">Priced Variants</label>
                             <div id="menu-variants-list" style="display:flex; flex-direction:column; gap:8px;"></div>
-                            <button type="button" class="btn btn-secondary" style="margin-top:8px;" onclick="addMenuVariantRow()">+ Add Priced Variant</button>
-                            <small style="display:block; color:var(--text-dim); margin-top:5px;">Example: 1 Pav — ₹79, 2 Pav — ₹109. Each variant can be stocked separately.</small>
+                            <button type="button" class="btn btn-secondary" style="margin-top:8px;" onclick="showMenuPricedVariantChoices()">+ Add Priced Variant</button>
+                            <small style="display:block; color:var(--text-dim); margin-top:5px;">Add an existing variant type (for example Half / Full) or create a new one. Set the price for this dish; each variant can be stocked separately.</small>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Selectable Options</label>
-                            <textarea id="menu-options" class="form-control" rows="4" placeholder="One option per line; optionally add a description after |. Example: Rice + Dal | Steamed rice with tadka dal"></textarea>
+                            <label class="form-label">Selectable Choices (same dish price)</label>
+                            <div id="menu-options-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+                            <button type="button" class="btn btn-secondary" style="margin-top:8px;" onclick="addMenuOptionRow()">+ Create New Choice</button>
+                            <small style="display:block; color:var(--text-dim); margin-top:5px;">For choices like Thali: Rice + Dal, Roti, or Mix. Customers select one at the dish price above. Use Priced Variants when each choice has its own price.</small>
                         </div>
 
                         <!-- Dietary & Location Availability -->
@@ -3618,6 +3620,6 @@
 
     <!-- Application Controller JS -->
     <script src="js/receipt-printer.js?v=1.1"></script>
-    <script src="js/app.js?v=6.8"></script>
+    <script src="js/app.js?v=6.14"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'littiwale-admin-pwa-v1.0';
+const CACHE_NAME = 'littiwale-admin-pwa-v1.6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
